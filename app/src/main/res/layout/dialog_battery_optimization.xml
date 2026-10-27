@@ -55,7 +55,7 @@
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/bo_btn_cancel"
-            style="@style/PdfLabelPrinting.TextButton"
+            style="@style/ReePDF.TextButton"
             android:text="@string/cancel_text"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
@@ -63,7 +63,7 @@
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/bo_btn_ok"
-            style="@style/PdfLabelPrinting.TextButton"
+            style="@style/ReePDF.TextButton"
             android:text="@string/ok_text"
             android:layout_width="0dp"
             android:layout_height="wrap_content"

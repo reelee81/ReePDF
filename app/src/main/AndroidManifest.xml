@@ -61,12 +61,12 @@
         </provider>
 
         <activity
-            android:name="hu.reelee81.pdflabelprinting.MainActivity"
+            android:name="hu.reelee81.reepdf.MainActivity"
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|density|uiMode|locale|fontScale|fontWeightAdjustment|colorMode|keyboard|navigation|touchscreen|layoutDirection|mcc|mnc|grammaticalGender"
             android:windowSoftInputMode="stateHidden|adjustPan"
             android:exported="true"
             android:launchMode="singleTask"
-            android:theme="@style/Theme.PdfLabelPrinting">
+            android:theme="@style/Theme.ReePDF">
 
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -111,16 +111,16 @@
         </activity>
 
         <activity
-            android:name="hu.reelee81.pdflabelprinting.PdfViewer"
+            android:name="hu.reelee81.reepdf.PdfViewer"
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|density|uiMode|locale|fontScale|fontWeightAdjustment|colorMode|keyboard|navigation|touchscreen|layoutDirection|mcc|mnc|grammaticalGender"
             android:exported="false"
-            android:theme="@style/Theme.PdfLabelPrinting.PdfViewer" />
+            android:theme="@style/Theme.ReePDF.PdfViewer" />
 
         <activity
-            android:name="hu.reelee81.pdflabelprinting.PdfEditorActivity"
+            android:name="hu.reelee81.reepdf.PdfEditorActivity"
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|density|uiMode|locale|fontScale|fontWeightAdjustment|colorMode|keyboard|navigation|touchscreen|layoutDirection|mcc|mnc|grammaticalGender"
             android:exported="false"
-            android:theme="@style/Theme.PdfLabelPrinting.PdfViewer" />
+            android:theme="@style/Theme.ReePDF.PdfViewer" />
 
         <service
             android:name=".PdfProcessingForegroundService"

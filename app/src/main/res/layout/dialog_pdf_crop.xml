@@ -44,7 +44,7 @@
         app:layout_constraintRight_toRightOf="parent"
         app:layout_constraintBottom_toTopOf="@id/crop_bottom_panel">
 
-        <hu.reelee81.pdflabelprinting.PdfCropView
+        <hu.reelee81.reepdf.PdfCropView
             android:id="@+id/crop_view"
             android:layout_width="match_parent"
             android:layout_height="wrap_content" />
@@ -62,7 +62,7 @@
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/crop_btn_cancel"
-            style="@style/PdfLabelPrinting.TextButton"
+            style="@style/ReePDF.TextButton"
             android:text="@string/cancel_text"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
@@ -70,7 +70,7 @@
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/crop_btn_full"
-            style="@style/PdfLabelPrinting.TextButton"
+            style="@style/ReePDF.TextButton"
             android:text="@string/crop_full_page"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
@@ -78,7 +78,7 @@
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/crop_btn_ok"
-            style="@style/PdfLabelPrinting.TextButton"
+            style="@style/ReePDF.TextButton"
             android:text="@string/ok_text"
             android:layout_width="0dp"
             android:layout_height="wrap_content"

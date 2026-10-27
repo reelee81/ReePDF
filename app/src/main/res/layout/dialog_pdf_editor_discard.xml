@@ -26,7 +26,7 @@
 
     <com.google.android.material.button.MaterialButton
         android:id="@+id/pdf_editor_discard_cancel"
-        style="@style/PdfLabelPrinting.TextButton"
+        style="@style/ReePDF.TextButton"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:text="@string/cancel_text"
@@ -38,7 +38,7 @@
 
     <com.google.android.material.button.MaterialButton
         android:id="@+id/pdf_editor_discard_confirm"
-        style="@style/PdfLabelPrinting.TextButton"
+        style="@style/ReePDF.TextButton"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:text="@string/discard_text"

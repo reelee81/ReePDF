@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <string name="app_name">PDF Label Printing</string>
+    <string name="app_name">ReePDF</string>
     <string name="normal_pages">NORMAL</string>
     <string name="label_pages">LABEL</string>
     <string name="select_signature">SIGNATURE</string>
@@ -142,7 +142,7 @@
     <string name="failed_to_rename_encrypted_pdf">Failed to rename encrypted PDF</string>
     <string name="output_name_reserved">This file name is used by the app\'s working files. Choose another name.</string>
     <string name="battery_optimization">Battery optimization</string>
-    <string name="battery_optimization_text">Because of long-running PDF operations (1000+ pages), we recommend disabling battery optimization for this app; otherwise, the system may stop processing when you put the app in the background or lock the screen. Different manufacturers place this setting in different locations, but in general you can find it under Settings → Apps → Manage apps → PDF Label Printing, then look for “Power usage” or “Battery” options where you can turn it on or off. Even then, it may still happen that the process is paused on some devices because certain manufacturers are very aggressive with battery saving (for example when the screen is locked). Therefore, if you want to be absolutely sure that long operations finish, stay on the app screen, because in that case it keeps the display awake until the processing finishes.</string>
+    <string name="battery_optimization_text">Because of long-running PDF operations (1000+ pages), we recommend disabling battery optimization for this app; otherwise, the system may stop processing when you put the app in the background or lock the screen. Different manufacturers place this setting in different locations, but in general you can find it under Settings → Apps → Manage apps → ReePDF, then look for “Power usage” or “Battery” options where you can turn it on or off. Even then, it may still happen that the process is paused on some devices because certain manufacturers are very aggressive with battery saving (for example when the screen is locked). Therefore, if you want to be absolutely sure that long operations finish, stay on the app screen, because in that case it keeps the display awake until the processing finishes.</string>
     <string name="position_on_page">Position on page(s)</string>
     <string name="crop_title">Free crop</string>
     <string name="crop_all_pages">Apply to all pages</string>
@@ -172,11 +172,11 @@
     <string name="about_third_party">Third-party licenses:</string>
     <string name="about_source">App source code (as required by the AGPL):</string>
     <string name="about_contact">Contact:</string>
-    <string name="about_readme_url" translatable="false"><u>https://github.com/reelee81/PdfLabelPrinting/blob/main/README.md</u></string>
-    <string name="about_privacy_url" translatable="false"><u>https://github.com/reelee81/PdfLabelPrinting/blob/main/PRIVACY_POLICY.md</u></string>
-    <string name="about_license_url" translatable="false"><u>https://github.com/reelee81/PdfLabelPrinting/blob/main/LICENSE</u></string>
-    <string name="about_third_party_url" translatable="false"><u>https://github.com/reelee81/PdfLabelPrinting/blob/main/THIRD_PARTY_LICENSES.md</u></string>
-    <string name="about_source_url" translatable="false"><u>https://github.com/reelee81/PdfLabelPrinting</u></string>
+    <string name="about_readme_url" translatable="false"><u>https://github.com/reelee81/ReePDF/blob/main/README.md</u></string>
+    <string name="about_privacy_url" translatable="false"><u>https://github.com/reelee81/ReePDF/blob/main/PRIVACY_POLICY.md</u></string>
+    <string name="about_license_url" translatable="false"><u>https://github.com/reelee81/ReePDF/blob/main/LICENSE</u></string>
+    <string name="about_third_party_url" translatable="false"><u>https://github.com/reelee81/ReePDF/blob/main/THIRD_PARTY_LICENSES.md</u></string>
+    <string name="about_source_url" translatable="false"><u>https://github.com/reelee81/ReePDF</u></string>
     <string name="about_contact_email" translatable="false"><u>reelee81@gmail.com</u></string>
     <string name="no_app_can_open_link">No app can open the link</string>
     <string name="no_email_app">No email app found</string>

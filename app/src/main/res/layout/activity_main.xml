@@ -1077,7 +1077,7 @@
 
                 <com.google.android.material.textfield.TextInputEditText
                     android:id="@+id/file_name"
-                    style="@style/PdfLabelPrinting.EditText.Filename"
+                    style="@style/ReePDF.EditText.Filename"
                     android:layout_width="0dp"
                     android:layout_height="@dimen/dp_50"
                     android:importantForAutofill="no"

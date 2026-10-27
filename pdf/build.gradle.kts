@@ -7,7 +7,7 @@ kotlin {
 }
 
 android {
-    namespace = "hu.reelee81.pdflabelprinting.pdf"
+    namespace = "hu.reelee81.reepdf.pdf"
     compileSdk = 37
 
     defaultConfig {

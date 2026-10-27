@@ -21,16 +21,16 @@ fun parseLocalesConfig(file: File): List<String> {
 }
 
 android {
-    namespace = "hu.reelee81.pdflabelprinting"
+    namespace = "hu.reelee81.reepdf"
     compileSdk = 37
     ndkVersion = "30.0.16248370"
 
     defaultConfig {
-        applicationId = "hu.reelee81.pdflabelprinting"
+        applicationId = "hu.reelee81.reepdf"
         minSdk = 24
         targetSdk = 37
-        versionCode = 36
-        versionName = "36.0"
+        versionCode = 1
+        versionName = "0.01"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <string name="app_name">PDF Címkenyomtatás</string>
+    <string name="app_name">ReePDF</string>
     <string name="normal_pages">NORMÁL</string>
     <string name="label_pages">CÍMKE</string>
     <string name="select_signature">ALÁÍRÁS</string>
@@ -141,7 +141,7 @@
     <string name="failed_to_rename_encrypted_pdf">A titkosított PDF átnevezése sikertelen</string>
     <string name="output_name_reserved">Ezt a fájlnevet az app munkafájljai használják. Válassz másik nevet.</string>
     <string name="battery_optimization">Akkumulátor optimalizálás</string>
-    <string name="battery_optimization_text">A hosszú PDF műveletek (1000+ oldal) miatt érdemes kikapcsolni az akku-optimalizálást az alkalmazásnál, különben a rendszer megállíthatja a feldolgozást, ha háttérbe teszed az appot vagy lezárod a kijelzőt. Különböző gyártóknál más-másféleképpen lehet ezt a beállítást elérni, de általában a Beállítások → Alkalmazások → Alkalmazások kezelése → PDF Címkenyomtatás → Itt kell keresni az "Energiafogyasztás" vagy a "Akkumulátor" beállítási lehetőségeket, amelyeken belül ki/be kapcsolható. Ennek ellenére is előfordulhat, hogy a folyamat szüneteltetett állapotba kerül, mert egyes gyártók túl agresszívan kezelik az akkumulátor védelmet például lezárt kijelzőnél. Ezért ha biztosra akarsz menni, hogy a hosszú műveletek végigfussanak, maradj az app felületén, mert ilyenkor ébren tartja a kijelzőt a feldolgozási folyamat befejezéséig.</string>
+    <string name="battery_optimization_text">A hosszú PDF műveletek (1000+ oldal) miatt érdemes kikapcsolni az akku-optimalizálást az alkalmazásnál, különben a rendszer megállíthatja a feldolgozást, ha háttérbe teszed az appot vagy lezárod a kijelzőt. Különböző gyártóknál más-másféleképpen lehet ezt a beállítást elérni, de általában a Beállítások → Alkalmazások → Alkalmazások kezelése → ReePDF → Itt kell keresni az "Energiafogyasztás" vagy a "Akkumulátor" beállítási lehetőségeket, amelyeken belül ki/be kapcsolható. Ennek ellenére is előfordulhat, hogy a folyamat szüneteltetett állapotba kerül, mert egyes gyártók túl agresszívan kezelik az akkumulátor védelmet például lezárt kijelzőnél. Ezért ha biztosra akarsz menni, hogy a hosszú műveletek végigfussanak, maradj az app felületén, mert ilyenkor ébren tartja a kijelzőt a feldolgozási folyamat befejezéséig.</string>
     <string name="position_on_page">Pozicionálás az oldal(ak)on</string>
     <string name="crop_title">Szabad vágás</string>
     <string name="crop_all_pages">Alkalmazás minden oldalon</string>

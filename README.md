@@ -1,9 +1,10 @@
-# PdfLabelPrinting (PDF Label Printing app)
+# ReePDF
 
-Android application for PDF-based label printing.  
-It turns existing PDF documents and images (e.g. AWB label, CMR, consignment note, delivery note, invoice, order)
-into printable pages on a touch screen: it places several pages or cropped labels on one A4 sheet,
-signs or stamps them, and prints, saves or sends the result.
+Free and open-source PDF toolkit.  
+It opens PDF documents and images, places several pages or cropped areas on one sheet (N-up),
+crops, rotates, reorders and deletes pages, signs or stamps them, and prints, saves or sends the result.
+
+Currently available for Android; desktop versions (Linux, Windows, macOS) are planned.
 
 Everything runs locally on the device; the app has no internet access and collects no data.
 
@@ -25,7 +26,7 @@ We publish the source code so that others can use it, modify it and learn from i
 
 ### Page layout
 
-- Place several pages or labels on one A4 sheet: **Row** × **Column** grid (1–100 each),
+- Place several pages or cropped areas on one A4 sheet: **Row** × **Column** grid (1–100 each),
   in portrait or landscape orientation
 - **Margin** in millimetres around and between the cells (0–100 mm)
 - **Scale**: every page or label is scaled to fill its cell, so small labels are enlarged
@@ -169,7 +170,7 @@ fail the build, it only shows up on the device (for example a PDF that no longer
 tested after every library or Android Gradle Plugin update and before every release.
 
 For this the project has an `r8check` build type: the same shrunk build as the release, signed with the debug key and
-installed as a separate app (“PLP R8 test”, in Hungarian “PLP R8 próba”; `hu.reelee81.pdflabelprinting.r8check`)
+installed as a separate app (“ReePDF R8 test”, in Hungarian “ReePDF R8 próba”; `hu.reelee81.reepdf.r8check`)
 next to the normal one.
 It contains a hidden smoke test screen (`app/src/r8check`) that runs the PDF engine without the user interface:
 it imports every PDF from its input folder, then rebuilds the layout (with Scale and Fit), crops, rotates, positions,
@@ -180,15 +181,15 @@ cancelling an import restores the previous state.
 ./gradlew :app:installR8check
 
 # optional: your own test PDFs (any subfolders); without them only the generated test files are used
-adb shell mkdir -p /sdcard/Android/data/hu.reelee81.pdflabelprinting.r8check/files/r8smoke
-adb push work/00_test_PDFs/. /sdcard/Android/data/hu.reelee81.pdflabelprinting.r8check/files/r8smoke/
+adb shell mkdir -p /sdcard/Android/data/hu.reelee81.reepdf.r8check/files/r8smoke
+adb push work/00_test_PDFs/. /sdcard/Android/data/hu.reelee81.reepdf.r8check/files/r8smoke/
 
 # run everything, or only the cancel check with: -e only cancel
-adb shell am start -n hu.reelee81.pdflabelprinting.r8check/hu.reelee81.pdflabelprinting.R8SmokeActivity
+adb shell am start -n hu.reelee81.reepdf.r8check/hu.reelee81.reepdf.R8SmokeActivity
 
 # result: one OK / FAIL / SKIP line per step, and a DONE summary at the end
-adb logcat -d -s PlpR8Smoke
-adb pull /sdcard/Android/data/hu.reelee81.pdflabelprinting.r8check/files/r8smoke/result.txt
+adb logcat -d -s ReePDFR8Smoke
+adb pull /sdcard/Android/data/hu.reelee81.reepdf.r8check/files/r8smoke/result.txt
 ```
 
 Keep the phone on the smoke test screen until the `DONE` line appears; with many large PDFs this can take a while.
@@ -225,7 +226,7 @@ If you distribute the application or a modified version of it (for example in th
 the AGPL license requires you to make the complete, modified source code
 publicly available as well (under an AGPL-compatible license).
 
-The source code of this app: https://github.com/reelee81/PdfLabelPrinting  
+The source code of this app: https://github.com/reelee81/ReePDF  
 The app shows this link in the “About the app” window.
 
 

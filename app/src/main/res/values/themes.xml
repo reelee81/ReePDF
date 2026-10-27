@@ -1,23 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- MAINACTIVITY THEME -->
-    <style name="Theme.PdfLabelPrinting" parent="Base.Theme.PdfLabelPrinting" />
+    <style name="Theme.ReePDF" parent="Base.Theme.ReePDF" />
 
     <!-- PDFVIEWER THEME -->
-    <style name="Theme.PdfLabelPrinting.PdfViewer" parent="Base.Theme.PdfLabelPrinting">
+    <style name="Theme.ReePDF.PdfViewer" parent="Base.Theme.ReePDF">
         <item name="android:colorBackground">@color/pdf_viewer_sb_bg_color</item>
         <item name="android:statusBarColor">@color/pdf_viewer_sb_bg_color</item>
 
-        <item name="toolbarStyle">@style/Widget.PdfLabelPrinting.Toolbar.PdfViewer</item>
+        <item name="toolbarStyle">@style/Widget.ReePDF.Toolbar.PdfViewer</item>
     </style>
 
     <!-- TOOLBAR PDF VIEWER -->
-    <style name="Widget.PdfLabelPrinting.Toolbar.PdfViewer" parent="Widget.PdfLabelPrinting.Toolbar">
+    <style name="Widget.ReePDF.Toolbar.PdfViewer" parent="Widget.ReePDF.Toolbar">
         <item name="android:backgroundTint">@color/pdf_viewer_sb_bg_color</item>
     </style>
 
     <!-- BASE THEME -->
-    <style name="Base.Theme.PdfLabelPrinting" parent="Theme.Material3.DayNight.NoActionBar">
+    <style name="Base.Theme.ReePDF" parent="Theme.Material3.DayNight.NoActionBar">
         <item name="android:colorBackground">@color/app_background_color</item>
         <item name="actionBarSize">@dimen/dp_56</item>
         <item name="colorControlNormal">@color/app_control_normal_color</item>
@@ -28,26 +28,26 @@
         <item name="fontFamily">@font/roboto</item>
         <item name="android:fontFamily">@font/roboto</item>
 
-        <item name="appBarLayoutStyle">@style/Widget.PdfLabelPrinting.AppBar</item>
-        <item name="toolbarStyle">@style/Widget.PdfLabelPrinting.Toolbar</item>
-        <item name="actionOverflowButtonStyle">@style/PdfLabelPrintingOverflowButton</item>
-        <item name="actionOverflowMenuStyle">@style/PdfLabelPrintingOverflowMenu</item>
-        <item name="materialButtonStyle">@style/Widget.PdfLabelPrinting.Button</item>
-        <item name="android:textViewStyle">@style/Widget.PdfLabelPrinting.TextView</item>
-        <item name="editTextStyle">@style/Widget.PdfLabelPrinting.EditText</item>
-        <item name="radioButtonStyle">@style/Widget.PdfLabelPrinting.RadioButton</item>
-        <item name="switchStyle">@style/Widget.PdfLabelPrinting.Switch.M2</item>
-        <item name="floatingActionButtonStyle">@style/Widget.PdfLabelPrinting.Fab</item>
-        <item name="textAppearanceListItem">@style/TextAppearance.PdfLabelPrinting.ListItem</item>
-        <item name="textAppearanceListItemSecondary">@style/TextAppearance.PdfLabelPrinting.ListItemSecondary</item>
-        <item name="circularProgressIndicatorStyle">@style/Widget.PdfLabelPrinting.CircularProgress</item>
-        <item name="linearProgressIndicatorStyle">@style/Widget.PdfLabelPrinting.LinearProgress</item>
-        <item name="materialAlertDialogTheme">@style/ThemeOverlay.PdfLabelPrinting.AlertDialog</item>
-        <item name="checkboxStyle">@style/Widget.PdfLabelPrinting.CheckBox</item>
+        <item name="appBarLayoutStyle">@style/Widget.ReePDF.AppBar</item>
+        <item name="toolbarStyle">@style/Widget.ReePDF.Toolbar</item>
+        <item name="actionOverflowButtonStyle">@style/ReePDFOverflowButton</item>
+        <item name="actionOverflowMenuStyle">@style/ReePDFOverflowMenu</item>
+        <item name="materialButtonStyle">@style/Widget.ReePDF.Button</item>
+        <item name="android:textViewStyle">@style/Widget.ReePDF.TextView</item>
+        <item name="editTextStyle">@style/Widget.ReePDF.EditText</item>
+        <item name="radioButtonStyle">@style/Widget.ReePDF.RadioButton</item>
+        <item name="switchStyle">@style/Widget.ReePDF.Switch.M2</item>
+        <item name="floatingActionButtonStyle">@style/Widget.ReePDF.Fab</item>
+        <item name="textAppearanceListItem">@style/TextAppearance.ReePDF.ListItem</item>
+        <item name="textAppearanceListItemSecondary">@style/TextAppearance.ReePDF.ListItemSecondary</item>
+        <item name="circularProgressIndicatorStyle">@style/Widget.ReePDF.CircularProgress</item>
+        <item name="linearProgressIndicatorStyle">@style/Widget.ReePDF.LinearProgress</item>
+        <item name="materialAlertDialogTheme">@style/ThemeOverlay.ReePDF.AlertDialog</item>
+        <item name="checkboxStyle">@style/Widget.ReePDF.CheckBox</item>
     </style>
 
     <!-- APPBAR -->
-    <style name="Widget.PdfLabelPrinting.AppBar" parent="Widget.Material3.AppBarLayout">
+    <style name="Widget.ReePDF.AppBar" parent="Widget.Material3.AppBarLayout">
         <item name="android:windowElevation">@dimen/dp_0</item>
         <item name="elevation">@dimen/dp_0</item>
         <item name="android:stateListAnimator">@null</item>
@@ -56,41 +56,41 @@
 
     <!-- TOOLBAR -->
     <!-- overflow menu (text size) -->
-    <style name="TextAppearance.PdfLabelPrinting.PopupMenuItem" parent="TextAppearance.Material3.BodyMedium">
+    <style name="TextAppearance.ReePDF.PopupMenuItem" parent="TextAppearance.Material3.BodyMedium">
         <item name="android:textSize">@dimen/dp_14</item>
     </style>
 
     <!-- overflow menu (text color) -->
-    <style name="Widget.PdfLabelPrinting.PopupMenu.TextView" parent="Widget.AppCompat.TextView">
+    <style name="Widget.ReePDF.PopupMenu.TextView" parent="Widget.AppCompat.TextView">
         <item name="android:textColor">@color/menu_text_color</item>
     </style>
 
     <!-- overflow menu (text size settings) -->
-    <style name="ThemeOverlay.PdfLabelPrinting.ToolbarPopup" parent="ThemeOverlay.Material3.Light">
-        <item name="textAppearanceLargePopupMenu">@style/TextAppearance.PdfLabelPrinting.PopupMenuItem</item>
-        <item name="textAppearanceSmallPopupMenu">@style/TextAppearance.PdfLabelPrinting.PopupMenuItem</item>
-        <item name="android:textAppearanceLargePopupMenu">@style/TextAppearance.PdfLabelPrinting.PopupMenuItem</item>
-        <item name="android:textAppearanceSmallPopupMenu">@style/TextAppearance.PdfLabelPrinting.PopupMenuItem</item>
+    <style name="ThemeOverlay.ReePDF.ToolbarPopup" parent="ThemeOverlay.Material3.Light">
+        <item name="textAppearanceLargePopupMenu">@style/TextAppearance.ReePDF.PopupMenuItem</item>
+        <item name="textAppearanceSmallPopupMenu">@style/TextAppearance.ReePDF.PopupMenuItem</item>
+        <item name="android:textAppearanceLargePopupMenu">@style/TextAppearance.ReePDF.PopupMenuItem</item>
+        <item name="android:textAppearanceSmallPopupMenu">@style/TextAppearance.ReePDF.PopupMenuItem</item>
 
-        <item name="android:textViewStyle">@style/Widget.PdfLabelPrinting.PopupMenu.TextView</item>
+        <item name="android:textViewStyle">@style/Widget.ReePDF.PopupMenu.TextView</item>
     </style>
 
     <!-- overflow button (menu icon color) -->
-    <style name="PdfLabelPrintingOverflowButton" parent="Widget.AppCompat.ActionButton.Overflow">
+    <style name="ReePDFOverflowButton" parent="Widget.AppCompat.ActionButton.Overflow">
         <item name="android:tint">@color/ic_custom_icon_color</item>
     </style>
 
     <!-- overflow menu (menu background color) -->
-    <style name="PdfLabelPrintingOverflowMenu" parent="Widget.Material3.PopupMenu.Overflow">
+    <style name="ReePDFOverflowMenu" parent="Widget.Material3.PopupMenu.Overflow">
         <item name="android:popupBackground">@drawable/menu_bg_overflow_popup</item>
     </style>
 
-    <style name="TextAppearance.PdfLabelPrinting.ToolbarTitle.NoScale" parent="TextAppearance.Material3.TitleMedium">
+    <style name="TextAppearance.ReePDF.ToolbarTitle.NoScale" parent="TextAppearance.Material3.TitleMedium">
         <item name="android:textSize">@dimen/dp_20</item>
         <item name="lineHeight">@dimen/dp_24</item>
     </style>
 
-    <style name="Widget.PdfLabelPrinting.Toolbar" parent="Widget.Material3.Toolbar.Surface">
+    <style name="Widget.ReePDF.Toolbar" parent="Widget.Material3.Toolbar.Surface">
         <item name="android:backgroundTint">@color/app_background_color</item>
         <item name="android:backgroundTintMode">src_in</item>
         <item name="titleCentered">false</item>
@@ -101,17 +101,17 @@
         <item name="elevation">@dimen/dp_0</item>
         <item name="android:stateListAnimator">@null</item>
 
-        <item name="popupTheme">@style/ThemeOverlay.PdfLabelPrinting.ToolbarPopup</item>
-        <item name="titleTextAppearance">@style/TextAppearance.PdfLabelPrinting.ToolbarTitle.NoScale</item>
+        <item name="popupTheme">@style/ThemeOverlay.ReePDF.ToolbarPopup</item>
+        <item name="titleTextAppearance">@style/TextAppearance.ReePDF.ToolbarTitle.NoScale</item>
     </style>
 
     <!-- BUTTON -->
-    <style name="TextAppearance.PdfLabelPrinting.Button.NoScale" parent="TextAppearance.Material3.LabelMedium">
+    <style name="TextAppearance.ReePDF.Button.NoScale" parent="TextAppearance.Material3.LabelMedium">
         <item name="android:textSize">@dimen/dp_13</item>
         <item name="lineHeight">@dimen/dp_17</item>
     </style>
 
-    <style name="Widget.PdfLabelPrinting.Button.Compact" parent="Widget.Material3.Button">
+    <style name="Widget.ReePDF.Button.Compact" parent="Widget.Material3.Button">
         <item name="android:minHeight">@dimen/dp_0</item>
         <item name="ensureMinTouchTargetSize">false</item>
         <item name="android:includeFontPadding">false</item>
@@ -126,10 +126,10 @@
         <item name="elevation">@dimen/dp_0</item>
         <item name="android:stateListAnimator">@null</item>
 
-        <item name="android:textAppearance">@style/TextAppearance.PdfLabelPrinting.Button.NoScale</item>
+        <item name="android:textAppearance">@style/TextAppearance.ReePDF.Button.NoScale</item>
     </style>
 
-    <style name="Widget.PdfLabelPrinting.Button" parent="Widget.PdfLabelPrinting.Button.Compact">
+    <style name="Widget.ReePDF.Button" parent="Widget.ReePDF.Button.Compact">
         <item name="backgroundTint">@color/material_button_bg_color</item>
         <item name="android:textColor">@color/material_button_text_color</item>
         <item name="iconTint">@color/material_button_text_color</item>
@@ -139,78 +139,78 @@
     </style>
 
     <!-- text button -->
-    <style name="PdfLabelPrinting.TextButton" parent="Widget.Material3.Button.TextButton">
+    <style name="ReePDF.TextButton" parent="Widget.Material3.Button.TextButton">
         <item name="android:textColor">@color/material_textbutton_text_color</item>
         <item name="android:gravity">center</item>
         <item name="rippleColor">@color/material_textbutton_ripple_color</item>
         <item name="textAllCaps">false</item>
         <item name="cornerRadius">@dimen/dp_4</item>
 
-        <item name="android:textAppearance">@style/TextAppearance.PdfLabelPrinting.Button.NoScale</item>
+        <item name="android:textAppearance">@style/TextAppearance.ReePDF.Button.NoScale</item>
     </style>
 
     <!-- NORMAL TEXT -->
-    <style name="TextAppearance.PdfLabelPrinting.Text.Normal" parent="TextAppearance.Material3.BodyMedium">
+    <style name="TextAppearance.ReePDF.Text.Normal" parent="TextAppearance.Material3.BodyMedium">
         <item name="android:textSize">@dimen/dp_13</item>
     </style>
 
-    <style name="Widget.PdfLabelPrinting.TextView" parent="Widget.AppCompat.TextView">
+    <style name="Widget.ReePDF.TextView" parent="Widget.AppCompat.TextView">
         <item name="android:gravity">center</item>
         <item name="android:includeFontPadding">false</item>
         <item name="android:textColor">@color/normal_text_color</item>
 
-        <item name="android:textAppearance">@style/TextAppearance.PdfLabelPrinting.Text.Normal</item>
+        <item name="android:textAppearance">@style/TextAppearance.ReePDF.Text.Normal</item>
     </style>
 
     <!-- THUMB TEXT -->
-    <style name="TextAppearance.PdfLabelPrinting.Text.Thumb" parent="TextAppearance.Material3.BodyMedium">
+    <style name="TextAppearance.ReePDF.Text.Thumb" parent="TextAppearance.Material3.BodyMedium">
         <item name="android:textSize">@dimen/dp_11</item>
     </style>
 
-    <style name="PdfLabelPrinting.TextView.Thumb" parent="Widget.AppCompat.TextView">
+    <style name="ReePDF.TextView.Thumb" parent="Widget.AppCompat.TextView">
         <item name="android:gravity">center</item>
         <item name="android:includeFontPadding">false</item>
         <item name="android:textColor">@color/thumb_text_color</item>
 
-        <item name="android:textAppearance">@style/TextAppearance.PdfLabelPrinting.Text.Thumb</item>
+        <item name="android:textAppearance">@style/TextAppearance.ReePDF.Text.Thumb</item>
     </style>
 
     <!-- NORMAL EDIT TEXT -->
-    <style name="TextAppearance.PdfLabelPrinting.EditText.Normal" parent="TextAppearance.Material3.BodyMedium">
+    <style name="TextAppearance.ReePDF.EditText.Normal" parent="TextAppearance.Material3.BodyMedium">
         <item name="android:textSize">@dimen/dp_17</item>
     </style>
 
-    <style name="Widget.PdfLabelPrinting.EditText" parent="Widget.AppCompat.EditText">
+    <style name="Widget.ReePDF.EditText" parent="Widget.AppCompat.EditText">
         <item name="android:textColor">@color/edittext_text_color</item>
         <item name="android:textColorHint">@color/edittext_hint_text_color</item>
         <item name="android:backgroundTint">@color/edittext_bg_color</item>
         <item name="android:gravity">bottom|center_horizontal</item>
         <item name="android:includeFontPadding">false</item>
 
-        <item name="android:textAppearance">@style/TextAppearance.PdfLabelPrinting.EditText.Normal</item>
+        <item name="android:textAppearance">@style/TextAppearance.ReePDF.EditText.Normal</item>
     </style>
 
     <!-- FILENAME EDIT TEXT -->
-    <style name="TextAppearance.PdfLabelPrinting.EditText.Filename" parent="TextAppearance.Material3.BodyMedium">
+    <style name="TextAppearance.ReePDF.EditText.Filename" parent="TextAppearance.Material3.BodyMedium">
         <item name="android:textSize">@dimen/dp_12</item>
     </style>
 
-    <style name="PdfLabelPrinting.EditText.Filename" parent="Widget.AppCompat.EditText">
+    <style name="ReePDF.EditText.Filename" parent="Widget.AppCompat.EditText">
         <item name="android:textColor">@color/edittext_text_color</item>
         <item name="android:textColorHint">@color/edittext_hint_text_color</item>
         <item name="android:backgroundTint">@color/edittext_bg_color</item>
         <item name="android:gravity">bottom|center_horizontal</item>
         <item name="android:includeFontPadding">false</item>
 
-        <item name="android:textAppearance">@style/TextAppearance.PdfLabelPrinting.EditText.Filename</item>
+        <item name="android:textAppearance">@style/TextAppearance.ReePDF.EditText.Filename</item>
     </style>
 
     <!-- RADIO BUTTON -->
-    <style name="TextAppearance.PdfLabelPrinting.Radio.NoScale" parent="TextAppearance.Material3.BodyMedium">
+    <style name="TextAppearance.ReePDF.Radio.NoScale" parent="TextAppearance.Material3.BodyMedium">
         <item name="android:textSize">@dimen/dp_13</item>
     </style>
 
-    <style name="Widget.PdfLabelPrinting.RadioButton" parent="Widget.Material3.CompoundButton.RadioButton">
+    <style name="Widget.ReePDF.RadioButton" parent="Widget.Material3.CompoundButton.RadioButton">
         <item name="android:textColor">@color/radio_switch_text_color</item>
         <item name="android:background">@android:color/transparent</item>
         <item name="buttonTint">@color/radio_button_bg_color</item>
@@ -220,15 +220,15 @@
         <item name="android:stateListAnimator">@null</item>
         <item name="rippleColor">@null</item>
 
-        <item name="android:textAppearance">@style/TextAppearance.PdfLabelPrinting.Radio.NoScale</item>
+        <item name="android:textAppearance">@style/TextAppearance.ReePDF.Radio.NoScale</item>
     </style>
 
     <!-- CHECKBOX BUTTON -->
-    <style name="TextAppearance.PdfLabelPrinting.Check.NoScale" parent="TextAppearance.Material3.BodyMedium">
+    <style name="TextAppearance.ReePDF.Check.NoScale" parent="TextAppearance.Material3.BodyMedium">
         <item name="android:textSize">@dimen/dp_13</item>
     </style>
 
-    <style name="Widget.PdfLabelPrinting.CheckBox" parent="Widget.Material3.CompoundButton.CheckBox">
+    <style name="Widget.ReePDF.CheckBox" parent="Widget.Material3.CompoundButton.CheckBox">
         <item name="useMaterialThemeColors">false</item>
         <item name="android:button">@drawable/ic_checkbox</item>
         <item name="buttonTint">@color/ic_checkbox_custom_color</item>
@@ -237,15 +237,15 @@
         <item name="elevation">@dimen/dp_0</item>
         <item name="android:stateListAnimator">@null</item>
 
-        <item name="android:textAppearance">@style/TextAppearance.PdfLabelPrinting.Check.NoScale</item>
+        <item name="android:textAppearance">@style/TextAppearance.ReePDF.Check.NoScale</item>
     </style>
 
     <!-- SWITCH BUTTON -->
-    <style name="TextAppearance.PdfLabelPrinting.Switch.M2.NoScale" parent="TextAppearance.Material3.BodyMedium">
+    <style name="TextAppearance.ReePDF.Switch.M2.NoScale" parent="TextAppearance.Material3.BodyMedium">
         <item name="android:textSize">@dimen/dp_13</item>
     </style>
 
-    <style name="Widget.PdfLabelPrinting.Switch.M2" parent="Widget.MaterialComponents.CompoundButton.Switch">
+    <style name="Widget.ReePDF.Switch.M2" parent="Widget.MaterialComponents.CompoundButton.Switch">
         <item name="android:textColor">@color/radio_switch_text_color</item>
         <item name="android:background">@android:color/transparent</item>
         <item name="useMaterialThemeColors">false</item>
@@ -255,11 +255,11 @@
         <item name="elevation">@dimen/dp_0</item>
         <item name="android:stateListAnimator">@null</item>
 
-        <item name="android:textAppearance">@style/TextAppearance.PdfLabelPrinting.Switch.M2.NoScale</item>
+        <item name="android:textAppearance">@style/TextAppearance.ReePDF.Switch.M2.NoScale</item>
     </style>
 
     <!-- FLOATING ACTION BUTTON -->
-    <style name="Widget.PdfLabelPrinting.Fab" parent="Widget.Material3.FloatingActionButton.Primary">
+    <style name="Widget.ReePDF.Fab" parent="Widget.Material3.FloatingActionButton.Primary">
         <item name="android:textColor">@color/fab_button_text_color</item>
         <item name="android:backgroundTint">@color/fab_button_bg_color</item>
         <item name="rippleColor">@color/fab_button_ripple_color</item>
@@ -271,30 +271,30 @@
     </style>
 
     <!-- LIST -->
-    <style name="TextAppearance.PdfLabelPrinting.ListItem" parent="TextAppearance.Material3.BodyMedium">
+    <style name="TextAppearance.ReePDF.ListItem" parent="TextAppearance.Material3.BodyMedium">
         <item name="android:textSize">@dimen/dp_14</item>
         <item name="android:textColor">@color/list_first_text_color</item>
     </style>
 
-    <style name="TextAppearance.PdfLabelPrinting.ListItemSecondary" parent="TextAppearance.Material3.BodyMedium">
+    <style name="TextAppearance.ReePDF.ListItemSecondary" parent="TextAppearance.Material3.BodyMedium">
         <item name="android:textSize">@dimen/dp_12</item>
         <item name="android:textColor">@color/list_secondary_text_color</item>
     </style>
 
     <!-- PROGRESS BAR -->
-    <style name="Widget.PdfLabelPrinting.CircularProgress" parent="Widget.Material3.CircularProgressIndicator">
+    <style name="Widget.ReePDF.CircularProgress" parent="Widget.Material3.CircularProgressIndicator">
         <item name="indicatorColor">@color/progress_indicator_color</item>
         <item name="trackColor">@color/progress_track_color</item>
     </style>
 
-    <style name="Widget.PdfLabelPrinting.LinearProgress" parent="Widget.Material3.LinearProgressIndicator">
+    <style name="Widget.ReePDF.LinearProgress" parent="Widget.Material3.LinearProgressIndicator">
         <item name="indicatorColor">@color/progress_indicator_color</item>
         <item name="trackColor">@color/progress_track_color</item>
         <item name="trackStopIndicatorSize">@dimen/dp_0</item>
     </style>
 
     <!-- ALERT DIALOG/POPUP DIALOG -->
-    <style name="ShapeAppearanceOverlay.PdfLabelPrinting.Dialog.Radius" parent="">
+    <style name="ShapeAppearanceOverlay.ReePDF.Dialog.Radius" parent="">
         <item name="cornerFamily">rounded</item>
         <item name="cornerSizeTopLeft">@dimen/dp_12</item>
         <item name="cornerSizeTopRight">@dimen/dp_12</item>
@@ -302,29 +302,29 @@
         <item name="cornerSizeBottomRight">@dimen/dp_12</item>
     </style>
 
-    <style name="PdfLabelPrinting.Dialog.Background.Radius" parent="MaterialAlertDialog.Material3">
+    <style name="ReePDF.Dialog.Background.Radius" parent="MaterialAlertDialog.Material3">
         <item name="backgroundTint">@color/alertdialog_background_color</item>
         <item name="backgroundInsetStart">@dimen/dp_0</item>
         <item name="backgroundInsetEnd">@dimen/dp_0</item>
         <item name="backgroundInsetTop">@dimen/dp_0</item>
         <item name="backgroundInsetBottom">@dimen/dp_0</item>
 
-        <item name="shapeAppearanceOverlay">@style/ShapeAppearanceOverlay.PdfLabelPrinting.Dialog.Radius</item>
+        <item name="shapeAppearanceOverlay">@style/ShapeAppearanceOverlay.ReePDF.Dialog.Radius</item>
     </style>
 
-    <style name="ThemeOverlay.PdfLabelPrinting.AlertDialog" parent="ThemeOverlay.Material3.MaterialAlertDialog">
+    <style name="ThemeOverlay.ReePDF.AlertDialog" parent="ThemeOverlay.Material3.MaterialAlertDialog">
         <item name="android:windowElevation">@dimen/dp_0</item>
         <item name="elevation">@dimen/dp_0</item>
         <item name="android:stateListAnimator">@null</item>
 
-        <item name="alertDialogStyle">@style/PdfLabelPrinting.Dialog.Background.Radius</item>
+        <item name="alertDialogStyle">@style/ReePDF.Dialog.Background.Radius</item>
     </style>
 
-    <style name="SignaturePosition.PdfLabelPrinting.Dialog.Background.Radius" parent="PdfLabelPrinting.Dialog.Background.Radius">
+    <style name="SignaturePosition.ReePDF.Dialog.Background.Radius" parent="ReePDF.Dialog.Background.Radius">
         <item name="backgroundTint">@color/sign_position_bg_color</item>
     </style>
 
-    <style name="SignaturePosition.PdfLabelPrinting.AlertDialog" parent="ThemeOverlay.PdfLabelPrinting.AlertDialog">
-        <item name="alertDialogStyle">@style/SignaturePosition.PdfLabelPrinting.Dialog.Background.Radius</item>
+    <style name="SignaturePosition.ReePDF.AlertDialog" parent="ThemeOverlay.ReePDF.AlertDialog">
+        <item name="alertDialogStyle">@style/SignaturePosition.ReePDF.Dialog.Background.Radius</item>
     </style>
 </resources>

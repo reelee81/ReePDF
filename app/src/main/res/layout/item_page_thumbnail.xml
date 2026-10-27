@@ -9,7 +9,7 @@
 
     <com.google.android.material.textview.MaterialTextView
         android:id="@+id/page_number"
-        style="@style/PdfLabelPrinting.TextView.Thumb"
+        style="@style/ReePDF.TextView.Thumb"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         app:layout_constraintTop_toTopOf="parent"
@@ -89,7 +89,7 @@
 
     <com.google.android.material.textview.MaterialTextView
         android:id="@+id/tv_size_label"
-        style="@style/PdfLabelPrinting.TextView.Thumb"
+        style="@style/ReePDF.TextView.Thumb"
         android:text="@string/tv_size_label_text"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"

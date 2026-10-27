@@ -1,7 +1,7 @@
-Privacy Policy – PdfLabelPrinting (PDF Label Printing app)
+Privacy Policy – ReePDF
 
-The PDF Label Printing (PdfLabelPrinting) application does not collect, store, or transmit any personal data to a server.
-It only processes PDF files selected by the user and generates printable labels from them.
+The ReePDF application does not collect, store, or transmit any personal data to a server.
+It only processes the PDF files and images selected by the user.
 File handling and the insertion of signatures take place entirely on the user’s device.
 
 The application:

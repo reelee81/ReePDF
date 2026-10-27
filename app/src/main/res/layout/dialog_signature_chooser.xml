@@ -45,7 +45,7 @@
 
     <com.google.android.material.button.MaterialButton
         android:id="@+id/sic_new"
-        style="@style/PdfLabelPrinting.TextButton"
+        style="@style/ReePDF.TextButton"
         android:text="@string/new_text"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
@@ -56,7 +56,7 @@
 
     <com.google.android.material.button.MaterialButton
         android:id="@+id/sic_remove"
-        style="@style/PdfLabelPrinting.TextButton"
+        style="@style/ReePDF.TextButton"
         android:text="@string/remove_text"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
@@ -67,7 +67,7 @@
 
     <com.google.android.material.button.MaterialButton
         android:id="@+id/sic_cancel"
-        style="@style/PdfLabelPrinting.TextButton"
+        style="@style/ReePDF.TextButton"
         android:text="@string/cancel_text"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
@@ -78,7 +78,7 @@
 
     <com.google.android.material.button.MaterialButton
         android:id="@+id/sic_ok"
-        style="@style/PdfLabelPrinting.TextButton"
+        style="@style/ReePDF.TextButton"
         android:text="@string/ok_text"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
