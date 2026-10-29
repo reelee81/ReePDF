@@ -200,11 +200,11 @@ class PdfCopySupportTest {
                 .getAsDictionary(PdfName.FontDescriptor).getAsStream(PdfName.FontFile2).bytes
             assertArrayEquals(requireNotNull(originalFont), program)
             val encoding = font.getAsStream(PdfName.Encoding).bytes.toString(Charsets.US_ASCII)
-            assertEquals(PdfName("PdfLabelIdentityEncoding"), font.getAsStream(PdfName.Encoding).getAsName(PdfName.CMapName))
+            assertEquals(PdfName("ReePDFIdentityEncoding"), font.getAsStream(PdfName.Encoding).getAsName(PdfName.CMapName))
             assertTrue(encoding.contains("begincidchar"))
             assertTrue(encoding.contains("<0043> 38"))
             val unicode = font.getAsStream(PdfName.ToUnicode).bytes.toString(Charsets.US_ASCII)
-            assertEquals(PdfName("PdfLabelIdentityUnicode"), font.getAsStream(PdfName.ToUnicode).getAsName(PdfName.CMapName))
+            assertEquals(PdfName("ReePDFIdentityUnicode"), font.getAsStream(PdfName.ToUnicode).getAsName(PdfName.CMapName))
             assertTrue(unicode.contains("<0043> <0043>"))
             assertTrue(!unicode.contains("beginbfrange"))
             assertTrue(PdfTextExtractor.getTextFromPage(result.getPage(1)).contains("Checkliste Service"))

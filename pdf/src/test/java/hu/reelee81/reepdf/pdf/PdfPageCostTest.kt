@@ -1,6 +1,16 @@
 package hu.reelee81.reepdf.pdf
 
+import com.itextpdf.io.font.constants.StandardFonts
+import com.itextpdf.kernel.font.PdfFontFactory
+import com.itextpdf.kernel.geom.PageSize
+import com.itextpdf.kernel.pdf.PdfArray
+import com.itextpdf.kernel.pdf.PdfDictionary
 import com.itextpdf.kernel.pdf.PdfDocument
+import com.itextpdf.kernel.pdf.PdfName
+import com.itextpdf.kernel.pdf.PdfNumber
+import com.itextpdf.kernel.pdf.PdfString
+import com.itextpdf.kernel.pdf.PdfWriter
+import com.itextpdf.kernel.pdf.canvas.PdfCanvas
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.Locale
@@ -16,21 +26,21 @@ class PdfPageCostTest {
     @Test
     fun theStreamsOfAPageAreAddedUpWithoutCrossingToOtherPages() {
         open { pdf ->
-            assertCost(10L + 100 + 1_000 + 5_000 + 7, PdfPageCost(pdf).of(1))
+            assertCost(10L + 100 + 1_000 + 5_000 + 7, PdfPageCost(pdf, objectBytes = 0).of(1))
         }
     }
 
     @Test
     fun inheritedResourcesAreCounted() {
         open { pdf ->
-            assertCost(20L + 300 + 5_000, PdfPageCost(pdf).of(2))
+            assertCost(20L + 300 + 5_000, PdfPageCost(pdf, objectBytes = 0).of(2))
         }
     }
 
     @Test
     fun aSharedObjectCountsOnceInABatch() {
         open { pdf ->
-            val cost = PdfPageCost(pdf)
+            val cost = PdfPageCost(pdf, objectBytes = 0)
             cost.of(1)
             assertCost(20L + 300, cost.of(2))
         }
@@ -39,15 +49,87 @@ class PdfPageCostTest {
     @Test
     fun theBudgetEndsTheBatch() {
         open { pdf ->
-            assertEnd(1, PdfPageCost.batchEnd(pdf, 1, 2, 20, budget = 6_117))
-            assertEnd(2, PdfPageCost.batchEnd(pdf, 1, 2, 20, budget = 6_118))
-            assertEnd(1, PdfPageCost.batchEnd(pdf, 1, 2, 1, budget = Long.MAX_VALUE))
-            assertEnd(2, PdfPageCost.batchEnd(pdf, 2, 2, 20, budget = 1))
+            assertEnd(1, PdfPageCost.batchEnd(pdf, 1, 2, 20, budget = 6_117, objectBytes = 0))
+            assertEnd(2, PdfPageCost.batchEnd(pdf, 1, 2, 20, budget = 6_118, objectBytes = 0))
+            assertEnd(1, PdfPageCost.batchEnd(pdf, 1, 2, 1, budget = Long.MAX_VALUE, objectBytes = 0))
+            assertEnd(2, PdfPageCost.batchEnd(pdf, 2, 2, 20, budget = 1, objectBytes = 0))
         }
     }
 
+    @Test
+    fun theObjectsOfAPageAreCountedWithoutPageNodes() {
+        open { pdf ->
+            assertCost(59, objects(pdf, 1))
+        }
+    }
+
+    @Test
+    fun theObjectsOfInheritedResourcesAreCounted() {
+        open { pdf ->
+            assertCost(28, objects(pdf, 2))
+        }
+    }
+
+    @Test
+    fun aSharedObjectIsCountedOnceInABatch() {
+        open { pdf ->
+            val cost = PdfPageCost(pdf, objectBytes = 1)
+            cost.of(1)
+            assertCost(20L + 300 + 19, cost.of(2))
+        }
+    }
+
+    @Test
+    fun byDefaultEveryObjectCostsObjectBytes() {
+        open { pdf ->
+            assertCost(6_117L + 59 * PdfPageCost.OBJECT_BYTES, PdfPageCost(pdf).of(1))
+        }
+    }
+
+    @Test
+    fun pagesWithManyObjectsEndTheBatchEarly() {
+        PdfDocument(PdfIo.reader(generated("objects.pdf", pages = 10, objectsPerPage = 2_000).absolutePath)).use { pdf ->
+            assertEnd(10, PdfPageCost.batchEnd(pdf, 1, 10, 100, budget = 10L * 1024 * 1024, objectBytes = 0))
+            assertEnd(4, PdfPageCost.batchEnd(pdf, 1, 10, 100, budget = 10L * 1024 * 1024))
+        }
+    }
+
+    @Test
+    fun aNormalDocumentStaysOneBatch() {
+        PdfDocument(PdfIo.reader(generated("normal.pdf", pages = 100, objectsPerPage = 0).absolutePath)).use { pdf ->
+            assertEnd(100, PdfPageCost.batchEnd(pdf, 1, 100, 100, budget = 256L * 1024 * 1024 / 8))
+        }
+    }
+
+    private fun objects(pdf: PdfDocument, page: Int): Long =
+        PdfPageCost(pdf, objectBytes = 1).of(page) - PdfPageCost(pdf, objectBytes = 0).of(page)
+
     private fun open(block: (PdfDocument) -> Unit) {
         PdfDocument(PdfIo.reader(fixture().absolutePath)).use(block)
+    }
+
+    private fun generated(name: String, pages: Int, objectsPerPage: Int): File {
+        val file = temp.newFile(name)
+        PdfDocument(PdfWriter(file.absolutePath, PdfIo.writerProperties())).use { doc ->
+            val font = PdfFontFactory.createFont(StandardFonts.HELVETICA)
+            repeat(pages) { index ->
+                val page = doc.addNewPage(PageSize.A4)
+                PdfCanvas(page).beginText().setFontAndSize(font, 12f).moveText(50.0, 700.0)
+                    .showText("Page ${index + 1}").endText().release()
+                if (objectsPerPage > 0) {
+                    val array = PdfArray()
+                    repeat(objectsPerPage) { i ->
+                        val dict = PdfDictionary()
+                        dict.put(PdfName.N, PdfNumber(i))
+                        dict.put(PdfName.T, PdfString("x"))
+                        array.add(dict.makeIndirect(doc))
+                    }
+                    page.pdfObject.put(PdfName("ReeObjects"), array)
+                }
+                page.flush()
+            }
+        }
+        return file
     }
 
     private fun fixture(): File = rawPdf(

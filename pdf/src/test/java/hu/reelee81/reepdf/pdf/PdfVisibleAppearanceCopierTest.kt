@@ -474,7 +474,7 @@ class PdfVisibleAppearanceCopierTest {
 
     @Test
     fun stressMixedPagesKeepTheExistingReopenAndFlushPattern() {
-        val count = System.getProperty("pdflabel.stressPages")?.toIntOrNull() ?: 0
+        val count = System.getProperty("reepdf.stressPages")?.toIntOrNull() ?: 0
         assumeTrue("Enabled explicitly for bounded-heap stress verification", count > 0)
         val sourceFile = temporary.newFile("many-pages.pdf")
         PdfDocument(PdfWriter(sourceFile.absolutePath)).use { pdf ->
@@ -522,7 +522,7 @@ class PdfVisibleAppearanceCopierTest {
         var peakHeap = 0L
         PdfDocument(PdfWriter(destinationFile.absolutePath)).use { destination ->
             destination.setFlushUnusedObjects(true)
-            val batch = (System.getProperty("pdflabel.stressBatch")?.toIntOrNull() ?: 10).coerceAtLeast(1)
+            val batch = (System.getProperty("reepdf.stressBatch")?.toIntOrNull() ?: 10).coerceAtLeast(1)
             for (start in 1..count step batch) {
                 val end = minOf(count, start + batch - 1)
                 PdfDocument(PdfReader(sourceFile.absolutePath).setMemorySavingMode(true)).use { source ->
@@ -540,7 +540,7 @@ class PdfVisibleAppearanceCopierTest {
             assertTrue(result.getPage(count).annotations.isEmpty())
         }
         val chunk = temporary.newFile("xobject-chunk.pdf")
-        val batch = (System.getProperty("pdflabel.stressBatch")?.toIntOrNull() ?: 10).coerceAtLeast(1)
+        val batch = (System.getProperty("reepdf.stressBatch")?.toIntOrNull() ?: 10).coerceAtLeast(1)
         for (start in 1..count step batch) {
             val end = minOf(count, start + batch - 1)
             PdfDocument(PdfReader(destinationFile.absolutePath).setMemorySavingMode(true)).use { source ->

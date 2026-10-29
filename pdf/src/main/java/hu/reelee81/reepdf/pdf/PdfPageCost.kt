@@ -9,7 +9,7 @@ import com.itextpdf.kernel.pdf.PdfObject
 import com.itextpdf.kernel.pdf.PdfStream
 import hu.reelee81.reepdf.core.PageBatch
 
-class PdfPageCost(private val document: PdfDocument) {
+class PdfPageCost(private val document: PdfDocument, private val objectBytes: Long = OBJECT_BYTES) {
     private val seen = HashSet<PdfIndirectReference>()
 
     fun of(page: Int): Long {
@@ -18,18 +18,26 @@ class PdfPageCost(private val document: PdfDocument) {
         addChildren(pageDict, pending)
         if (!pageDict.containsKey(PdfName.Resources)) inheritedResources(pageDict)?.let { pending += it }
         var bytes = 0L
+        var objects = 0L
         while (pending.isNotEmpty()) {
             when (val obj = resolve(pending.removeLast()) ?: continue) {
                 is PdfStream -> {
+                    objects++
                     bytes += obj.getAsNumber(PdfName.Length)?.longValue()?.coerceAtLeast(0) ?: 0
                     addChildren(obj, pending)
                 }
-                is PdfDictionary -> if (!isPageNode(obj)) addChildren(obj, pending)
-                is PdfArray -> for (i in 0 until obj.size()) pending += obj.get(i, false)
-                else -> Unit
+                is PdfDictionary -> if (!isPageNode(obj)) {
+                    objects++
+                    addChildren(obj, pending)
+                }
+                is PdfArray -> {
+                    objects++
+                    for (i in 0 until obj.size()) pending += obj.get(i, false)
+                }
+                else -> objects++
             }
         }
-        return bytes
+        return bytes + objects * objectBytes
     }
 
     private fun resolve(value: PdfObject): PdfObject? {
@@ -61,8 +69,17 @@ class PdfPageCost(private val document: PdfDocument) {
     }
 
     companion object {
-        fun batchEnd(document: PdfDocument, from: Int, last: Int, batchSize: Int, budget: Long = PdfBatchBudget.bytes()): Int {
-            val cost = PdfPageCost(document)
+        const val OBJECT_BYTES = 512L
+
+        fun batchEnd(
+            document: PdfDocument,
+            from: Int,
+            last: Int,
+            batchSize: Int,
+            budget: Long = PdfBatchBudget.bytes(),
+            objectBytes: Long = OBJECT_BYTES
+        ): Int {
+            val cost = PdfPageCost(document, objectBytes)
             return PageBatch.end(from, last, batchSize, budget, cost::of)
         }
     }

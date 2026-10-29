@@ -139,4 +139,38 @@
             <include layout="@layout/dialog_pdf_editor_erase_all" />
         </LinearLayout>
     </androidx.constraintlayout.widget.ConstraintLayout>
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/overlay_dialog_pdf_editor_erase_unsaved"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:background="@color/dialog_overlay_background_color"
+        android:clickable="true"
+        android:elevation="@dimen/dp_9999_overlay"
+        android:focusable="true"
+        android:paddingLeft="@dimen/dp_16"
+        android:paddingTop="@dimen/dp_16"
+        android:paddingRight="@dimen/dp_16"
+        android:paddingBottom="@dimen/dp_16"
+        android:visibility="gone"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintLeft_toLeftOf="parent"
+        app:layout_constraintRight_toRightOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <LinearLayout
+            android:id="@+id/overlay_dialog_pdf_editor_erase_unsaved_panel"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:background="@drawable/bg_overlay_dialog_panel"
+            android:orientation="vertical"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintLeft_toLeftOf="parent"
+            app:layout_constraintRight_toRightOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintWidth_max="@dimen/dp_9999_overlay">
+
+            <include layout="@layout/dialog_pdf_editor_erase_unsaved" />
+        </LinearLayout>
+    </androidx.constraintlayout.widget.ConstraintLayout>
 </androidx.constraintlayout.widget.ConstraintLayout>

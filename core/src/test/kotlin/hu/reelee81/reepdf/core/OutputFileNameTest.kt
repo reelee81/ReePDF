@@ -28,10 +28,10 @@ class OutputFileNameTest {
     @Test
     fun unknownOrDifferentlyCasedTokensStayUnchanged() {
         assertEquals(
-            "Label [yyyy] [dd] [HH] [M]",
-            OutputFileName.replaceTimeTokens("Label [yyyy] [dd] [HH] [M]", now, locale)
+            "Custom [yyyy] [dd] [HH] [M]",
+            OutputFileName.replaceTimeTokens("Custom [yyyy] [dd] [HH] [M]", now, locale)
         )
-        assertEquals("Label_03_05", OutputFileName.replaceTimeTokens("Label_[MM]_[mm]", now, locale))
+        assertEquals("Custom_03_05", OutputFileName.replaceTimeTokens("Custom_[MM]_[mm]", now, locale))
     }
 
     @Test

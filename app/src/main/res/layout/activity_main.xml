@@ -96,10 +96,10 @@
                     android:layout_marginBottom="@dimen/dp_10">
 
                     <com.google.android.material.button.MaterialButton
-                        android:id="@+id/save_label_pages"
+                        android:id="@+id/save_custom_pages"
                         android:layout_width="0dp"
                         android:layout_height="@dimen/dp_44"
-                        android:text="@string/label_pages"
+                        android:text="@string/custom_pages"
                         android:layout_marginRight="@dimen/dp_2"
                         app:layout_constraintLeft_toLeftOf="parent"
                         app:layout_constraintRight_toLeftOf="@+id/save_load_simple_text_2"
@@ -116,17 +116,17 @@
                         android:gravity="center"
                         android:layout_marginLeft="@dimen/dp_2"
                         android:layout_marginRight="@dimen/dp_2"
-                        app:layout_constraintLeft_toRightOf="@id/save_label_pages"
-                        app:layout_constraintRight_toLeftOf="@+id/load_label_pages"
+                        app:layout_constraintLeft_toRightOf="@id/save_custom_pages"
+                        app:layout_constraintRight_toLeftOf="@+id/load_custom_pages"
                         app:layout_constraintTop_toTopOf="parent"
                         app:layout_constraintBottom_toBottomOf="parent"
                         app:layout_constraintHorizontal_weight="1" />
 
                     <com.google.android.material.button.MaterialButton
-                        android:id="@+id/load_label_pages"
+                        android:id="@+id/load_custom_pages"
                         android:layout_width="0dp"
                         android:layout_height="@dimen/dp_44"
-                        android:text="@string/label_pages"
+                        android:text="@string/custom_pages"
                         android:layout_marginLeft="@dimen/dp_2"
                         app:layout_constraintLeft_toRightOf="@id/save_load_simple_text_2"
                         app:layout_constraintRight_toRightOf="parent"
@@ -146,7 +146,7 @@
                         android:layout_height="wrap_content"
                         android:layout_marginRight="@dimen/dp_2"
                         app:layout_constraintLeft_toLeftOf="parent"
-                        app:layout_constraintRight_toLeftOf="@+id/scale_container"
+                        app:layout_constraintRight_toLeftOf="@+id/landscape_container"
                         app:layout_constraintTop_toTopOf="parent"
                         app:layout_constraintBottom_toBottomOf="parent"
                         app:layout_constraintHorizontal_weight="1"
@@ -154,7 +154,7 @@
 
                         <com.google.android.material.textfield.TextInputEditText
                             android:id="@+id/number_of_rows"
-                            android:hint="@string/row_column_batch_hint_text"
+                            android:hint="@string/row_column_hint_text"
                             android:layout_width="0dp"
                             android:layout_height="@dimen/dp_40"
                             android:inputType="number"
@@ -183,7 +183,7 @@
                     </androidx.constraintlayout.widget.ConstraintLayout>
 
                     <FrameLayout
-                        android:id="@+id/scale_container"
+                        android:id="@+id/landscape_container"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_marginLeft="@dimen/dp_2"
@@ -195,8 +195,8 @@
                         app:layout_constraintHorizontal_weight="1">
 
                         <com.google.android.material.switchmaterial.SwitchMaterial
-                            android:id="@+id/scale"
-                            android:text="@string/print_page_scale"
+                            android:id="@+id/landscape"
+                            android:text="@string/landscape"
                             android:layout_width="wrap_content"
                             android:layout_height="@dimen/dp_48"
                             android:layout_gravity="center"
@@ -208,7 +208,7 @@
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_marginLeft="@dimen/dp_2"
-                        app:layout_constraintLeft_toRightOf="@id/scale_container"
+                        app:layout_constraintLeft_toRightOf="@id/landscape_container"
                         app:layout_constraintRight_toRightOf="parent"
                         app:layout_constraintTop_toTopOf="parent"
                         app:layout_constraintBottom_toBottomOf="parent"
@@ -229,7 +229,7 @@
 
                         <com.google.android.material.textfield.TextInputEditText
                             android:id="@+id/number_of_columns"
-                            android:hint="@string/row_column_batch_hint_text"
+                            android:hint="@string/row_column_hint_text"
                             android:layout_width="0dp"
                             android:layout_height="@dimen/dp_40"
                             android:inputType="number"
@@ -249,67 +249,47 @@
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="@dimen/dp_3">
 
-                    <androidx.constraintlayout.widget.ConstraintLayout
-                        android:id="@+id/left_pair"
+                    <FrameLayout
+                        android:id="@+id/scale_container"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_marginRight="@dimen/dp_2"
                         app:layout_constraintLeft_toLeftOf="parent"
-                        app:layout_constraintRight_toLeftOf="@+id/fit_container"
+                        app:layout_constraintRight_toLeftOf="@+id/drawframe_container"
                         app:layout_constraintTop_toTopOf="parent"
                         app:layout_constraintBottom_toBottomOf="parent"
                         app:layout_constraintHorizontal_weight="1"
                         app:layout_constraintHorizontal_chainStyle="spread">
 
-                        <com.google.android.material.textfield.TextInputEditText
-                            android:id="@+id/batch_page"
-                            android:hint="@string/row_column_batch_hint_text"
-                            android:layout_width="0dp"
-                            android:layout_height="@dimen/dp_40"
-                            android:inputType="number"
-                            android:maxLength="3"
-                            android:importantForAutofill="no"
-                            android:layout_marginRight="@dimen/dp_2"
-                            app:layout_constraintLeft_toLeftOf="parent"
-                            app:layout_constraintRight_toLeftOf="@+id/batch_simple_text"
-                            app:layout_constraintTop_toTopOf="parent"
-                            app:layout_constraintBottom_toBottomOf="parent"
-                            app:layout_constraintHorizontal_weight="1"
-                            app:layout_constraintHorizontal_chainStyle="spread"/>
-
-                        <com.google.android.material.textview.MaterialTextView
-                            android:id="@+id/batch_simple_text"
-                            android:text="@string/page_batch"
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:textAlignment="textStart"
-                            android:layout_marginLeft="@dimen/dp_2"
-                            app:layout_constraintLeft_toRightOf="@id/batch_page"
-                            app:layout_constraintRight_toRightOf="parent"
-                            app:layout_constraintTop_toTopOf="parent"
-                            app:layout_constraintBottom_toBottomOf="parent"
-                            app:layout_constraintHorizontal_weight="1"/>
-                    </androidx.constraintlayout.widget.ConstraintLayout>
+                        <hu.reelee81.reepdf.TriStateSwitch
+                            android:id="@+id/scale"
+                            android:text="@string/print_page_scale"
+                            android:layout_width="wrap_content"
+                            android:layout_height="@dimen/dp_48"
+                            android:layout_gravity="left|center_vertical"
+                            android:layout_marginLeft="@dimen/dp_5"
+                            app:switchPadding="@dimen/dp_6"/>
+                    </FrameLayout>
 
                     <FrameLayout
-                        android:id="@+id/fit_container"
+                        android:id="@+id/drawframe_container"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_marginLeft="@dimen/dp_2"
                         android:layout_marginRight="@dimen/dp_2"
-                        app:layout_constraintLeft_toRightOf="@id/left_pair"
+                        app:layout_constraintLeft_toRightOf="@id/scale_container"
                         app:layout_constraintRight_toLeftOf="@+id/right_pair"
                         app:layout_constraintTop_toTopOf="parent"
                         app:layout_constraintBottom_toBottomOf="parent"
                         app:layout_constraintHorizontal_weight="1">
 
                         <com.google.android.material.switchmaterial.SwitchMaterial
-                            android:id="@+id/fit"
-                            android:text="@string/fit"
+                            android:id="@+id/drawframe"
+                            android:text="@string/print_page_border"
                             android:layout_width="wrap_content"
                             android:layout_height="@dimen/dp_48"
                             android:layout_gravity="center"
-                            app:switchPadding="@dimen/dp_6"/>
+                            app:switchPadding="@dimen/dp_6" />
                     </FrameLayout>
 
                     <androidx.constraintlayout.widget.ConstraintLayout
@@ -317,7 +297,7 @@
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_marginLeft="@dimen/dp_2"
-                        app:layout_constraintLeft_toRightOf="@id/fit_container"
+                        app:layout_constraintLeft_toRightOf="@id/drawframe_container"
                         app:layout_constraintRight_toRightOf="parent"
                         app:layout_constraintTop_toTopOf="parent"
                         app:layout_constraintBottom_toBottomOf="parent"
@@ -351,61 +331,6 @@
                             app:layout_constraintBottom_toBottomOf="parent"
                             app:layout_constraintHorizontal_weight="1"/>
                     </androidx.constraintlayout.widget.ConstraintLayout>
-                </androidx.constraintlayout.widget.ConstraintLayout>
-
-                <androidx.constraintlayout.widget.ConstraintLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginBottom="@dimen/dp_3">
-
-                    <RadioGroup
-                        android:id="@+id/radio_group"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:orientation="horizontal"
-                        android:gravity="left|center_vertical"
-                        android:layout_marginRight="@dimen/dp_4"
-                        app:layout_constraintLeft_toLeftOf="parent"
-                        app:layout_constraintRight_toLeftOf="@+id/drawframe_container"
-                        app:layout_constraintTop_toTopOf="parent"
-                        app:layout_constraintBottom_toBottomOf="parent"
-                        app:layout_constraintHorizontal_weight="2"
-                        app:layout_constraintHorizontal_chainStyle="spread">
-
-                        <com.google.android.material.radiobutton.MaterialRadioButton
-                            android:id="@+id/portrait"
-                            android:text="@string/portrait"
-                            android:layout_width="wrap_content"
-                            android:layout_height="@dimen/dp_48"
-                            android:layout_marginRight="@dimen/dp_16"/>
-
-                        <com.google.android.material.radiobutton.MaterialRadioButton
-                            android:id="@+id/landscape"
-                            android:text="@string/landscape"
-                            android:layout_width="0dp"
-                            android:layout_height="@dimen/dp_48"
-                            android:layout_weight="1" />
-                    </RadioGroup>
-
-                    <FrameLayout
-                        android:id="@+id/drawframe_container"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_marginLeft="@dimen/dp_4"
-                        app:layout_constraintLeft_toRightOf="@id/radio_group"
-                        app:layout_constraintRight_toRightOf="parent"
-                        app:layout_constraintTop_toTopOf="parent"
-                        app:layout_constraintBottom_toBottomOf="parent"
-                        app:layout_constraintHorizontal_weight="1">
-
-                        <com.google.android.material.switchmaterial.SwitchMaterial
-                            android:id="@+id/drawframe"
-                            android:text="@string/print_page_border"
-                            android:layout_width="wrap_content"
-                            android:layout_height="@dimen/dp_48"
-                            android:layout_gravity="left|center_vertical"
-                            app:switchPadding="@dimen/dp_6" />
-                    </FrameLayout>
                 </androidx.constraintlayout.widget.ConstraintLayout>
 
                 <androidx.constraintlayout.widget.ConstraintLayout

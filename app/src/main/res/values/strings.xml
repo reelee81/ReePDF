@@ -2,7 +2,7 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
     <string name="app_name">ReePDF</string>
     <string name="normal_pages">NORMAL</string>
-    <string name="label_pages">LABEL</string>
+    <string name="custom_pages">CUSTOM</string>
     <string name="select_signature">SIGNATURE</string>
     <string name="empty_page">EMPTY PAGE</string>
     <string name="select_file">PDF / IMAGE</string>
@@ -12,13 +12,12 @@
     <string name="save_load">Save / Load</string>
     <string name="row">Row</string>
     <string name="column">Column</string>
-    <string name="fit">Fit</string>
     <string name="margin">Margin</string>
     <string name="add">Add</string>
     <string name="xy_add">XY / Add</string>
     <string name="file_type_text">.pdf</string>
     <string name="password_out_text">Pwd.</string>
-    <string name="row_column_batch_hint_text">1</string>
+    <string name="row_column_hint_text">1</string>
     <string name="margin_xy_hint_text">0</string>
     <string name="choose_text">Choose a signature</string>
     <string name="new_text">NEW</string>
@@ -36,9 +35,7 @@
     <string name="opt_hour_hh">Hour [hh]</string>
     <string name="opt_minute_mm">Minute [mm]</string>
     <string name="opt_second_ss">Second [ss]</string>
-    <string name="portrait">Portrait</string>
-    <string name="landscape">Landscape</string>
-    <string name="page_batch">Batch</string>
+    <string name="landscape">Land.</string>
     <string name="print_page_scale">Scale</string>
     <string name="print_page_grayscale">Grayscale background</string>
     <string name="print_page_border">Border</string>
@@ -66,7 +63,7 @@
     <string name="in_progress_print">Print\u2026</string>
     <string name="in_progress_send">Send\u2026</string>
     <string name="in_progress_save">Save\u2026</string>
-    <string name="in_progress_pdf_reading">Pdf reading\u2026</string>
+    <string name="in_progress_pdf_reading">Reading PDF\u2026</string>
     <string name="in_progress_page_layout">Page layout\u2026</string>
     <string name="in_progress_ui">UI update\u2026</string>
     <string name="pdf_navigation_wait">Please wait</string>
@@ -102,7 +99,7 @@
     <string name="max_coordinates_x_y_mm">Max coordinates X: %1$d mm, Y: %2$d mm</string>
     <string name="editor_open_error">An error occurred while opening the editor.</string>
     <string name="default_tmpl_normal">Normal_[YYYY][MM][DD][hh][mm][ss]</string>
-    <string name="default_tmpl_label">Label_[YYYY][MM][DD][hh][mm][ss]</string>
+    <string name="default_tmpl_custom">Custom_[YYYY][MM][DD][hh][mm][ss]</string>
     <string name="unknown_pdf">unknown.pdf</string>
     <string name="input_stream_is_null">InputStream is null</string>
     <string name="error_loading_pdf_with_msg">File error loading: %1$s</string>
@@ -126,7 +123,6 @@
     <string name="image_decode_failed">Image decode failed</string>
     <string name="pdf_saved_successfully">PDF saved successfully.</string>
     <string name="workspace_files_cleared">The working files were deleted, the page list has been cleared.</string>
-    <string name="enter_value_batch_1_100">Enter a value between page/batch 1 (stable) and 100 (fast)</string>
     <string name="save_settings_to_storage">Save settings</string>
     <string name="load_settings_from_storage">Load settings</string>
     <string name="msg_prefs_saved_success">Settings saved to file.</string>
@@ -153,7 +149,7 @@
     <string name="pdf_editor_requires_s_ext_18">The PDF editor requires Android 12 (S) Extension 18 or higher.</string>
     <string name="pdf_edits_save_failed">Saving PDF edits failed: %1$s</string>
     <string name="pdf_edits_save_engine_restarted">The PDF engine restarted, so the drawings can\'t be saved. Leave the editor and open it again.</string>
-    <string name="pdf_edits_save_cancelled">Saving cancelled. The drawings stay on the page, but they can no longer be undone one by one. You can discard them when leaving the editor.</string>
+    <string name="pdf_edits_save_cancelled">Saving canceled. The drawings stay on the page, but they can no longer be undone one by one. You can discard them when leaving the editor.</string>
     <string name="no_pdf_edits_to_save">No PDF edits to save</string>
     <string name="discard_pdf_edits">Discard PDF edits?</string>
     <string name="discard_text">DISCARD</string>
@@ -161,6 +157,8 @@
     <string name="erase_visible_pdf_edits">Remove saved edits from the visible pages</string>
     <string name="erase_all_pdf_edits">Remove saved edits from all pages</string>
     <string name="erase_all_pdf_edits_confirm">Remove saved edits from all pages?</string>
+    <string name="erase_visible_pdf_edits_unsaved_confirm">Unsaved drawings will be lost on all pages. Remove saved edits from the visible pages anyway?</string>
+    <string name="erase_all_pdf_edits_unsaved_confirm">Unsaved drawings will be lost on all pages. Remove saved edits from all pages anyway?</string>
     <string name="pdf_edits_erasing">Removing edits</string>
     <string name="pdf_edits_erase_failed">Removing edits failed: %1$s</string>
     <string name="about_app">About the app</string>

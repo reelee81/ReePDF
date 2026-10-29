@@ -123,6 +123,7 @@ import hu.reelee81.reepdf.core.NupGeometry.DEFAULT_POSITION
 import hu.reelee81.reepdf.core.NupGeometry.maxMarginMm
 import hu.reelee81.reepdf.core.NupGeometry.validPosition
 import hu.reelee81.reepdf.core.OutputFileName
+import hu.reelee81.reepdf.core.PageBatch
 import hu.reelee81.reepdf.core.PageSizes
 import hu.reelee81.reepdf.core.PdfCropRect
 import hu.reelee81.reepdf.core.PdfCrops
@@ -133,6 +134,7 @@ import hu.reelee81.reepdf.core.PdfOperationScreen
 import hu.reelee81.reepdf.core.PdfOperationState
 import hu.reelee81.reepdf.core.ProfileLoadRebuild
 import hu.reelee81.reepdf.core.ProgressNotifyPacing
+import hu.reelee81.reepdf.core.ScaleMode
 import hu.reelee81.reepdf.core.SignatureGeometry
 import hu.reelee81.reepdf.core.SignatureGeometry.refPxForSignatureDpi
 import hu.reelee81.reepdf.core.WorkFileBackup
@@ -185,46 +187,43 @@ class MainActivity : AppCompatActivity() {
         const val KEY_THEME_MODE = "theme_mode"
         const val KEY_ROWS = "rows"
         const val KEY_NORMAL_ROWS = "normal_rows"
-        const val KEY_LABEL_ROWS = "label_rows"
+        const val KEY_CUSTOM_ROWS = "custom_rows"
         const val KEY_COLUMNS = "columns"
         const val KEY_NORMAL_COLUMNS = "normal_columns"
-        const val KEY_LABEL_COLUMNS = "label_columns"
+        const val KEY_CUSTOM_COLUMNS = "custom_columns"
         const val KEY_MARGIN = "margin"
         const val KEY_NORMAL_MARGIN = "normal_margin"
-        const val KEY_LABEL_MARGIN = "label_margin"
+        const val KEY_CUSTOM_MARGIN = "custom_margin"
         const val KEY_ORIENTATION = "orientation"
         const val KEY_NORMAL_ORIENTATION = "normal_orientation"
-        const val KEY_LABEL_ORIENTATION = "label_orientation"
+        const val KEY_CUSTOM_ORIENTATION = "custom_orientation"
         const val KEY_DRAW_FRAME = "draw_frame"
         const val KEY_NORMAL_DRAW_FRAME = "normal_draw_frame"
-        const val KEY_LABEL_DRAW_FRAME = "label_draw_frame"
+        const val KEY_CUSTOM_DRAW_FRAME = "custom_draw_frame"
         const val KEY_SIG_POS_X = "sig_pos_x"
         const val KEY_NORMAL_SIG_POS_X = "normal_sig_pos_x"
-        const val KEY_LABEL_SIG_POS_X = "label_sig_pos_x"
+        const val KEY_CUSTOM_SIG_POS_X = "custom_sig_pos_x"
         const val KEY_SIG_POS_Y = "sig_pos_y"
         const val KEY_NORMAL_SIG_POS_Y = "normal_sig_pos_y"
-        const val KEY_LABEL_SIG_POS_Y = "label_sig_pos_y"
+        const val KEY_CUSTOM_SIG_POS_Y = "custom_sig_pos_y"
         const val KEY_SCALE = "scale"
         const val KEY_NORMAL_SCALE = "normal_scale"
-        const val KEY_LABEL_SCALE = "label_scale"
+        const val KEY_CUSTOM_SCALE = "custom_scale"
         const val KEY_FIT = "fit"
         const val KEY_NORMAL_FIT = "normal_fit"
-        const val KEY_LABEL_FIT = "label_fit"
+        const val KEY_CUSTOM_FIT = "custom_fit"
         const val KEY_POSITION = "position"
         const val KEY_NORMAL_POSITION = "normal_position"
-        const val KEY_LABEL_POSITION = "label_position"
+        const val KEY_CUSTOM_POSITION = "custom_position"
         const val KEY_CROP = "crop"
         const val KEY_NORMAL_CROP = "normal_crop"
-        const val KEY_LABEL_CROP = "label_crop"
-        const val KEY_BATCH_PAGE = "batch_page"
-        const val KEY_NORMAL_BATCH_PAGE = "normal_batch_page"
-        const val KEY_LABEL_BATCH_PAGE = "label_batch_page"
+        const val KEY_CUSTOM_CROP = "custom_crop"
         const val KEY_PASSWORD_OUT = "password_out"
         const val KEY_NORMAL_PASSWORD_OUT = "normal_password_out"
-        const val KEY_LABEL_PASSWORD_OUT = "label_password_out"
+        const val KEY_CUSTOM_PASSWORD_OUT = "custom_password_out"
         const val KEY_FILE_NAME_TEMPLATE = "file_name_template"
         const val KEY_NORMAL_FILE_NAME_TEMPLATE = "normal_file_name_template"
-        const val KEY_LABEL_FILE_NAME_TEMPLATE = "label_file_name_template"
+        const val KEY_CUSTOM_FILE_NAME_TEMPLATE = "custom_file_name_template"
         const val KEY_LAST_SIG_DPI_INDEX = "key_last_signature_dpi_index"
         const val KEY_LAST_SCAN_EFFECT = "key_last_scan_effect"
         const val KEY_LAST_GRAYSCALE = "key_last_grayscale_page"
@@ -278,15 +277,12 @@ class MainActivity : AppCompatActivity() {
     private lateinit var savePdf: MaterialButton
     private lateinit var sendPdf: MaterialButton
     private lateinit var addSignature: MaterialButton
-    private lateinit var portrait: MaterialRadioButton
-    private lateinit var landscape: MaterialRadioButton
+    private lateinit var landscape: SwitchMaterial
     private lateinit var drawFrameSwitch: SwitchMaterial
-    private lateinit var scaleSwitch: SwitchMaterial
-    private lateinit var fitSwitch: SwitchMaterial
+    private lateinit var scaleSwitch: TriStateSwitch
     private lateinit var listStartButton: AppCompatImageButton
     private lateinit var listEndButton: AppCompatImageButton
     private lateinit var saveDocumentLauncher: ActivityResultLauncher<Intent>
-    private lateinit var batchPage: TextInputEditText
     private lateinit var passwordOutCb: MaterialCheckBox
 
     private val isFitMeasurable = Build.VERSION.SDK_INT >= VERSION_CODES.O
@@ -307,7 +303,6 @@ class MainActivity : AppCompatActivity() {
     private var selectedDpiIndexForSignature = 0
     private var didRunNScrollColdStartFix = false
     private var isFirstCreate = true
-    private var batchValid = true
     private var sourceRotation: IntArray = IntArray(0)
     private var sourcePosition: IntArray = IntArray(0)
     private var defaultPosition: Int = DEFAULT_POSITION
@@ -421,8 +416,8 @@ class MainActivity : AppCompatActivity() {
                             "normal" -> {
                                 findViewById<Button>(R.id.load_normal_pages)?.performClick()
                             }
-                            "label" -> {
-                                findViewById<Button>(R.id.load_label_pages)?.performClick()
+                            "custom" -> {
+                                findViewById<Button>(R.id.load_custom_pages)?.performClick()
                             }
                             else -> {
 
@@ -559,7 +554,6 @@ class MainActivity : AppCompatActivity() {
         numberOfRows = findViewById(R.id.number_of_rows)
         numberOfColumns = findViewById(R.id.number_of_columns)
         margin = findViewById(R.id.margin)
-        batchPage = findViewById(R.id.batch_page)
         passwordOutCb = findViewById(R.id.password_out)
         emptyPage = findViewById(R.id.empty_page)
         val selectPdf: Button = findViewById(R.id.select_pdf)
@@ -567,7 +561,6 @@ class MainActivity : AppCompatActivity() {
         savePdf = findViewById(R.id.save_pdf_file)
         sendPdf = findViewById(R.id.send_pdf)
         addSignature = findViewById(R.id.add_signature)
-        portrait = findViewById(R.id.portrait)
         landscape = findViewById(R.id.landscape)
         drawFrameSwitch = findViewById(R.id.drawframe)
 
@@ -587,8 +580,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         scaleSwitch = findViewById(R.id.scale)
-        fitSwitch = findViewById(R.id.fit)
-        updateFitSwitchEnabled()
+        scaleSwitch.lastPosition = if (isFitMeasurable) ScaleMode.FIT.ordinal else ScaleMode.SCALE.ordinal
 
         signaturePosX = findViewById(R.id.signature_position_x)
         signaturePosY = findViewById(R.id.signature_position_y)
@@ -598,28 +590,17 @@ class MainActivity : AppCompatActivity() {
         numberOfRows.filters    = arrayOf(InputFilter.LengthFilter(3), numberRangeFilterNoOp(1..100))
         numberOfColumns.filters = arrayOf(InputFilter.LengthFilter(3), numberRangeFilterNoOp(1..100))
         margin.filters          = arrayOf(InputFilter.LengthFilter(3), numberRangeFilterNoOp(0..100))
-        batchPage.filters       = arrayOf(InputFilter.LengthFilter(3), numberRangeFilterNoOp(1..100))
-
-        portrait.setOnCheckedChangeListener { _, checked ->
-            updateSignatureInputFilters()
-            if (checked) maybeRegenerateNupOnSettingChange(isLandscape = false)
-        }
 
         landscape.setOnCheckedChangeListener { _, checked ->
             updateSignatureInputFilters()
-            if (checked) maybeRegenerateNupOnSettingChange(isLandscape = true)
+            maybeRegenerateNupOnSettingChange(isLandscape = checked)
         }
 
         drawFrameSwitch.setOnCheckedChangeListener { _, _ ->
             maybeRegenerateNupOnSettingChange()
         }
 
-        scaleSwitch.setOnCheckedChangeListener { _, _ ->
-            updateFitSwitchEnabled()
-            maybeRegenerateNupOnSettingChange()
-        }
-
-        fitSwitch.setOnCheckedChangeListener { _, _ ->
+        scaleSwitch.onPositionChanged = {
             maybeRegenerateNupOnSettingChange()
         }
 
@@ -829,7 +810,6 @@ class MainActivity : AppCompatActivity() {
         margin.addTextChangedListener(SimpleTextWatcher { validateInputs() })
         signaturePosX.addTextChangedListener(SimpleTextWatcher { validateInputs() })
         signaturePosY.addTextChangedListener(SimpleTextWatcher { validateInputs() })
-        batchPage.addTextChangedListener(SimpleTextWatcher { validateInputs() })
 
         emptyPage.setOnClickListener { addEmptyPageToSource() }
         selectPdf.setOnClickListener { launchSelectPdf() }
@@ -841,7 +821,7 @@ class MainActivity : AppCompatActivity() {
         addTimeBtn.setOnClickListener { showTimestampDialog() }
 
         val saveNormalPages: Button = findViewById(R.id.save_normal_pages)
-        val saveLabelPages: Button = findViewById(R.id.save_label_pages)
+        val saveCustomPages: Button = findViewById(R.id.save_custom_pages)
         saveNormalPages.setOnClickListener {
             saveSettings("normal")
             numberOfRows.clearFocus()
@@ -851,8 +831,8 @@ class MainActivity : AppCompatActivity() {
             signaturePosY.clearFocus()
             if (nupConfigChanged()) maybeRegenerateNupOnSettingChange()
         }
-        saveLabelPages.setOnClickListener {
-            saveSettings("label")
+        saveCustomPages.setOnClickListener {
+            saveSettings("custom")
             numberOfRows.clearFocus()
             numberOfColumns.clearFocus()
             margin.clearFocus()
@@ -862,13 +842,13 @@ class MainActivity : AppCompatActivity() {
         }
 
         val normalPages: Button = findViewById(R.id.load_normal_pages)
-        val labelPages: Button = findViewById(R.id.load_label_pages)
+        val customPages: Button = findViewById(R.id.load_custom_pages)
         normalPages.setOnClickListener {
             loadSettings("normal")
             maybeRegenerateNupOnSettingChange()
         }
-        labelPages.setOnClickListener {
-            loadSettings("label")
+        customPages.setOnClickListener {
+            loadSettings("custom")
             maybeRegenerateNupOnSettingChange()
         }
 
@@ -1660,7 +1640,6 @@ class MainActivity : AppCompatActivity() {
                     R.id.number_of_rows,
                     R.id.number_of_columns,
                     R.id.margin,
-                    R.id.batch_page,
                     R.id.signature_position_x,
                     R.id.signature_position_y,
                     R.id.file_name
@@ -3104,46 +3083,43 @@ class MainActivity : AppCompatActivity() {
             sp.edit {
                 putString(KEY_ROWS, "1")
                 putString(KEY_NORMAL_ROWS, "1")
-                putString(KEY_LABEL_ROWS, "2")
+                putString(KEY_CUSTOM_ROWS, "2")
                 putString(KEY_COLUMNS, "1")
                 putString(KEY_NORMAL_COLUMNS, "1")
-                putString(KEY_LABEL_COLUMNS, "2")
-                putString(KEY_BATCH_PAGE, "50")
-                putString(KEY_NORMAL_BATCH_PAGE, "50")
-                putString(KEY_LABEL_BATCH_PAGE, "50")
+                putString(KEY_CUSTOM_COLUMNS, "2")
                 putBoolean(KEY_SCALE, false)
                 putBoolean(KEY_NORMAL_SCALE, false)
-                putBoolean(KEY_LABEL_SCALE, true)
+                putBoolean(KEY_CUSTOM_SCALE, true)
                 putBoolean(KEY_FIT, false)
                 putBoolean(KEY_NORMAL_FIT, false)
-                putBoolean(KEY_LABEL_FIT, false)
+                putBoolean(KEY_CUSTOM_FIT, false)
                 putInt(KEY_POSITION, DEFAULT_POSITION)
                 putInt(KEY_NORMAL_POSITION, DEFAULT_POSITION)
-                putInt(KEY_LABEL_POSITION, DEFAULT_POSITION)
+                putInt(KEY_CUSTOM_POSITION, DEFAULT_POSITION)
                 putBoolean(KEY_CROP, false)
                 putBoolean(KEY_NORMAL_CROP, false)
-                putBoolean(KEY_LABEL_CROP, false)
+                putBoolean(KEY_CUSTOM_CROP, false)
                 putString(KEY_MARGIN, "0")
                 putString(KEY_NORMAL_MARGIN, "0")
-                putString(KEY_LABEL_MARGIN, "2")
+                putString(KEY_CUSTOM_MARGIN, "2")
                 putBoolean(KEY_ORIENTATION, true)
                 putBoolean(KEY_NORMAL_ORIENTATION, true)
-                putBoolean(KEY_LABEL_ORIENTATION, true)
+                putBoolean(KEY_CUSTOM_ORIENTATION, true)
                 putBoolean(KEY_DRAW_FRAME, false)
                 putBoolean(KEY_NORMAL_DRAW_FRAME, false)
-                putBoolean(KEY_LABEL_DRAW_FRAME, false)
+                putBoolean(KEY_CUSTOM_DRAW_FRAME, false)
                 putString(KEY_SIG_POS_X, "155")
                 putString(KEY_NORMAL_SIG_POS_X, "155")
-                putString(KEY_LABEL_SIG_POS_X, "155")
+                putString(KEY_CUSTOM_SIG_POS_X, "155")
                 putString(KEY_SIG_POS_Y, "245")
                 putString(KEY_NORMAL_SIG_POS_Y, "245")
-                putString(KEY_LABEL_SIG_POS_Y, "245")
+                putString(KEY_CUSTOM_SIG_POS_Y, "245")
                 putBoolean(KEY_PASSWORD_OUT, false)
                 putBoolean(KEY_NORMAL_PASSWORD_OUT, false)
-                putBoolean(KEY_LABEL_PASSWORD_OUT, false)
+                putBoolean(KEY_CUSTOM_PASSWORD_OUT, false)
                 putString(KEY_FILE_NAME_TEMPLATE, getString(R.string.default_tmpl_normal))
                 putString(KEY_NORMAL_FILE_NAME_TEMPLATE, getString(R.string.default_tmpl_normal))
-                putString(KEY_LABEL_FILE_NAME_TEMPLATE, getString(R.string.default_tmpl_label))
+                putString(KEY_CUSTOM_FILE_NAME_TEMPLATE, getString(R.string.default_tmpl_custom))
                 putInt(KEY_LAST_SIG_DPI_INDEX, 0)
                 putBoolean(KEY_LAST_SCAN_EFFECT, false)
                 putBoolean(KEY_LAST_GRAYSCALE, false)
@@ -3165,14 +3141,13 @@ class MainActivity : AppCompatActivity() {
                 val rows = numberOfRows.text.toString()
                 val columns = numberOfColumns.text.toString()
                 val marginVal = margin.text.toString()
-                val isPortrait = portrait.isChecked
+                val isPortrait = !landscape.isChecked
                 val drawFrame = drawFrameSwitch.isChecked
                 val sigX = signaturePosX.text.toString()
                 val sigY = signaturePosY.text.toString()
-                val scale = scaleSwitch.isChecked
-                val fit = fitSwitch.isChecked
+                val scale = scaleMode().scale
+                val fit = scaleMode().fit
                 val fileNameTemplate = fileNameEt.text?.toString() ?: ""
-                val batchVal = batchPage.text.toString()
                 val passwordOutChecked = passwordOutCb.isChecked
 
                 when (type) {
@@ -3188,26 +3163,24 @@ class MainActivity : AppCompatActivity() {
                         putBoolean(KEY_NORMAL_FIT, fit)
                         putInt(KEY_NORMAL_POSITION, defaultPosition)
                         putBoolean(KEY_NORMAL_CROP, cropAllPages)
-                        putString(KEY_NORMAL_BATCH_PAGE, batchVal)
                         putBoolean(KEY_NORMAL_PASSWORD_OUT, passwordOutChecked)
                         putString(KEY_NORMAL_FILE_NAME_TEMPLATE, fileNameTemplate)
                     }
 
-                    "label" -> {
-                        putString(KEY_LABEL_ROWS, rows)
-                        putString(KEY_LABEL_COLUMNS, columns)
-                        putString(KEY_LABEL_MARGIN, marginVal)
-                        putBoolean(KEY_LABEL_ORIENTATION, isPortrait)
-                        putBoolean(KEY_LABEL_DRAW_FRAME, drawFrame)
-                        putString(KEY_LABEL_SIG_POS_X, sigX)
-                        putString(KEY_LABEL_SIG_POS_Y, sigY)
-                        putBoolean(KEY_LABEL_SCALE, scale)
-                        putBoolean(KEY_LABEL_FIT, fit)
-                        putInt(KEY_LABEL_POSITION, defaultPosition)
-                        putBoolean(KEY_LABEL_CROP, cropAllPages)
-                        putString(KEY_LABEL_BATCH_PAGE, batchVal)
-                        putBoolean(KEY_LABEL_PASSWORD_OUT, passwordOutChecked)
-                        putString(KEY_LABEL_FILE_NAME_TEMPLATE, fileNameTemplate)
+                    "custom" -> {
+                        putString(KEY_CUSTOM_ROWS, rows)
+                        putString(KEY_CUSTOM_COLUMNS, columns)
+                        putString(KEY_CUSTOM_MARGIN, marginVal)
+                        putBoolean(KEY_CUSTOM_ORIENTATION, isPortrait)
+                        putBoolean(KEY_CUSTOM_DRAW_FRAME, drawFrame)
+                        putString(KEY_CUSTOM_SIG_POS_X, sigX)
+                        putString(KEY_CUSTOM_SIG_POS_Y, sigY)
+                        putBoolean(KEY_CUSTOM_SCALE, scale)
+                        putBoolean(KEY_CUSTOM_FIT, fit)
+                        putInt(KEY_CUSTOM_POSITION, defaultPosition)
+                        putBoolean(KEY_CUSTOM_CROP, cropAllPages)
+                        putBoolean(KEY_CUSTOM_PASSWORD_OUT, passwordOutChecked)
+                        putString(KEY_CUSTOM_FILE_NAME_TEMPLATE, fileNameTemplate)
                     }
                 }
                 putString(KEY_ROWS, rows)
@@ -3221,7 +3194,6 @@ class MainActivity : AppCompatActivity() {
                 putBoolean(KEY_FIT, fit)
                 putInt(KEY_POSITION, defaultPosition)
                 putBoolean(KEY_CROP, cropAllPages)
-                putString(KEY_BATCH_PAGE, batchVal)
                 putBoolean(KEY_PASSWORD_OUT, passwordOutChecked)
                 putString(KEY_FILE_NAME_TEMPLATE, fileNameTemplate)
             }
@@ -3238,15 +3210,14 @@ class MainActivity : AppCompatActivity() {
                 putString(KEY_ROWS, numberOfRows.text.toString())
                 putString(KEY_COLUMNS, numberOfColumns.text.toString())
                 putString(KEY_MARGIN, margin.text.toString())
-                putBoolean(KEY_ORIENTATION, portrait.isChecked)
+                putBoolean(KEY_ORIENTATION, !landscape.isChecked)
                 putBoolean(KEY_DRAW_FRAME, drawFrameSwitch.isChecked)
                 putString(KEY_SIG_POS_X, signaturePosX.text.toString())
                 putString(KEY_SIG_POS_Y, signaturePosY.text.toString())
-                putBoolean(KEY_SCALE, scaleSwitch.isChecked)
-                putBoolean(KEY_FIT, fitSwitch.isChecked)
+                putBoolean(KEY_SCALE, scaleMode().scale)
+                putBoolean(KEY_FIT, scaleMode().fit)
                 putInt(KEY_POSITION, defaultPosition)
                 putBoolean(KEY_CROP, cropAllPages)
-                putString(KEY_BATCH_PAGE, batchPage.text.toString())
                 putBoolean(KEY_PASSWORD_OUT, passwordOutCb.isChecked)
                 putString(KEY_FILE_NAME_TEMPLATE, fileNameEt.text?.toString() ?: "")
             }
@@ -3265,7 +3236,6 @@ class MainActivity : AppCompatActivity() {
         val sigY: String
         val scale: Boolean
         val fit: Boolean
-        val batchVal: String
         val passwordOutChecked: Boolean
 
         synchronized(prefsBackupLock) {
@@ -3280,28 +3250,22 @@ class MainActivity : AppCompatActivity() {
             fit = prefs.getBoolean(KEY_FIT, false)
             defaultPosition = validPosition(prefs.getInt(KEY_POSITION, DEFAULT_POSITION))
             cropAllPages = prefs.getBoolean(KEY_CROP, false)
-            batchVal = prefs.getString(KEY_BATCH_PAGE, "50") ?: "50"
             passwordOutChecked = prefs.getBoolean(KEY_PASSWORD_OUT, false)
         }
 
         numberOfRows.setText(rows)
         numberOfColumns.setText(columns)
         margin.setText(marginVal)
-        portrait.isChecked = isPortrait
         landscape.isChecked = !isPortrait
         drawFrameSwitch.isChecked = drawFrame
         signaturePosX.setText(sigX)
         signaturePosY.setText(sigY)
-        batchPage.setText(batchVal)
         passwordOutCb.isChecked = passwordOutChecked
-        scaleSwitch.isChecked = scale
-        setFitChecked(fit)
-        updateFitSwitchEnabled()
+        setScaleMode(scale, fit)
 
         setupEnterClosesEditTextAndHidesKeyboard(numberOfRows)
         setupEnterClosesEditTextAndHidesKeyboard(numberOfColumns)
         setupEnterClosesEditTextAndHidesKeyboard(margin)
-        setupEnterClosesEditTextAndHidesKeyboard(batchPage)
         setupEnterClosesEditTextAndHidesKeyboard(signaturePosX)
         setupEnterClosesEditTextAndHidesKeyboard(signaturePosY)
 
@@ -3362,7 +3326,6 @@ class MainActivity : AppCompatActivity() {
                             "nlFit" to prefs.getBoolean(KEY_NORMAL_FIT, false),
                             "nlPosition" to prefs.getInt(KEY_NORMAL_POSITION, DEFAULT_POSITION),
                             "nlCrop" to prefs.getBoolean(KEY_NORMAL_CROP, false),
-                            "nlBatchPage" to (prefs.getString(KEY_NORMAL_BATCH_PAGE, "50") ?: "50"),
                             "nlPasswordOut" to prefs.getBoolean(KEY_NORMAL_PASSWORD_OUT, false),
                             "nlFileNameTemplate" to (prefs.getString(
                                 KEY_NORMAL_FILE_NAME_TEMPLATE,
@@ -3370,30 +3333,29 @@ class MainActivity : AppCompatActivity() {
                             ) ?: getString(R.string.default_tmpl_normal))
                         )
 
-                        "label" -> mapOf(
-                            "nlRows" to (prefs.getString(KEY_LABEL_ROWS, "2") ?: "2"),
-                            "nlColumns" to (prefs.getString(KEY_LABEL_COLUMNS, "2") ?: "2"),
-                            "nlMargin" to (prefs.getString(KEY_LABEL_MARGIN, "2") ?: "2"),
-                            "nlOrientation" to prefs.getBoolean(KEY_LABEL_ORIENTATION, true),
-                            "nlDrawFrame" to prefs.getBoolean(KEY_LABEL_DRAW_FRAME, false),
+                        "custom" -> mapOf(
+                            "nlRows" to (prefs.getString(KEY_CUSTOM_ROWS, "2") ?: "2"),
+                            "nlColumns" to (prefs.getString(KEY_CUSTOM_COLUMNS, "2") ?: "2"),
+                            "nlMargin" to (prefs.getString(KEY_CUSTOM_MARGIN, "2") ?: "2"),
+                            "nlOrientation" to prefs.getBoolean(KEY_CUSTOM_ORIENTATION, true),
+                            "nlDrawFrame" to prefs.getBoolean(KEY_CUSTOM_DRAW_FRAME, false),
                             "nlSigPosX" to (prefs.getString(
-                                KEY_LABEL_SIG_POS_X,
+                                KEY_CUSTOM_SIG_POS_X,
                                 DEFAULT_SIG_POS_X_MM.toString()
                             ) ?: DEFAULT_SIG_POS_X_MM.toString()),
                             "nlSigPosY" to (prefs.getString(
-                                KEY_LABEL_SIG_POS_Y,
+                                KEY_CUSTOM_SIG_POS_Y,
                                 DEFAULT_SIG_POS_Y_MM.toString()
                             ) ?: DEFAULT_SIG_POS_Y_MM.toString()),
-                            "nlScale" to prefs.getBoolean(KEY_LABEL_SCALE, true),
-                            "nlFit" to prefs.getBoolean(KEY_LABEL_FIT, false),
-                            "nlPosition" to prefs.getInt(KEY_LABEL_POSITION, DEFAULT_POSITION),
-                            "nlCrop" to prefs.getBoolean(KEY_LABEL_CROP, false),
-                            "nlBatchPage" to (prefs.getString(KEY_LABEL_BATCH_PAGE, "50") ?: "50"),
-                            "nlPasswordOut" to prefs.getBoolean(KEY_LABEL_PASSWORD_OUT, false),
+                            "nlScale" to prefs.getBoolean(KEY_CUSTOM_SCALE, true),
+                            "nlFit" to prefs.getBoolean(KEY_CUSTOM_FIT, false),
+                            "nlPosition" to prefs.getInt(KEY_CUSTOM_POSITION, DEFAULT_POSITION),
+                            "nlCrop" to prefs.getBoolean(KEY_CUSTOM_CROP, false),
+                            "nlPasswordOut" to prefs.getBoolean(KEY_CUSTOM_PASSWORD_OUT, false),
                             "nlFileNameTemplate" to (prefs.getString(
-                                KEY_LABEL_FILE_NAME_TEMPLATE,
-                                getString(R.string.default_tmpl_label)
-                            ) ?: getString(R.string.default_tmpl_label))
+                                KEY_CUSTOM_FILE_NAME_TEMPLATE,
+                                getString(R.string.default_tmpl_custom)
+                            ) ?: getString(R.string.default_tmpl_custom))
                         )
 
                         else -> emptyMap()
@@ -3405,17 +3367,13 @@ class MainActivity : AppCompatActivity() {
             numberOfColumns.setText(data["nlColumns"] as String)
             margin.setText(data["nlMargin"] as String)
             val isPortrait = data["nlOrientation"] as Boolean
-            portrait.isChecked = isPortrait
             landscape.isChecked = !isPortrait
             drawFrameSwitch.isChecked = data["nlDrawFrame"] as Boolean
             signaturePosX.setText(data["nlSigPosX"] as String)
             signaturePosY.setText(data["nlSigPosY"] as String)
-            scaleSwitch.isChecked = data["nlScale"] as Boolean
-            setFitChecked(data["nlFit"] as Boolean)
-            updateFitSwitchEnabled()
+            setScaleMode(data["nlScale"] as Boolean, data["nlFit"] as Boolean)
             val profilePosition = validPosition(data["nlPosition"] as Int)
             cropAllPages = data["nlCrop"] as Boolean
-            batchPage.setText(data["nlBatchPage"] as String)
             passwordOutCb.isChecked = data["nlPasswordOut"] as Boolean
 
             val fileNameEt: EditText = findViewById(R.id.file_name)
@@ -3458,12 +3416,12 @@ class MainActivity : AppCompatActivity() {
     private fun defaultFileNameTemplatesOfAllLanguages(): List<Pair<String, String>> =
         listOf(Locale.ENGLISH, Locale.forLanguageTag("hu")).map { locale ->
             val localized = createConfigurationContext(Configuration(resources.configuration).apply { setLocale(locale) })
-            localized.getString(R.string.default_tmpl_normal) to localized.getString(R.string.default_tmpl_label)
+            localized.getString(R.string.default_tmpl_normal) to localized.getString(R.string.default_tmpl_custom)
         }
 
     private fun localizeDefaultFileNameTemplate(value: String, defaults: List<Pair<String, String>>): String = when {
         defaults.any { it.first == value } -> getString(R.string.default_tmpl_normal)
-        defaults.any { it.second == value } -> getString(R.string.default_tmpl_label)
+        defaults.any { it.second == value } -> getString(R.string.default_tmpl_custom)
         else -> value
     }
 
@@ -3471,7 +3429,7 @@ class MainActivity : AppCompatActivity() {
         val defaults = defaultFileNameTemplatesOfAllLanguages()
         val prefs = getSharedPreferences(PREFS_NAME_FRAGMENT, MODE_PRIVATE)
         synchronized(prefsBackupLock) {
-            val changes = listOf(KEY_FILE_NAME_TEMPLATE, KEY_NORMAL_FILE_NAME_TEMPLATE, KEY_LABEL_FILE_NAME_TEMPLATE)
+            val changes = listOf(KEY_FILE_NAME_TEMPLATE, KEY_NORMAL_FILE_NAME_TEMPLATE, KEY_CUSTOM_FILE_NAME_TEMPLATE)
                 .mapNotNull { key ->
                     val value = prefs.getString(key, null) ?: return@mapNotNull null
                     val localized = localizeDefaultFileNameTemplate(value, defaults)
@@ -3500,7 +3458,7 @@ class MainActivity : AppCompatActivity() {
                     (rows == 1 && cols == 1)
 
         val fileNameEt: EditText = findViewById(R.id.file_name)
-        val hintRes = if (isNormal) R.string.default_tmpl_normal else R.string.default_tmpl_label
+        val hintRes = if (isNormal) R.string.default_tmpl_normal else R.string.default_tmpl_custom
         fileNameEt.hint = getString(hintRes)
     }
 
@@ -3508,15 +3466,14 @@ class MainActivity : AppCompatActivity() {
         nbColumnsValid = validateIntField(numberOfColumns, 1, getString(R.string.enter_value_1_100))
         nbRowsValid    = validateIntField(numberOfRows,    1, getString(R.string.enter_value_1_100))
         marginValid    = validateIntField(margin,          0, getString(R.string.enter_value_0_100))
-        batchValid     = validateIntField(batchPage,       1, getString(R.string.enter_value_batch_1_100))
-        val isPortrait = portrait.isChecked
+        val isPortrait = !landscape.isChecked
         val maxX = if (isPortrait) 210 else 297
         val maxY = if (isPortrait) 297 else 210
         sigXValid = checkUpToMax(signaturePosX.text.toString(), maxX)
         sigYValid = checkUpToMax(signaturePosY.text.toString(), maxY)
 
-        validateIntFieldX(signaturePosX, portrait)
-        validateIntFieldY(signaturePosY, portrait)
+        validateIntFieldX(signaturePosX, isPortrait)
+        validateIntFieldY(signaturePosY, isPortrait)
 
         updateFileNameHintBasedOnRowsCols()
         updateButtonsState()
@@ -3579,10 +3536,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun validateIntFieldX(
         et: EditText,
-        portrait: MaterialRadioButton
+        isPortrait: Boolean
     ): Boolean {
-        val isPortrait = portrait.isChecked
-
         val emptyMsg = if (isPortrait) {
             et.context.getString(R.string.enter_value_0_209)
         } else {
@@ -3603,10 +3558,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun validateIntFieldY(
         et: EditText,
-        portrait: MaterialRadioButton
+        isPortrait: Boolean
     ): Boolean {
-        val isPortrait = portrait.isChecked
-
         val emptyMsg = if (isPortrait) {
             et.context.getString(R.string.enter_value_0_296)
         } else {
@@ -3825,13 +3778,10 @@ class MainActivity : AppCompatActivity() {
                 numberOfColumns.setText(saved.columns)
                 margin.setText(saved.margin)
 
-                portrait.isChecked = saved.isPortrait
                 landscape.isChecked = !saved.isPortrait
 
                 drawFrameSwitch.isChecked = saved.drawFrame
-                scaleSwitch.isChecked = saved.scale
-                setFitChecked(saved.fit)
-                updateFitSwitchEnabled()
+                setScaleMode(saved.scale, saved.fit)
 
                 lastBuiltNupConfig = NupConfig(
                     saved.rows.toIntOrNull() ?: 1,
@@ -4007,17 +3957,15 @@ class MainActivity : AppCompatActivity() {
         val cols     = readIntOr(numberOfColumns, min = 1, def = 1)
         val marginMm = min(readIntOr(margin, min = 0, def = 0), maxMarginMm(rows, cols, isLand))
         val drawFrame = drawFrameSwitch.isChecked
-        val scaleInd = scaleSwitch.isChecked
-        val fitInd = fitSwitch.isChecked && isFitMeasurable
+        val scaleInd = scaleMode().scale
+        val fitInd = scaleMode().fit && isFitMeasurable
         return NupConfig(rows, cols, marginMm, isLand, drawFrame, scaleInd, fitInd)
     }
 
-    private fun setFitChecked(checked: Boolean) {
-        fitSwitch.isChecked = checked && isFitMeasurable
-    }
+    private fun scaleMode(): ScaleMode = ScaleMode.at(scaleSwitch.position)
 
-    private fun updateFitSwitchEnabled() {
-        fitSwitch.isEnabled = isFitMeasurable && scaleSwitch.isChecked
+    private fun setScaleMode(scale: Boolean, fit: Boolean) {
+        scaleSwitch.position = ScaleMode.of(scale, fit && isFitMeasurable).ordinal
     }
 
     private fun nupConfigChanged(): Boolean {
@@ -4207,7 +4155,7 @@ class MainActivity : AppCompatActivity() {
                 rotation = sourceRotation.copyOf(),
                 position = sourcePosition.copyOf(),
                 defaultPosition = defaultPosition,
-                batchSize = batchValueOrDefault1(),
+                batchSize = PageBatch.PAGES,
                 selected = selected
             ),
             progress = operationProgress(),
@@ -4596,12 +4544,6 @@ class MainActivity : AppCompatActivity() {
 
     private fun rdr(path: String, password: ByteArray? = null): PdfReader = PdfIo.reader(path, password)
 
-    private fun batchValueOrDefault1(): Int {
-        val sNow = batchPage.text?.toString()?.trim().orEmpty()
-        val v = sNow.toIntOrNull()
-        return if (v != null && v > 0) v else 1
-    }
-
     private fun addEmptyPageToSource() {
         if (!PdfSourceParts.exists(sourceDir())) {
             Toast.makeText(this, getString(R.string.select_a_page), Toast.LENGTH_SHORT).show()
@@ -4804,7 +4746,7 @@ class MainActivity : AppCompatActivity() {
                             ?: PdfPageSizes.read(
                                 source,
                                 totalSrcPages,
-                                batchValueOrDefault1(),
+                                PageBatch.PAGES,
                                 fallbackW,
                                 fallbackH,
                                 progressStage(totalSrcPages.toLong())
@@ -5322,7 +5264,7 @@ class MainActivity : AppCompatActivity() {
                 rotation = sourceRotation.copyOf(),
                 position = sourcePosition.copyOf(),
                 defaultPosition = newDefaultPosition,
-                batchSize = batchValueOrDefault1(),
+                batchSize = PageBatch.PAGES,
                 selected = selectedIdxBefore
             ),
             progress = operationProgress(),
@@ -5822,7 +5764,7 @@ class MainActivity : AppCompatActivity() {
                 rotation = sourceRotation.copyOf(),
                 position = sourcePosition.copyOf(),
                 defaultPosition = defaultPosition,
-                batchSize = batchValueOrDefault1(),
+                batchSize = PageBatch.PAGES,
                 selected = selected
             ),
             progress = operationProgress(),
@@ -5891,7 +5833,6 @@ class MainActivity : AppCompatActivity() {
                         val i = Intent(this@MainActivity, PdfViewer::class.java).apply {
                             putExtra(PdfViewer.EXTRA_URI, uri.toString())
                             putExtra(PdfViewer.EXTRA_INITIAL_PAGE_INDEX, initialPageIndex)
-                            putExtra(PdfViewer.EXTRA_BATCH_SIZE, batchValueOrDefault1())
                             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                         }
                         pdfViewerLauncher.launch(i)
@@ -6121,7 +6062,7 @@ class MainActivity : AppCompatActivity() {
             input = PdfOutputOperation.Input(
                 baseName = buildOutputFileName().ifBlank { OutputFileName.defaultDate() },
                 password = password,
-                batchSize = batchValueOrDefault1(),
+                batchSize = PageBatch.PAGES,
                 messages = PdfOutputOperation.Messages(
                     layoutMissing = getString(R.string.temporary_pdf_not_found),
                     nameReserved = getString(R.string.output_name_reserved),
@@ -6559,7 +6500,7 @@ class MainActivity : AppCompatActivity() {
         val defTemplate = if (isNormalByRowsCols) {
             getString(R.string.default_tmpl_normal)
         } else {
-            getString(R.string.default_tmpl_label)
+            getString(R.string.default_tmpl_custom)
         }
 
         return OutputFileName.replaceTimeTokens(defTemplate)
@@ -6677,7 +6618,7 @@ class MainActivity : AppCompatActivity() {
                 rotation = sourceRotation.copyOf(),
                 position = sourcePosition.copyOf(),
                 defaultPosition = defaultPosition,
-                batchSize = batchValueOrDefault1()
+                batchSize = PageBatch.PAGES
             ),
             progress = operationProgress(),
             renderer = MuPdfSignedPageRenderer(warn = { warning, error -> Log.w("MainActivity", warning, error) }),
@@ -6971,19 +6912,18 @@ class MainActivity : AppCompatActivity() {
             serializer.attribute(null, "name", name)
 
             val allowedKeys = setOf(
-                KEY_NORMAL_ROWS, KEY_LABEL_ROWS,
-                KEY_NORMAL_COLUMNS, KEY_LABEL_COLUMNS,
-                KEY_NORMAL_BATCH_PAGE, KEY_LABEL_BATCH_PAGE,
-                KEY_NORMAL_SCALE, KEY_LABEL_SCALE,
-                KEY_NORMAL_FIT, KEY_LABEL_FIT, KEY_NORMAL_POSITION, KEY_LABEL_POSITION,
-                KEY_NORMAL_CROP, KEY_LABEL_CROP,
-                KEY_NORMAL_MARGIN, KEY_LABEL_MARGIN,
-                KEY_NORMAL_ORIENTATION, KEY_LABEL_ORIENTATION,
-                KEY_NORMAL_DRAW_FRAME, KEY_LABEL_DRAW_FRAME,
-                KEY_NORMAL_SIG_POS_X, KEY_LABEL_SIG_POS_X,
-                KEY_NORMAL_SIG_POS_Y, KEY_LABEL_SIG_POS_Y,
-                KEY_NORMAL_PASSWORD_OUT, KEY_LABEL_PASSWORD_OUT,
-                KEY_NORMAL_FILE_NAME_TEMPLATE, KEY_LABEL_FILE_NAME_TEMPLATE,
+                KEY_NORMAL_ROWS, KEY_CUSTOM_ROWS,
+                KEY_NORMAL_COLUMNS, KEY_CUSTOM_COLUMNS,
+                KEY_NORMAL_SCALE, KEY_CUSTOM_SCALE,
+                KEY_NORMAL_FIT, KEY_CUSTOM_FIT, KEY_NORMAL_POSITION, KEY_CUSTOM_POSITION,
+                KEY_NORMAL_CROP, KEY_CUSTOM_CROP,
+                KEY_NORMAL_MARGIN, KEY_CUSTOM_MARGIN,
+                KEY_NORMAL_ORIENTATION, KEY_CUSTOM_ORIENTATION,
+                KEY_NORMAL_DRAW_FRAME, KEY_CUSTOM_DRAW_FRAME,
+                KEY_NORMAL_SIG_POS_X, KEY_CUSTOM_SIG_POS_X,
+                KEY_NORMAL_SIG_POS_Y, KEY_CUSTOM_SIG_POS_Y,
+                KEY_NORMAL_PASSWORD_OUT, KEY_CUSTOM_PASSWORD_OUT,
+                KEY_NORMAL_FILE_NAME_TEMPLATE, KEY_CUSTOM_FILE_NAME_TEMPLATE,
                 KEY_LAST_SIG_DPI_INDEX, KEY_LAST_SCAN_EFFECT, KEY_LAST_GRAYSCALE,
                 KEY_LAST_INNER_PDF_READER, KEY_LAST_LOADED_PROFILE,
                 KEY_RESTORE_LOCK_UNTIL_RELOAD, KEY_FIRST_RUN_INITIALIZED
@@ -7038,19 +6978,18 @@ class MainActivity : AppCompatActivity() {
         var foundTargetMap = false
 
         val allowedKeys = setOf(
-            KEY_NORMAL_ROWS, KEY_LABEL_ROWS,
-            KEY_NORMAL_COLUMNS, KEY_LABEL_COLUMNS,
-            KEY_NORMAL_BATCH_PAGE, KEY_LABEL_BATCH_PAGE,
-            KEY_NORMAL_SCALE, KEY_LABEL_SCALE,
-            KEY_NORMAL_FIT, KEY_LABEL_FIT, KEY_NORMAL_POSITION, KEY_LABEL_POSITION,
-            KEY_NORMAL_CROP, KEY_LABEL_CROP,
-            KEY_NORMAL_MARGIN, KEY_LABEL_MARGIN,
-            KEY_NORMAL_ORIENTATION, KEY_LABEL_ORIENTATION,
-            KEY_NORMAL_DRAW_FRAME, KEY_LABEL_DRAW_FRAME,
-            KEY_NORMAL_SIG_POS_X, KEY_LABEL_SIG_POS_X,
-            KEY_NORMAL_SIG_POS_Y, KEY_LABEL_SIG_POS_Y,
-            KEY_NORMAL_PASSWORD_OUT, KEY_LABEL_PASSWORD_OUT,
-            KEY_NORMAL_FILE_NAME_TEMPLATE, KEY_LABEL_FILE_NAME_TEMPLATE,
+            KEY_NORMAL_ROWS, KEY_CUSTOM_ROWS,
+            KEY_NORMAL_COLUMNS, KEY_CUSTOM_COLUMNS,
+            KEY_NORMAL_SCALE, KEY_CUSTOM_SCALE,
+            KEY_NORMAL_FIT, KEY_CUSTOM_FIT, KEY_NORMAL_POSITION, KEY_CUSTOM_POSITION,
+            KEY_NORMAL_CROP, KEY_CUSTOM_CROP,
+            KEY_NORMAL_MARGIN, KEY_CUSTOM_MARGIN,
+            KEY_NORMAL_ORIENTATION, KEY_CUSTOM_ORIENTATION,
+            KEY_NORMAL_DRAW_FRAME, KEY_CUSTOM_DRAW_FRAME,
+            KEY_NORMAL_SIG_POS_X, KEY_CUSTOM_SIG_POS_X,
+            KEY_NORMAL_SIG_POS_Y, KEY_CUSTOM_SIG_POS_Y,
+            KEY_NORMAL_PASSWORD_OUT, KEY_CUSTOM_PASSWORD_OUT,
+            KEY_NORMAL_FILE_NAME_TEMPLATE, KEY_CUSTOM_FILE_NAME_TEMPLATE,
             KEY_LAST_SIG_DPI_INDEX, KEY_LAST_SCAN_EFFECT, KEY_LAST_GRAYSCALE,
             KEY_LAST_INNER_PDF_READER, KEY_LAST_LOADED_PROFILE,
             KEY_RESTORE_LOCK_UNTIL_RELOAD, KEY_FIRST_RUN_INITIALIZED

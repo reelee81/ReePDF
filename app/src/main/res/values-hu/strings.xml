@@ -2,7 +2,7 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
     <string name="app_name">ReePDF</string>
     <string name="normal_pages">NORMÁL</string>
-    <string name="label_pages">CÍMKE</string>
+    <string name="custom_pages">EGYEDI</string>
     <string name="select_signature">ALÁÍRÁS</string>
     <string name="empty_page">ÜRES OLDAL</string>
     <string name="select_file">PDF / KÉP</string>
@@ -12,13 +12,12 @@
     <string name="save_load">Ment / Betölt</string>
     <string name="row">Sor</string>
     <string name="column">Oszlop</string>
-    <string name="fit">Fit</string>
     <string name="margin">Margó</string>
     <string name="add">Hozzáad</string>
     <string name="xy_add">XY / Hozzáad</string>
     <string name="file_type_text">.pdf</string>
     <string name="password_out_text">Jsz.</string>
-    <string name="row_column_batch_hint_text">1</string>
+    <string name="row_column_hint_text">1</string>
     <string name="margin_xy_hint_text">0</string>
     <string name="choose_text">Válassz aláírást</string>
     <string name="new_text">ÚJ</string>
@@ -36,9 +35,7 @@
     <string name="opt_hour_hh">Óra [hh]</string>
     <string name="opt_minute_mm">Perc [mm]</string>
     <string name="opt_second_ss">Másodperc [ss]</string>
-    <string name="portrait">Álló</string>
     <string name="landscape">Fekvő</string>
-    <string name="page_batch">Köteg</string>
     <string name="print_page_scale">Skála</string>
     <string name="print_page_grayscale">Szürkeárnyalatos háttér</string>
     <string name="print_page_border">Keret</string>
@@ -101,7 +98,7 @@
     <string name="max_coordinates_x_y_mm">Max. koordináták X: %1$d mm, Y: %2$d mm</string>
     <string name="editor_open_error">Hiba történt a szerkesztő megnyitásakor.</string>
     <string name="default_tmpl_normal">Normal_[YYYY][MM][DD][hh][mm][ss]</string>
-    <string name="default_tmpl_label">Cimke_[YYYY][MM][DD][hh][mm][ss]</string>
+    <string name="default_tmpl_custom">Egyedi_[YYYY][MM][DD][hh][mm][ss]</string>
     <string name="unknown_pdf">ismeretlen.pdf</string>
     <string name="input_stream_is_null">InputStream null</string>
     <string name="error_loading_pdf_with_msg">Fájlbetöltési hiba: %1$s</string>
@@ -125,7 +122,6 @@
     <string name="image_decode_failed">Kép dekódolása sikertelen</string>
     <string name="pdf_saved_successfully">PDF sikeresen mentve.</string>
     <string name="workspace_files_cleared">A munkafájlok törlődtek, a lapok listája kiürült.</string>
-    <string name="enter_value_batch_1_100">Adj meg egy értéket az 1 (stabil) és 100 (gyors) oldal/köteg között</string>
     <string name="save_settings_to_storage">Beállítások mentése</string>
     <string name="load_settings_from_storage">Beállítások betöltése</string>
     <string name="msg_prefs_saved_success">Beállítások fájlba mentve.</string>
@@ -160,6 +156,8 @@
     <string name="erase_visible_pdf_edits">Mentett szerkesztések törlése a látható lapokról</string>
     <string name="erase_all_pdf_edits">Mentett szerkesztések törlése minden lapról</string>
     <string name="erase_all_pdf_edits_confirm">Törlöd a mentett szerkesztéseket minden lapról?</string>
+    <string name="erase_visible_pdf_edits_unsaved_confirm">A nem mentett rajzok minden lapon elvesznek. Így is törlöd a mentett szerkesztéseket a látható lapokról?</string>
+    <string name="erase_all_pdf_edits_unsaved_confirm">A nem mentett rajzok minden lapon elvesznek. Így is törlöd a mentett szerkesztéseket minden lapról?</string>
     <string name="pdf_edits_erasing">Szerkesztések törlése</string>
     <string name="pdf_edits_erase_failed">A szerkesztések törlése sikertelen: %1$s</string>
     <string name="about_app">Alkalmazás névjegye</string>

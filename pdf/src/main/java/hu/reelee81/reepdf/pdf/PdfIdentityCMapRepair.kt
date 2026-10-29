@@ -34,10 +34,10 @@ internal object PdfIdentityCMapRepair {
                 null
             } ?: continue
             font.put(PdfName.Encoding, PdfStream(corrected.encoding).apply {
-                put(PdfName.CMapName, PdfName("PdfLabelIdentityEncoding"))
+                put(PdfName.CMapName, PdfName("ReePDFIdentityEncoding"))
             })
             font.put(PdfName.ToUnicode, PdfStream(corrected.unicode).apply {
-                put(PdfName.CMapName, PdfName("PdfLabelIdentityUnicode"))
+                put(PdfName.CMapName, PdfName("ReePDFIdentityUnicode"))
             })
         }
     }
@@ -79,11 +79,11 @@ internal object PdfIdentityCMapRepair {
         if (type != 1 || vertical || !fullTwoByteSpace || mappings.isEmpty()) return null
         val result = StringBuilder("/CIDInit /ProcSet findresource begin\n12 dict begin begincmap\n")
             .append("/CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> def\n")
-            .append("/CMapName /PdfLabelIdentityEncoding def /CMapType 1 def /WMode 0 def\n")
+            .append("/CMapName /ReePDFIdentityEncoding def /CMapType 1 def /WMode 0 def\n")
             .append("1 begincodespacerange <0000> <FFFF> endcodespacerange\n")
         val unicode = StringBuilder("/CIDInit /ProcSet findresource begin\n12 dict begin begincmap\n")
             .append("/CIDSystemInfo << /Registry (Adobe) /Ordering (UCS) /Supplement 0 >> def\n")
-            .append("/CMapName /PdfLabelIdentityUnicode def /CMapType 2 def\n")
+            .append("/CMapName /ReePDFIdentityUnicode def /CMapType 2 def\n")
             .append("1 begincodespacerange <0000> <FFFF> endcodespacerange\n")
         for (start in mappings.indices step 100) {
             val end = minOf(start + 100, mappings.size)

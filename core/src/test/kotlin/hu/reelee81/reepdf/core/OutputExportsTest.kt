@@ -14,7 +14,7 @@ class OutputExportsTest {
     fun everyPdfGoesExceptTheProtectedOnesFoldersAndOtherFiles() {
         val dir = temp.newFolder()
         File(dir, "nup_temp.pdf").writeText("nup")
-        File(dir, "Label.pdf").writeText("old export")
+        File(dir, "Custom.pdf").writeText("old export")
         File(dir, "upper.PDF").writeText("old export")
         File(dir, "notes.txt").writeText("text")
         File(dir, "source_temp").mkdirs()

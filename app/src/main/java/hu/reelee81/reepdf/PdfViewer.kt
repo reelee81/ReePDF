@@ -26,7 +26,6 @@ class PdfViewer : PdfActivity() {
         const val EXTRA_URI = "pdf_uri"
         const val EXTRA_OUTPUT_URI = "pdf_output_uri"
         const val EXTRA_INITIAL_PAGE_INDEX = "pdf_initial_page_index"
-        const val EXTRA_BATCH_SIZE = "pdf_batch_size"
         private const val FRAG_TAG = "pdfFragTag"
         private const val STATE_CURRENT_URI = "pdf_current_uri"
         private const val STATE_HAS_EDITED_DOCUMENT = "pdf_has_edited_document"
@@ -236,10 +235,6 @@ class PdfViewer : PdfActivity() {
                             Intent(this@PdfViewer, PdfEditorActivity::class.java).apply {
                                 putExtra(PdfEditorActivity.EXTRA_INPUT_URI, editUri.toString())
                                 putExtra(PdfEditorActivity.EXTRA_INITIAL_PAGE_INDEX, current.currentPageIndex)
-                                putExtra(
-                                    PdfEditorActivity.EXTRA_BATCH_SIZE,
-                                    intent.getIntExtra(EXTRA_BATCH_SIZE, 1)
-                                )
                                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                             }
                         )

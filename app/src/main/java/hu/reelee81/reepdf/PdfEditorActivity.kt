@@ -13,6 +13,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.annotation.ChecksSdkIntAtLeast
@@ -36,6 +37,7 @@ import com.itextpdf.kernel.pdf.PdfWriter
 import com.itextpdf.kernel.utils.PdfAnnotationFlattener
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.button.MaterialButton
+import hu.reelee81.reepdf.core.PageBatch
 import hu.reelee81.reepdf.pdf.PdfEditProjection
 import hu.reelee81.reepdf.pdf.PdfIo
 import java.io.File
@@ -59,10 +61,11 @@ class PdfEditorActivity : PdfActivity() {
         const val EXTRA_OUTPUT_URI = "pdf_output_uri"
         const val EXTRA_INITIAL_PAGE_INDEX = "pdf_initial_page_index"
         const val EXTRA_CURRENT_PAGE_INDEX = "pdf_current_page_index"
-        const val EXTRA_BATCH_SIZE = "pdf_batch_size"
         private const val FRAG_TAG = "pdfEditorFrag"
         private const val STATE_DISCARD_CONFIRMATION_VISIBLE = "pdf_discard_confirmation_visible"
         private const val STATE_ERASE_ALL_CONFIRMATION_VISIBLE = "pdf_erase_all_confirmation_visible"
+        private const val STATE_ERASE_UNSAVED_CONFIRMATION_VISIBLE = "pdf_erase_unsaved_confirmation_visible"
+        private const val STATE_ERASE_UNSAVED_ALL = "pdf_erase_unsaved_all"
         private const val STATE_ERASED_FILE = "pdf_erased_file"
         private const val STATE_APPLIED_FILE = "pdf_applied_file"
         private const val DISABLED_ALPHA = 0.38f
@@ -79,6 +82,7 @@ class PdfEditorActivity : PdfActivity() {
     private var eraseOverlayShown = false
     private var erasingAll = false
     private var searchingEdits = false
+    private var eraseUnsavedAll = false
     private var erasedFile: File? = null
     private var erasedFileDelivered = false
     private var saveJob: Job? = null
@@ -147,6 +151,9 @@ class PdfEditorActivity : PdfActivity() {
         if (savedInstanceState?.getBoolean(STATE_ERASE_ALL_CONFIRMATION_VISIBLE) == true) {
             showEraseAllConfirmation()
         }
+        if (savedInstanceState?.getBoolean(STATE_ERASE_UNSAVED_CONFIRMATION_VISIBLE) == true) {
+            showEraseUnsavedConfirmation(savedInstanceState.getBoolean(STATE_ERASE_UNSAVED_ALL))
+        }
         onPdfOperationStateChanged()
     }
 
@@ -167,6 +174,11 @@ class PdfEditorActivity : PdfActivity() {
             STATE_ERASE_ALL_CONFIRMATION_VISIBLE,
             findViewById<View>(R.id.overlay_dialog_pdf_editor_erase_all)?.isVisible == true
         )
+        outState.putBoolean(
+            STATE_ERASE_UNSAVED_CONFIRMATION_VISIBLE,
+            findViewById<View>(R.id.overlay_dialog_pdf_editor_erase_unsaved)?.isVisible == true
+        )
+        outState.putBoolean(STATE_ERASE_UNSAVED_ALL, eraseUnsavedAll)
         erasedFile?.let { outState.putString(STATE_ERASED_FILE, it.absolutePath) }
         appliedFile?.let { outState.putString(STATE_APPLIED_FILE, it.absolutePath) }
         super.onSaveInstanceState(outState)
@@ -282,7 +294,7 @@ class PdfEditorActivity : PdfActivity() {
         }
         val visible = createEraseButton(R.drawable.ic_erase_one_page_24, R.string.erase_visible_pdf_edits, size)
         (visible.layoutParams as LinearLayout.LayoutParams).marginEnd = resources.getDimensionPixelSize(R.dimen.dp_10)
-        visible.setOnClickListener { erasePdfEdits(all = false) }
+        visible.setOnClickListener { erasePdfEdits(all = false, confirmFirst = hasUnsavedEdits()) }
         val all = createEraseButton(R.drawable.ic_erase_all_pages_24, R.string.erase_all_pdf_edits, size)
         all.setOnClickListener { erasePdfEdits(all = true, confirmFirst = true) }
         buttons.addView(visible)
@@ -312,6 +324,9 @@ class PdfEditorActivity : PdfActivity() {
     private fun canStartEditorOperation(): Boolean =
         supportsPdfEditing() && ::fragment.isInitialized && documentLoaded && !isPdfOperationInProgress()
 
+    private fun hasUnsavedEdits(): Boolean =
+        supportsPdfEditing() && ::fragment.isInitialized && fragment.hasUnsavedChanges
+
     private fun uriFor(file: File): Uri = FileProvider.getUriForFile(this, "$packageName.provider", file)
 
     private fun erasePdfEdits(all: Boolean, confirmFirst: Boolean = false) {
@@ -320,7 +335,7 @@ class PdfEditorActivity : PdfActivity() {
         val pages = if (all) null else fragment.visiblePageIndices.map { it + 1 }.toSet()
         if (pages != null && pages.isEmpty()) return
         val pageIndex = fragment.currentPageIndex
-        val batchSize = intent.getIntExtra(EXTRA_BATCH_SIZE, 1)
+        val batchSize = PageBatch.PAGES
         val ownInput = erasedFile
         val open: () -> PdfReader = if (ownInput != null) {
             { PdfReader(ownInput) }
@@ -360,7 +375,7 @@ class PdfEditorActivity : PdfActivity() {
                     }
                 }
                 if (cleared == NEEDS_CONFIRMATION) {
-                    showEraseAllConfirmation()
+                    if (hasUnsavedEdits()) showEraseUnsavedConfirmation(all) else showEraseAllConfirmation()
                 } else if (cleared > 0) {
                     keepOutput = true
                     erasedFile = output
@@ -437,6 +452,31 @@ class PdfEditorActivity : PdfActivity() {
 
     private fun hideEraseAllConfirmation() {
         findViewById<View>(R.id.overlay_dialog_pdf_editor_erase_all).apply {
+            isVisible = false
+            setOnClickListener(null)
+        }
+    }
+
+    private fun showEraseUnsavedConfirmation(all: Boolean) {
+        eraseUnsavedAll = all
+        val overlay = findViewById<View>(R.id.overlay_dialog_pdf_editor_erase_unsaved)
+        overlay.setOnClickListener { hideEraseUnsavedConfirmation() }
+        findViewById<View>(R.id.overlay_dialog_pdf_editor_erase_unsaved_panel).setOnClickListener { }
+        findViewById<TextView>(R.id.pdf_editor_erase_unsaved_message).setText(
+            if (all) R.string.erase_all_pdf_edits_unsaved_confirm else R.string.erase_visible_pdf_edits_unsaved_confirm
+        )
+        findViewById<MaterialButton>(R.id.pdf_editor_erase_unsaved_cancel).setOnClickListener {
+            hideEraseUnsavedConfirmation()
+        }
+        findViewById<MaterialButton>(R.id.pdf_editor_erase_unsaved_confirm).setOnClickListener {
+            hideEraseUnsavedConfirmation()
+            erasePdfEdits(all = all)
+        }
+        overlay.isVisible = true
+    }
+
+    private fun hideEraseUnsavedConfirmation() {
+        findViewById<View>(R.id.overlay_dialog_pdf_editor_erase_unsaved).apply {
             isVisible = false
             setOnClickListener(null)
         }
@@ -601,6 +641,11 @@ class PdfEditorActivity : PdfActivity() {
 
         if (findViewById<View>(R.id.overlay_dialog_pdf_editor_erase_all).isVisible) {
             hideEraseAllConfirmation()
+            return
+        }
+
+        if (findViewById<View>(R.id.overlay_dialog_pdf_editor_erase_unsaved).isVisible) {
+            hideEraseUnsavedConfirmation()
             return
         }
 

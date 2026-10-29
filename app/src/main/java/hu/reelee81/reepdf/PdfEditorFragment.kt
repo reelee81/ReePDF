@@ -66,6 +66,14 @@ class PdfEditorFragment : EditablePdfViewerFragment() {
         hideToolboxUntilEditing()
     }
 
+    override fun onPause() {
+        super.onPause()
+        if (activity?.isFinishing == true && isEditModeEnabled) {
+            isEditModeEnabled = false
+            hideToolboxUntilEditing()
+        }
+    }
+
     private fun hideToolboxUntilEditing() {
         if (!isEditModeEnabled) isToolboxVisible = false
     }

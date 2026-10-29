@@ -27,16 +27,18 @@ We publish the source code so that others can use it, modify it and learn from i
 ### Page layout
 
 - Place several pages or cropped areas on one A4 sheet: **Row** × **Column** grid (1–100 each),
-  in portrait or landscape orientation
-- **Margin** in millimetres around and between the cells (0–100 mm)
-- **Scale**: every page or label is scaled to fill its cell, so small labels are enlarged
-  for better print quality; when it is off, pages are only reduced, never enlarged
-- **Fit** (together with Scale): measures the real content of the page (MuPDF), trims the empty border
-  and fills the cell with the content only
+  in portrait orientation, or in landscape orientation with the **Land.** (landscape) switch on
+- **Margin** in millimeters around and between the cells (0–100 mm)
+- **Scale** switch with three positions (tap to step through them, or drag the switch directly to any position):
+  - off: pages are only reduced, never enlarged
+  - middle: every page or cropped area is scaled to fill its cell, so small ones are enlarged
+    for better print quality
+  - right: measures the real content of the page (MuPDF), trims the empty border
+    and fills the cell with the content only
 - **Border**: draws a frame around every cell
-- **Position on page**: aligns the page inside its cell to one of 9 positions (corners, edges, centre),
+- **Position on page**: aligns the page inside its cell to one of 9 positions (corners, edges, center),
   for all pages or for the selected ones
-- **Free crop**: cut out any area of a page with a live preview, for one page group or for all pages,
+- **Free crop**: cut out any area of a page with a live preview, for a single page group or for all pages,
   and reset it at any time
 - Rotate pages 90° to the left, one by one or all selected ones together
 - Add an empty page to the end of the list, with the exact size of the first page
@@ -58,7 +60,7 @@ We publish the source code so that others can use it, modify it and learn from i
 
 - Add a PNG signature, stamp, logo or watermark to the selected pages
 - Keep your own library of signature images (add new ones, remove old ones)
-- Set the position in millimetres (X / Y); with a single page selected, tap the pencil icon
+- Set the position in millimeters (X / Y); with a single page selected, tap the pencil icon
   to drag the signature to its place on the page preview
 - Choose the resolution: 144 dpi or 300 dpi
 - Optional **scan effect** and **grayscale background**
@@ -75,7 +77,7 @@ We publish the source code so that others can use it, modify it and learn from i
 - Search and text selection (Android 12+ with S Extension 13+)
 - Edit pages: draw and highlight with the AndroidX PDF editing tools (Android 12+ with S Extension 18+)
 - Saved edits stay on the pages even when the layout settings change later
-- Remove saved edits from the visible pages or from all pages
+- Remove saved edits from the visible pages or from all pages; the app asks first if unsaved drawings would be lost
 - Edits stored in a file that was saved earlier and opened again become part of the page and
   cannot be removed separately
 
@@ -90,11 +92,9 @@ We publish the source code so that others can use it, modify it and learn from i
 
 ### Settings
 
-- Two setting profiles, **NORMAL** and **LABEL** (grid, margin, orientation, border, scale, fit, position,
-  crop, batch size, signature position, password protection, file name template), saved and loaded with
-  one tap
+- Two setting profiles, **NORMAL** and **CUSTOM** (grid, margin, orientation, border, scale, position,
+  crop, signature position, password protection, file name template), saved and loaded with one tap
 - Export the settings to an XML file and import them again, for example on another device
-- **Batch**: number of pages processed in one step, from 1 (stable, low memory) to 100 (fast)
 - Light, dark or phone theme
 - English and Hungarian user interface
 - “About the app” window with the version number and links to this page, the privacy policy,
@@ -102,25 +102,26 @@ We publish the source code so that others can use it, modify it and learn from i
 
 ### Long operations
 
-- Progress window with percentage and a cancel button; cancelling restores the previous state
+- Progress window with percentage and a cancel button; canceling restores the previous state
 - Processing continues in the background with a notification, and the screen stays on while the app is open
 - “Battery optimization” help in the menu, because some phones stop background work during long operations
-- Built for very large documents: pages are processed in batches to keep memory usage low
+- Built for very large documents: pages are processed in batches whose size adapts to the page content,
+  to keep memory usage low
 - Requires Android 7.0 or newer (API 24+)
 
 
 ## Screenshots
 
 <p style="text-align: center;">
-  <img src="screenshots/main_screen_light.jpg" width="500" alt="Main screen (light theme)" />
+  <img src="screenshots/main_screen_light.png" width="500" alt="Main screen (light theme)" />
 </p>
 
 <p style="text-align: center;">
-  <img src="screenshots/main_screen_dark.jpg" width="500" alt="Main screen (dark theme)" />
+  <img src="screenshots/main_screen_dark.png" width="500" alt="Main screen (dark theme)" />
 </p>
 
 <p style="text-align: center;">
-  <img src="screenshots/signature_dialog.jpg" width="500" alt="Signature position dialog" />
+  <img src="screenshots/signature_dialog.png" width="500" alt="Signature position dialog" />
 </p>
 
 
@@ -143,7 +144,7 @@ The app does not collect, store or transmit any personal data to a server. Detai
 
 - Minimum SDK: 24
 - Target / Compile SDK: 37
-- Android Gradle Plugin: 9.4.x
+- Android Gradle Plugin: 9.5.x
 - Java / Kotlin toolchain: 21
 
 Typical build commands:
@@ -166,8 +167,8 @@ committed.
 
 The release build is shrunk and obfuscated with R8. iText, Xerces and MuPDF load some of their own classes by
 name, which R8 cannot see; the rules in `app/proguard-rules.pro` keep exactly these classes. A broken rule does not
-fail the build, it only shows up on the device (for example a PDF that no longer opens), so the shrunk app has to be
-tested after every library or Android Gradle Plugin update and before every release.
+fail the build; it only shows up on the device, for example as a PDF that no longer opens. The shrunk app therefore
+has to be tested after every library or Android Gradle Plugin update and before every release.
 
 For this the project has an `r8check` build type: the same shrunk build as the release, signed with the debug key and
 installed as a separate app (“ReePDF R8 test”, in Hungarian “ReePDF R8 próba”; `hu.reelee81.reepdf.r8check`)
@@ -175,7 +176,7 @@ next to the normal one.
 It contains a hidden smoke test screen (`app/src/r8check`) that runs the PDF engine without the user interface:
 it imports every PDF from its input folder, then rebuilds the layout (with Scale and Fit), crops, rotates, positions,
 adds an empty page, reorders, deletes, signs (MuPDF) and saves with and without a password, and checks that
-cancelling an import restores the previous state.
+canceling an import restores the previous state.
 
 ```bash
 ./gradlew :app:installR8check
@@ -230,7 +231,7 @@ The source code of this app: https://github.com/reelee81/ReePDF
 The app shows this link in the “About the app” window.
 
 
-## Acknowledgements / Inspiration
+## Acknowledgments / Inspiration
 
 The built-in PDF viewer is based on the AndroidX PDF component. Thanks to the AndroidX PDF Viewer team:  
 https://developer.android.com/jetpack/androidx/releases/pdf

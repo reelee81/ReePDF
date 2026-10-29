@@ -20,6 +20,7 @@ import com.itextpdf.kernel.pdf.PdfWriter
 import com.itextpdf.kernel.pdf.canvas.PdfCanvas
 import hu.reelee81.reepdf.core.NupConfig
 import hu.reelee81.reepdf.core.NupGeometry.DEFAULT_POSITION
+import hu.reelee81.reepdf.core.PageBatch
 import hu.reelee81.reepdf.core.PdfCropRect
 import hu.reelee81.reepdf.core.SignatureGeometry
 import hu.reelee81.reepdf.core.WorkFileBackup
@@ -379,7 +380,7 @@ class R8SmokeActivity : Activity() {
 
     private companion object {
         const val TAG = "ReePDFR8Smoke"
-        const val BATCH = 20
+        const val BATCH = PageBatch.PAGES
         const val SIGNATURE_W = 400
         const val SIGNATURE_H = 100
         const val SHOWN_LINES = 40

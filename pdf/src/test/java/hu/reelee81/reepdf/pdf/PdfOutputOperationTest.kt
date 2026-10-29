@@ -39,12 +39,12 @@ class PdfOutputOperationTest {
         File(dir, "source_temp").mkdirs()
         File(dir, "notes.txt").writeText("text")
 
-        val result = runBlocking { operation(baseName = "Label: 1").execute {} }
+        val result = runBlocking { operation(baseName = "Custom: 1").execute {} }
 
-        assertEquals(File(dir, "Label_ 1.pdf"), result.file)
+        assertEquals(File(dir, "Custom_ 1.pdf"), result.file)
         assertArrayEquals(nup().readBytes(), result.file.readBytes())
         assertEquals(
-            setOf("nup_temp.pdf", "nup_temp_copy.pdf", "source_temp", "notes.txt", "Label_ 1.pdf"),
+            setOf("nup_temp.pdf", "nup_temp_copy.pdf", "source_temp", "notes.txt", "Custom_ 1.pdf"),
             dir.list()!!.toSet()
         )
         assertEquals(listOf("selection saved"), events)
@@ -68,7 +68,7 @@ class PdfOutputOperationTest {
         assertTrue(runCatching { PdfDocument(PdfReader(result.file)).use { } }.exceptionOrNull() is BadPasswordException)
         assertEquals(pageContents(nup(), null), pageContents(result.file, password))
         assertEquals(pageWidths(nup(), null), pageWidths(result.file, password))
-        assertFalse(File(dir, "Label_enc.pdf").exists())
+        assertFalse(File(dir, "Custom_enc.pdf").exists())
         assertEquals(5, PdfDocument(PdfReader(nup())).use { it.numberOfPages })
     }
 
@@ -90,12 +90,12 @@ class PdfOutputOperationTest {
         writeLayout(2)
         val operation = operation(password = password)
         val result = runBlocking { operation.execute {} }
-        File(dir, "Label_enc.pdf").writeText("left over")
+        File(dir, "Custom_enc.pdf").writeText("left over")
 
         runBlocking { operation.discard() }
 
         assertFalse(result.file.exists())
-        assertFalse(File(dir, "Label_enc.pdf").exists())
+        assertFalse(File(dir, "Custom_enc.pdf").exists())
         assertTrue(nup().exists())
     }
 
@@ -103,7 +103,7 @@ class PdfOutputOperationTest {
     fun whenTheCopyCannotBeWrittenTheOperationFailsAndTheLayoutIsLeftAlone() {
         writeLayout(2)
         val before = nup().readBytes()
-        File(dir, "Label.pdf").mkdirs()
+        File(dir, "Custom.pdf").mkdirs()
         val operation = operation(password = password)
 
         val failure = runCatching { runBlocking { operation.execute {} } }.exceptionOrNull()
@@ -111,8 +111,8 @@ class PdfOutputOperationTest {
 
         assertTrue(failure != null)
         assertArrayEquals(before, nup().readBytes())
-        assertTrue(File(dir, "Label.pdf").isDirectory)
-        assertFalse(File(dir, "Label_enc.pdf").exists())
+        assertTrue(File(dir, "Custom.pdf").isDirectory)
+        assertFalse(File(dir, "Custom_enc.pdf").exists())
     }
 
     @Test
@@ -153,7 +153,7 @@ class PdfOutputOperationTest {
         PdfDocument(reader(file, password)).use { pdf -> (1..pdf.numberOfPages).map { pdf.getPage(it).pageSize.width } }
 
     private fun operation(
-        baseName: String = "Label",
+        baseName: String = "Custom",
         password: ByteArray? = null,
         batchSize: Int = 2,
         budget: Long = Long.MAX_VALUE

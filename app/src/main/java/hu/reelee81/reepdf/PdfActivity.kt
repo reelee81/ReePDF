@@ -132,6 +132,7 @@ abstract class PdfActivity : AppCompatActivity() {
         for (id in listOf(
             R.id.overlay_dialog_pdf_editor_discard_panel,
             R.id.overlay_dialog_pdf_editor_erase_all_panel,
+            R.id.overlay_dialog_pdf_editor_erase_unsaved_panel,
             R.id.overlay_pdf_navigation_wait_panel
         )) {
             val panel = findViewById<View>(id) ?: continue
@@ -182,6 +183,7 @@ abstract class PdfActivity : AppCompatActivity() {
     override fun dispatchTouchEvent(event: MotionEvent): Boolean = when {
         findViewById<View>(R.id.overlay_dialog_pdf_editor_discard)?.isVisible == true ||
             findViewById<View>(R.id.overlay_dialog_pdf_editor_erase_all)?.isVisible == true ||
+            findViewById<View>(R.id.overlay_dialog_pdf_editor_erase_unsaved)?.isVisible == true ||
             waitOverlay?.isVisible == true -> super.dispatchTouchEvent(event)
         waitActive -> true
         else -> super.dispatchTouchEvent(event)
