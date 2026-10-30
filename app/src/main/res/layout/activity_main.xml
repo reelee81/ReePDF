@@ -51,10 +51,10 @@
                     android:layout_marginBottom="@dimen/dp_10">
 
                     <com.google.android.material.button.MaterialButton
-                        android:id="@+id/save_normal_pages"
+                        android:id="@+id/save_reeprofile1_pages"
                         android:layout_width="0dp"
                         android:layout_height="@dimen/dp_44"
-                        android:text="@string/normal_pages"
+                        android:text="@string/reeprofile1_pages"
                         android:layout_marginRight="@dimen/dp_2"
                         app:layout_constraintLeft_toLeftOf="parent"
                         app:layout_constraintRight_toLeftOf="@+id/save_load_simple_text_1"
@@ -71,17 +71,17 @@
                         android:gravity="center"
                         android:layout_marginLeft="@dimen/dp_2"
                         android:layout_marginRight="@dimen/dp_2"
-                        app:layout_constraintLeft_toRightOf="@id/save_normal_pages"
-                        app:layout_constraintRight_toLeftOf="@+id/load_normal_pages"
+                        app:layout_constraintLeft_toRightOf="@id/save_reeprofile1_pages"
+                        app:layout_constraintRight_toLeftOf="@+id/load_reeprofile1_pages"
                         app:layout_constraintTop_toTopOf="parent"
                         app:layout_constraintBottom_toBottomOf="parent"
                         app:layout_constraintHorizontal_weight="1" />
 
                     <com.google.android.material.button.MaterialButton
-                        android:id="@+id/load_normal_pages"
+                        android:id="@+id/load_reeprofile1_pages"
                         android:layout_width="0dp"
                         android:layout_height="@dimen/dp_44"
-                        android:text="@string/normal_pages"
+                        android:text="@string/reeprofile1_pages"
                         android:layout_marginLeft="@dimen/dp_2"
                         app:layout_constraintLeft_toRightOf="@id/save_load_simple_text_1"
                         app:layout_constraintRight_toRightOf="parent"
@@ -96,10 +96,10 @@
                     android:layout_marginBottom="@dimen/dp_10">
 
                     <com.google.android.material.button.MaterialButton
-                        android:id="@+id/save_custom_pages"
+                        android:id="@+id/save_reeprofile2_pages"
                         android:layout_width="0dp"
                         android:layout_height="@dimen/dp_44"
-                        android:text="@string/custom_pages"
+                        android:text="@string/reeprofile2_pages"
                         android:layout_marginRight="@dimen/dp_2"
                         app:layout_constraintLeft_toLeftOf="parent"
                         app:layout_constraintRight_toLeftOf="@+id/save_load_simple_text_2"
@@ -116,17 +116,17 @@
                         android:gravity="center"
                         android:layout_marginLeft="@dimen/dp_2"
                         android:layout_marginRight="@dimen/dp_2"
-                        app:layout_constraintLeft_toRightOf="@id/save_custom_pages"
-                        app:layout_constraintRight_toLeftOf="@+id/load_custom_pages"
+                        app:layout_constraintLeft_toRightOf="@id/save_reeprofile2_pages"
+                        app:layout_constraintRight_toLeftOf="@+id/load_reeprofile2_pages"
                         app:layout_constraintTop_toTopOf="parent"
                         app:layout_constraintBottom_toBottomOf="parent"
                         app:layout_constraintHorizontal_weight="1" />
 
                     <com.google.android.material.button.MaterialButton
-                        android:id="@+id/load_custom_pages"
+                        android:id="@+id/load_reeprofile2_pages"
                         android:layout_width="0dp"
                         android:layout_height="@dimen/dp_44"
-                        android:text="@string/custom_pages"
+                        android:text="@string/reeprofile2_pages"
                         android:layout_marginLeft="@dimen/dp_2"
                         app:layout_constraintLeft_toRightOf="@id/save_load_simple_text_2"
                         app:layout_constraintRight_toRightOf="parent"

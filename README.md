@@ -92,8 +92,9 @@ We publish the source code so that others can use it, modify it and learn from i
 
 ### Settings
 
-- Two setting profiles, **NORMAL** and **CUSTOM** (grid, margin, orientation, border, scale, position,
-  crop, signature position, password protection, file name template), saved and loaded with one tap
+- Two setting profiles, **Profile 1** and **Profile 2** (grid, margin, orientation, border, scale, position,
+  crop, signature position (separately for portrait and landscape), resolution and effects, password
+  protection, file name template), saved and loaded with one tap
 - Export the settings to an XML file and import them again, for example on another device
 - Light, dark or phone theme
 - English and Hungarian user interface

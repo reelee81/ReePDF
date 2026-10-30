@@ -82,9 +82,69 @@ class PdfEditProjectionTest {
             val names = editForm!!.getAsDictionary(PdfName.Resources).getAsDictionary(PdfName.XObject).keySet()
             assertEquals(10, names.size)
             assertEquals(1, first.getAsDictionary(PdfName.Resources).getAsDictionary(PdfName.XObject).keySet().size)
-            assertEquals(2, pdf.getPage(1).contentStreamCount)
+            assertEquals(3, pdf.getPage(1).contentStreamCount)
             assertNull(layerForm(pdf.getPage(2)))
         }
+    }
+
+    @Test
+    fun anEditStaysInPlaceWhenTheSourcePageLeavesItsMatrixChanged() {
+        val source = temporary.newFile()
+        PdfDocument(PdfWriter(source)).use { pdf ->
+            PdfCanvas(pdf.addNewPage(PageSize.A4)).concatMatrix(0.24, 0.0, 0.0, -0.24, 0.0, 841.92)
+                .beginText().setFontAndSize(PdfFontFactory.createFont(), 50f)
+                .moveText(160.0, 400.0).showText("SOURCE 1").endText()
+        }
+        val projected = projectEdit(source, "EDIT", 1)
+        val position = textPositions(buildNup(projected), 1)["EDIT"]
+        assertNotNull(position)
+        assertEquals(150f, position!![0], 0.05f)
+        assertEquals(200f, position[1], 0.05f)
+
+        val cleared = temporary.newFile()
+        assertEquals(1, PdfEditProjection.clearLayers(buildNup(projected), cleared, null, batchSize = 1) {})
+        val restored = temporary.newFile()
+        assertEquals(1, projectFile(projected, cleared, restored))
+        PdfDocument(PdfReader(restored)).use { pdf ->
+            assertNull(layerForm(pdf.getPage(1)))
+            assertEquals(1, pdf.getPage(1).contentStreamCount)
+        }
+        assertTrue(textPositions(buildNup(restored), 1).containsKey("SOURCE 1"))
+    }
+
+    @Test
+    fun anEditStaysInPlaceWhenTheSourcePageLeavesSavesOpen() {
+        val source = rawSource("q\nq\n0.24 0 0 -0.24 0 841.92 cm\n0 0 m 100 100 l S\n")
+        val projected = projectEdit(source, "EDIT", 1)
+        val position = textPositions(buildNup(projected), 1)["EDIT"]
+        assertNotNull(position)
+        assertEquals(150f, position!![0], 0.05f)
+        assertEquals(200f, position[1], 0.05f)
+        PdfDocument(PdfReader(projected)).use { pdf ->
+            assertEquals(3, pdf.getPage(1).contentStreamCount)
+        }
+    }
+
+    @Test
+    fun aSourcePageWithMoreRestoresThanSavesKeepsItsOriginalContent() {
+        val original = "0.5 0 0 0.5 0 0 cm\nq\nQ\nQ\n0 0 m 100 100 l S\n"
+        val projected = projectEdit(rawSource(original), "EDIT", 1)
+        PdfDocument(PdfReader(projected)).use { pdf ->
+            val page = pdf.getPage(1)
+            assertNotNull(layerForm(page))
+            assertNull(privateData(page.pdfObject)!!.get(PdfName("Wrap")))
+            assertEquals(2, page.contentStreamCount)
+            assertEquals(original, String(page.getContentStream(0).bytes, Charsets.ISO_8859_1))
+            assertFalse(String(page.getContentStream(1).bytes, Charsets.ISO_8859_1).startsWith("Q"))
+        }
+    }
+
+    private fun rawSource(content: String): File {
+        val file = temporary.newFile()
+        PdfDocument(PdfWriter(file)).use { pdf ->
+            pdf.addNewPage(PageSize.A4).getContentStream(0).setData(content.toByteArray(Charsets.ISO_8859_1))
+        }
+        return file
     }
 
     @Test

@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources xmlns:tools="http://schemas.android.com/tools">
     <string name="app_name">ReePDF</string>
-    <string name="normal_pages">NORMAL</string>
-    <string name="custom_pages">CUSTOM</string>
+    <string name="reeprofile1_pages">PROFILE 1</string>
+    <string name="reeprofile2_pages">PROFILE 2</string>
     <string name="select_signature">SIGNATURE</string>
     <string name="empty_page">EMPTY PAGE</string>
     <string name="select_file">PDF / IMAGE</string>
@@ -98,8 +98,8 @@
     <string name="signature_image_too_large">The signature image is too large.</string>
     <string name="max_coordinates_x_y_mm">Max coordinates X: %1$d mm, Y: %2$d mm</string>
     <string name="editor_open_error">An error occurred while opening the editor.</string>
-    <string name="default_tmpl_normal">Normal_[YYYY][MM][DD][hh][mm][ss]</string>
-    <string name="default_tmpl_custom">Custom_[YYYY][MM][DD][hh][mm][ss]</string>
+    <string name="default_tmpl_reeprofile1" tools:ignore="Typos">Profile_1_[YYYY][MM][DD][hh][mm][ss]</string>
+    <string name="default_tmpl_reeprofile2">Profile_2_[YYYY][MM][DD][hh][mm][ss]</string>
     <string name="unknown_pdf">unknown.pdf</string>
     <string name="input_stream_is_null">InputStream is null</string>
     <string name="error_loading_pdf_with_msg">File error loading: %1$s</string>
@@ -123,11 +123,11 @@
     <string name="image_decode_failed">Image decode failed</string>
     <string name="pdf_saved_successfully">PDF saved successfully.</string>
     <string name="workspace_files_cleared">The working files were deleted, the page list has been cleared.</string>
-    <string name="save_settings_to_storage">Save settings</string>
-    <string name="load_settings_from_storage">Load settings</string>
-    <string name="msg_prefs_saved_success">Settings saved to file.</string>
+    <string name="save_settings_to_storage">Save profile settings</string>
+    <string name="load_settings_from_storage">Load profile settings</string>
+    <string name="msg_prefs_saved_success">Profile settings saved to file.</string>
     <string name="msg_prefs_save_failed">Save failed: %1$s</string>
-    <string name="msg_prefs_loaded_success">Settings loaded successfully.</string>
+    <string name="msg_prefs_loaded_success">Profile settings loaded successfully.</string>
     <string name="msg_prefs_load_failed">Load failed: %1$s</string>
     <string name="error_invalid_prefs_file">Invalid file: missing &quot;%1$s&quot; settings map.</string>
     <string name="output_stream_is_null">OutputStream is null</string>

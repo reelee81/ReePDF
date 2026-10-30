@@ -223,7 +223,7 @@ object PdfCopySupport {
         return values
     }
 
-    private fun unclosedSaves(content: ByteArray, resources: PdfDictionary): Int? {
+    internal fun unclosedSaves(content: ByteArray, resources: PdfDictionary): Int? {
         return try {
             PdfTokenizer(RandomAccessFileOrArray(RandomAccessSourceFactory().createSource(content))).use { tokenizer ->
                 val parser = PdfCanvasParser(tokenizer, PdfResources(resources))

@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources xmlns:tools="http://schemas.android.com/tools">
     <string name="app_name">ReePDF</string>
-    <string name="normal_pages">NORMÁL</string>
-    <string name="custom_pages">EGYEDI</string>
+    <string name="reeprofile1_pages">PROFIL 1</string>
+    <string name="reeprofile2_pages">PROFIL 2</string>
     <string name="select_signature">ALÁÍRÁS</string>
     <string name="empty_page">ÜRES OLDAL</string>
     <string name="select_file">PDF / KÉP</string>
@@ -97,8 +97,8 @@
     <string name="signature_image_too_large">Az aláíráskép mérete túl nagy.</string>
     <string name="max_coordinates_x_y_mm">Max. koordináták X: %1$d mm, Y: %2$d mm</string>
     <string name="editor_open_error">Hiba történt a szerkesztő megnyitásakor.</string>
-    <string name="default_tmpl_normal">Normal_[YYYY][MM][DD][hh][mm][ss]</string>
-    <string name="default_tmpl_custom">Egyedi_[YYYY][MM][DD][hh][mm][ss]</string>
+    <string name="default_tmpl_reeprofile1" tools:ignore="Typos">Profil_1_[YYYY][MM][DD][hh][mm][ss]</string>
+    <string name="default_tmpl_reeprofile2">Profil_2_[YYYY][MM][DD][hh][mm][ss]</string>
     <string name="unknown_pdf">ismeretlen.pdf</string>
     <string name="input_stream_is_null">InputStream null</string>
     <string name="error_loading_pdf_with_msg">Fájlbetöltési hiba: %1$s</string>
@@ -122,11 +122,11 @@
     <string name="image_decode_failed">Kép dekódolása sikertelen</string>
     <string name="pdf_saved_successfully">PDF sikeresen mentve.</string>
     <string name="workspace_files_cleared">A munkafájlok törlődtek, a lapok listája kiürült.</string>
-    <string name="save_settings_to_storage">Beállítások mentése</string>
-    <string name="load_settings_from_storage">Beállítások betöltése</string>
-    <string name="msg_prefs_saved_success">Beállítások fájlba mentve.</string>
+    <string name="save_settings_to_storage">Profilbeállítások mentése</string>
+    <string name="load_settings_from_storage">Profilbeállítások betöltése</string>
+    <string name="msg_prefs_saved_success">Profilbeállítások fájlba mentve.</string>
     <string name="msg_prefs_save_failed">Mentés sikertelen: %1$s</string>
-    <string name="msg_prefs_loaded_success">Beállítások sikeresen betöltve.</string>
+    <string name="msg_prefs_loaded_success">Profilbeállítások sikeresen betöltve.</string>
     <string name="msg_prefs_load_failed">Betöltés sikertelen: %1$s</string>
     <string name="error_invalid_prefs_file">Érvénytelen fájl: hiányzik a &quot;%1$s&quot; beállítások térképe.</string>
     <string name="output_stream_is_null">OutputStream null-t adott</string>

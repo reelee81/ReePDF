@@ -186,47 +186,59 @@ class MainActivity : AppCompatActivity() {
         const val PREFS_NAME_FRAGMENT = "ReePDFPrefs"
         const val KEY_THEME_MODE = "theme_mode"
         const val KEY_ROWS = "rows"
-        const val KEY_NORMAL_ROWS = "normal_rows"
-        const val KEY_CUSTOM_ROWS = "custom_rows"
+        const val KEY_REEPROFILE1_ROWS = "reeprofile1_rows"
+        const val KEY_REEPROFILE2_ROWS = "reeprofile2_rows"
         const val KEY_COLUMNS = "columns"
-        const val KEY_NORMAL_COLUMNS = "normal_columns"
-        const val KEY_CUSTOM_COLUMNS = "custom_columns"
+        const val KEY_REEPROFILE1_COLUMNS = "reeprofile1_columns"
+        const val KEY_REEPROFILE2_COLUMNS = "reeprofile2_columns"
         const val KEY_MARGIN = "margin"
-        const val KEY_NORMAL_MARGIN = "normal_margin"
-        const val KEY_CUSTOM_MARGIN = "custom_margin"
+        const val KEY_REEPROFILE1_MARGIN = "reeprofile1_margin"
+        const val KEY_REEPROFILE2_MARGIN = "reeprofile2_margin"
         const val KEY_ORIENTATION = "orientation"
-        const val KEY_NORMAL_ORIENTATION = "normal_orientation"
-        const val KEY_CUSTOM_ORIENTATION = "custom_orientation"
+        const val KEY_REEPROFILE1_ORIENTATION = "reeprofile1_orientation"
+        const val KEY_REEPROFILE2_ORIENTATION = "reeprofile2_orientation"
         const val KEY_DRAW_FRAME = "draw_frame"
-        const val KEY_NORMAL_DRAW_FRAME = "normal_draw_frame"
-        const val KEY_CUSTOM_DRAW_FRAME = "custom_draw_frame"
-        const val KEY_SIG_POS_X = "sig_pos_x"
-        const val KEY_NORMAL_SIG_POS_X = "normal_sig_pos_x"
-        const val KEY_CUSTOM_SIG_POS_X = "custom_sig_pos_x"
-        const val KEY_SIG_POS_Y = "sig_pos_y"
-        const val KEY_NORMAL_SIG_POS_Y = "normal_sig_pos_y"
-        const val KEY_CUSTOM_SIG_POS_Y = "custom_sig_pos_y"
+        const val KEY_REEPROFILE1_DRAW_FRAME = "reeprofile1_draw_frame"
+        const val KEY_REEPROFILE2_DRAW_FRAME = "reeprofile2_draw_frame"
+        const val KEY_SIG_POS_PORTRAIT_X = "sig_pos_portrait_x"
+        const val KEY_REEPROFILE1_SIG_POS_PORTRAIT_X = "reeprofile1_sig_pos_portrait_x"
+        const val KEY_REEPROFILE2_SIG_POS_PORTRAIT_X = "reeprofile2_sig_pos_portrait_x"
+        const val KEY_SIG_POS_PORTRAIT_Y = "sig_pos_portrait_y"
+        const val KEY_REEPROFILE1_SIG_POS_PORTRAIT_Y = "reeprofile1_sig_pos_portrait_y"
+        const val KEY_REEPROFILE2_SIG_POS_PORTRAIT_Y = "reeprofile2_sig_pos_portrait_y"
+        const val KEY_SIG_POS_LANDSCAPE_X = "sig_pos_landscape_x"
+        const val KEY_REEPROFILE1_SIG_POS_LANDSCAPE_X = "reeprofile1_sig_pos_landscape_x"
+        const val KEY_REEPROFILE2_SIG_POS_LANDSCAPE_X = "reeprofile2_sig_pos_landscape_x"
+        const val KEY_SIG_POS_LANDSCAPE_Y = "sig_pos_landscape_y"
+        const val KEY_REEPROFILE1_SIG_POS_LANDSCAPE_Y = "reeprofile1_sig_pos_landscape_y"
+        const val KEY_REEPROFILE2_SIG_POS_LANDSCAPE_Y = "reeprofile2_sig_pos_landscape_y"
         const val KEY_SCALE = "scale"
-        const val KEY_NORMAL_SCALE = "normal_scale"
-        const val KEY_CUSTOM_SCALE = "custom_scale"
+        const val KEY_REEPROFILE1_SCALE = "reeprofile1_scale"
+        const val KEY_REEPROFILE2_SCALE = "reeprofile2_scale"
         const val KEY_FIT = "fit"
-        const val KEY_NORMAL_FIT = "normal_fit"
-        const val KEY_CUSTOM_FIT = "custom_fit"
+        const val KEY_REEPROFILE1_FIT = "reeprofile1_fit"
+        const val KEY_REEPROFILE2_FIT = "reeprofile2_fit"
         const val KEY_POSITION = "position"
-        const val KEY_NORMAL_POSITION = "normal_position"
-        const val KEY_CUSTOM_POSITION = "custom_position"
+        const val KEY_REEPROFILE1_POSITION = "reeprofile1_position"
+        const val KEY_REEPROFILE2_POSITION = "reeprofile2_position"
         const val KEY_CROP = "crop"
-        const val KEY_NORMAL_CROP = "normal_crop"
-        const val KEY_CUSTOM_CROP = "custom_crop"
+        const val KEY_REEPROFILE1_CROP = "reeprofile1_crop"
+        const val KEY_REEPROFILE2_CROP = "reeprofile2_crop"
         const val KEY_PASSWORD_OUT = "password_out"
-        const val KEY_NORMAL_PASSWORD_OUT = "normal_password_out"
-        const val KEY_CUSTOM_PASSWORD_OUT = "custom_password_out"
+        const val KEY_REEPROFILE1_PASSWORD_OUT = "reeprofile1_password_out"
+        const val KEY_REEPROFILE2_PASSWORD_OUT = "reeprofile2_password_out"
         const val KEY_FILE_NAME_TEMPLATE = "file_name_template"
-        const val KEY_NORMAL_FILE_NAME_TEMPLATE = "normal_file_name_template"
-        const val KEY_CUSTOM_FILE_NAME_TEMPLATE = "custom_file_name_template"
+        const val KEY_REEPROFILE1_FILE_NAME_TEMPLATE = "reeprofile1_file_name_template"
+        const val KEY_REEPROFILE2_FILE_NAME_TEMPLATE = "reeprofile2_file_name_template"
         const val KEY_LAST_SIG_DPI_INDEX = "key_last_signature_dpi_index"
+        const val KEY_REEPROFILE1_SIG_DPI_INDEX = "reeprofile1_sig_dpi_index"
+        const val KEY_REEPROFILE2_SIG_DPI_INDEX = "reeprofile2_sig_dpi_index"
         const val KEY_LAST_SCAN_EFFECT = "key_last_scan_effect"
+        const val KEY_REEPROFILE1_SCAN_EFFECT = "reeprofile1_scan_effect"
+        const val KEY_REEPROFILE2_SCAN_EFFECT = "reeprofile2_scan_effect"
         const val KEY_LAST_GRAYSCALE = "key_last_grayscale_page"
+        const val KEY_REEPROFILE1_GRAYSCALE = "reeprofile1_grayscale"
+        const val KEY_REEPROFILE2_GRAYSCALE = "reeprofile2_grayscale"
         const val KEY_LAST_INNER_PDF_READER = "key_last_inner_pdf_reader"
         const val KEY_LAST_LOADED_PROFILE = "key_last_loaded_profile"
         const val KEY_RESTORE_LOCK_UNTIL_RELOAD = "key_restore_lock_until_reload"
@@ -238,8 +250,10 @@ class MainActivity : AppCompatActivity() {
         const val KEY_THEME_RESTORE_ROTATION_CSV = "key_theme_restore_rotation_csv"
         const val KEY_THEME_RESTORE_POSITION_CSV = "key_theme_restore_position_csv"
         const val KEY_THEME_RESTORE_CROP = "key_theme_restore_crop"
-        const val DEFAULT_SIG_POS_X_MM = 155
-        const val DEFAULT_SIG_POS_Y_MM = 245
+        const val DEFAULT_SIG_POS_PORTRAIT_X_MM = 155
+        const val DEFAULT_SIG_POS_PORTRAIT_Y_MM = 245
+        const val DEFAULT_SIG_POS_LANDSCAPE_X_MM = 235
+        const val DEFAULT_SIG_POS_LANDSCAPE_Y_MM = 165
 
         private const val SOURCE_TEMP_NAME = "source_temp"
         private const val NUP_TEMP_NAME = "nup_temp.pdf"
@@ -295,6 +309,7 @@ class MainActivity : AppCompatActivity() {
     private var marginValid = true
     private var sigXValid = true
     private var sigYValid = true
+    private var suppressSigPosSwap = false
     private var currentSigFile: File? = null
     private var selectedSigIndex = -1
     private var fastScroller: AlwaysVisibleFastScroller? = null
@@ -413,11 +428,11 @@ class MainActivity : AppCompatActivity() {
                         }
 
                         when (profile) {
-                            "normal" -> {
-                                findViewById<Button>(R.id.load_normal_pages)?.performClick()
+                            "reeprofile1" -> {
+                                findViewById<Button>(R.id.load_reeprofile1_pages)?.performClick()
                             }
-                            "custom" -> {
-                                findViewById<Button>(R.id.load_custom_pages)?.performClick()
+                            "reeprofile2" -> {
+                                findViewById<Button>(R.id.load_reeprofile2_pages)?.performClick()
                             }
                             else -> {
 
@@ -592,6 +607,7 @@ class MainActivity : AppCompatActivity() {
         margin.filters          = arrayOf(InputFilter.LengthFilter(3), numberRangeFilterNoOp(0..100))
 
         landscape.setOnCheckedChangeListener { _, checked ->
+            if (!suppressSigPosSwap) swapSignaturePositionFields(checked)
             updateSignatureInputFilters()
             maybeRegenerateNupOnSettingChange(isLandscape = checked)
         }
@@ -820,10 +836,10 @@ class MainActivity : AppCompatActivity() {
 
         addTimeBtn.setOnClickListener { showTimestampDialog() }
 
-        val saveNormalPages: Button = findViewById(R.id.save_normal_pages)
-        val saveCustomPages: Button = findViewById(R.id.save_custom_pages)
-        saveNormalPages.setOnClickListener {
-            saveSettings("normal")
+        val saveReeProfile1Pages: Button = findViewById(R.id.save_reeprofile1_pages)
+        val saveReeProfile2Pages: Button = findViewById(R.id.save_reeprofile2_pages)
+        saveReeProfile1Pages.setOnClickListener {
+            saveSettings("reeprofile1")
             numberOfRows.clearFocus()
             numberOfColumns.clearFocus()
             margin.clearFocus()
@@ -831,8 +847,8 @@ class MainActivity : AppCompatActivity() {
             signaturePosY.clearFocus()
             if (nupConfigChanged()) maybeRegenerateNupOnSettingChange()
         }
-        saveCustomPages.setOnClickListener {
-            saveSettings("custom")
+        saveReeProfile2Pages.setOnClickListener {
+            saveSettings("reeprofile2")
             numberOfRows.clearFocus()
             numberOfColumns.clearFocus()
             margin.clearFocus()
@@ -841,14 +857,14 @@ class MainActivity : AppCompatActivity() {
             if (nupConfigChanged()) maybeRegenerateNupOnSettingChange()
         }
 
-        val normalPages: Button = findViewById(R.id.load_normal_pages)
-        val customPages: Button = findViewById(R.id.load_custom_pages)
-        normalPages.setOnClickListener {
-            loadSettings("normal")
+        val reeProfile1Pages: Button = findViewById(R.id.load_reeprofile1_pages)
+        val reeProfile2Pages: Button = findViewById(R.id.load_reeprofile2_pages)
+        reeProfile1Pages.setOnClickListener {
+            loadSettings("reeprofile1")
             maybeRegenerateNupOnSettingChange()
         }
-        customPages.setOnClickListener {
-            loadSettings("custom")
+        reeProfile2Pages.setOnClickListener {
+            loadSettings("reeprofile2")
             maybeRegenerateNupOnSettingChange()
         }
 
@@ -1834,6 +1850,46 @@ class MainActivity : AppCompatActivity() {
         signaturePosY.filters = arrayOf(InputFilter.LengthFilter(3))
 
         validateInputs()
+    }
+
+    private fun sigPosXKey(isLand: Boolean): String =
+        if (isLand) KEY_SIG_POS_LANDSCAPE_X else KEY_SIG_POS_PORTRAIT_X
+
+    private fun sigPosYKey(isLand: Boolean): String =
+        if (isLand) KEY_SIG_POS_LANDSCAPE_Y else KEY_SIG_POS_PORTRAIT_Y
+
+    private fun defaultSigPosX(isLand: Boolean): String =
+        (if (isLand) DEFAULT_SIG_POS_LANDSCAPE_X_MM else DEFAULT_SIG_POS_PORTRAIT_X_MM).toString()
+
+    private fun defaultSigPosY(isLand: Boolean): String =
+        (if (isLand) DEFAULT_SIG_POS_LANDSCAPE_Y_MM else DEFAULT_SIG_POS_PORTRAIT_Y_MM).toString()
+
+    private fun storedSignaturePosition(isLand: Boolean): Pair<String, String> {
+        val prefs = getSharedPreferences(PREFS_NAME_FRAGMENT, MODE_PRIVATE)
+        return synchronized(prefsBackupLock) {
+            (prefs.getString(sigPosXKey(isLand), defaultSigPosX(isLand)) ?: defaultSigPosX(isLand)) to
+                    (prefs.getString(sigPosYKey(isLand), defaultSigPosY(isLand)) ?: defaultSigPosY(isLand))
+        }
+    }
+
+    private fun currentSignaturePosition(isLand: Boolean): Pair<String, String> =
+        if (isLand == landscape.isChecked) {
+            signaturePosX.text.toString() to signaturePosY.text.toString()
+        } else {
+            storedSignaturePosition(isLand)
+        }
+
+    private fun swapSignaturePositionFields(isLand: Boolean) {
+        val prefs = getSharedPreferences(PREFS_NAME_FRAGMENT, MODE_PRIVATE)
+        synchronized(prefsBackupLock) {
+            prefs.edit {
+                putString(sigPosXKey(!isLand), signaturePosX.text.toString())
+                putString(sigPosYKey(!isLand), signaturePosY.text.toString())
+            }
+        }
+        val (x, y) = storedSignaturePosition(isLand)
+        signaturePosX.setText(x)
+        signaturePosY.setText(y)
     }
 
     private fun showMaxCoordinatesAlert(maxXi: Int, maxYi: Int, imageTooLarge: Boolean) {
@@ -3082,49 +3138,61 @@ class MainActivity : AppCompatActivity() {
 
             sp.edit {
                 putString(KEY_ROWS, "1")
-                putString(KEY_NORMAL_ROWS, "1")
-                putString(KEY_CUSTOM_ROWS, "2")
+                putString(KEY_REEPROFILE1_ROWS, "1")
+                putString(KEY_REEPROFILE2_ROWS, "2")
                 putString(KEY_COLUMNS, "1")
-                putString(KEY_NORMAL_COLUMNS, "1")
-                putString(KEY_CUSTOM_COLUMNS, "2")
+                putString(KEY_REEPROFILE1_COLUMNS, "1")
+                putString(KEY_REEPROFILE2_COLUMNS, "2")
                 putBoolean(KEY_SCALE, false)
-                putBoolean(KEY_NORMAL_SCALE, false)
-                putBoolean(KEY_CUSTOM_SCALE, true)
+                putBoolean(KEY_REEPROFILE1_SCALE, false)
+                putBoolean(KEY_REEPROFILE2_SCALE, true)
                 putBoolean(KEY_FIT, false)
-                putBoolean(KEY_NORMAL_FIT, false)
-                putBoolean(KEY_CUSTOM_FIT, false)
+                putBoolean(KEY_REEPROFILE1_FIT, false)
+                putBoolean(KEY_REEPROFILE2_FIT, false)
                 putInt(KEY_POSITION, DEFAULT_POSITION)
-                putInt(KEY_NORMAL_POSITION, DEFAULT_POSITION)
-                putInt(KEY_CUSTOM_POSITION, DEFAULT_POSITION)
+                putInt(KEY_REEPROFILE1_POSITION, DEFAULT_POSITION)
+                putInt(KEY_REEPROFILE2_POSITION, DEFAULT_POSITION)
                 putBoolean(KEY_CROP, false)
-                putBoolean(KEY_NORMAL_CROP, false)
-                putBoolean(KEY_CUSTOM_CROP, false)
+                putBoolean(KEY_REEPROFILE1_CROP, false)
+                putBoolean(KEY_REEPROFILE2_CROP, false)
                 putString(KEY_MARGIN, "0")
-                putString(KEY_NORMAL_MARGIN, "0")
-                putString(KEY_CUSTOM_MARGIN, "2")
+                putString(KEY_REEPROFILE1_MARGIN, "0")
+                putString(KEY_REEPROFILE2_MARGIN, "2")
                 putBoolean(KEY_ORIENTATION, true)
-                putBoolean(KEY_NORMAL_ORIENTATION, true)
-                putBoolean(KEY_CUSTOM_ORIENTATION, true)
+                putBoolean(KEY_REEPROFILE1_ORIENTATION, true)
+                putBoolean(KEY_REEPROFILE2_ORIENTATION, true)
                 putBoolean(KEY_DRAW_FRAME, false)
-                putBoolean(KEY_NORMAL_DRAW_FRAME, false)
-                putBoolean(KEY_CUSTOM_DRAW_FRAME, false)
-                putString(KEY_SIG_POS_X, "155")
-                putString(KEY_NORMAL_SIG_POS_X, "155")
-                putString(KEY_CUSTOM_SIG_POS_X, "155")
-                putString(KEY_SIG_POS_Y, "245")
-                putString(KEY_NORMAL_SIG_POS_Y, "245")
-                putString(KEY_CUSTOM_SIG_POS_Y, "245")
+                putBoolean(KEY_REEPROFILE1_DRAW_FRAME, false)
+                putBoolean(KEY_REEPROFILE2_DRAW_FRAME, false)
+                putString(KEY_SIG_POS_PORTRAIT_X, "155")
+                putString(KEY_REEPROFILE1_SIG_POS_PORTRAIT_X, "155")
+                putString(KEY_REEPROFILE2_SIG_POS_PORTRAIT_X, "155")
+                putString(KEY_SIG_POS_PORTRAIT_Y, "245")
+                putString(KEY_REEPROFILE1_SIG_POS_PORTRAIT_Y, "245")
+                putString(KEY_REEPROFILE2_SIG_POS_PORTRAIT_Y, "245")
+                putString(KEY_SIG_POS_LANDSCAPE_X, "235")
+                putString(KEY_REEPROFILE1_SIG_POS_LANDSCAPE_X, "235")
+                putString(KEY_REEPROFILE2_SIG_POS_LANDSCAPE_X, "235")
+                putString(KEY_SIG_POS_LANDSCAPE_Y, "165")
+                putString(KEY_REEPROFILE1_SIG_POS_LANDSCAPE_Y, "165")
+                putString(KEY_REEPROFILE2_SIG_POS_LANDSCAPE_Y, "165")
                 putBoolean(KEY_PASSWORD_OUT, false)
-                putBoolean(KEY_NORMAL_PASSWORD_OUT, false)
-                putBoolean(KEY_CUSTOM_PASSWORD_OUT, false)
-                putString(KEY_FILE_NAME_TEMPLATE, getString(R.string.default_tmpl_normal))
-                putString(KEY_NORMAL_FILE_NAME_TEMPLATE, getString(R.string.default_tmpl_normal))
-                putString(KEY_CUSTOM_FILE_NAME_TEMPLATE, getString(R.string.default_tmpl_custom))
+                putBoolean(KEY_REEPROFILE1_PASSWORD_OUT, false)
+                putBoolean(KEY_REEPROFILE2_PASSWORD_OUT, false)
+                putString(KEY_FILE_NAME_TEMPLATE, getString(R.string.default_tmpl_reeprofile1))
+                putString(KEY_REEPROFILE1_FILE_NAME_TEMPLATE, getString(R.string.default_tmpl_reeprofile1))
+                putString(KEY_REEPROFILE2_FILE_NAME_TEMPLATE, getString(R.string.default_tmpl_reeprofile2))
                 putInt(KEY_LAST_SIG_DPI_INDEX, 0)
+                putInt(KEY_REEPROFILE1_SIG_DPI_INDEX, 0)
+                putInt(KEY_REEPROFILE2_SIG_DPI_INDEX, 0)
                 putBoolean(KEY_LAST_SCAN_EFFECT, false)
+                putBoolean(KEY_REEPROFILE1_SCAN_EFFECT, false)
+                putBoolean(KEY_REEPROFILE2_SCAN_EFFECT, false)
                 putBoolean(KEY_LAST_GRAYSCALE, false)
+                putBoolean(KEY_REEPROFILE1_GRAYSCALE, false)
+                putBoolean(KEY_REEPROFILE2_GRAYSCALE, false)
                 putBoolean(KEY_LAST_INNER_PDF_READER, true)
-                putString(KEY_LAST_LOADED_PROFILE, "normal")
+                putString(KEY_LAST_LOADED_PROFILE, "reeprofile1")
                 putString(KEY_THEME_MODE, "system")
                 putBoolean(KEY_RESTORE_LOCK_UNTIL_RELOAD, false)
                 putBoolean(KEY_FIRST_RUN_INITIALIZED, true)
@@ -3143,44 +3211,57 @@ class MainActivity : AppCompatActivity() {
                 val marginVal = margin.text.toString()
                 val isPortrait = !landscape.isChecked
                 val drawFrame = drawFrameSwitch.isChecked
-                val sigX = signaturePosX.text.toString()
-                val sigY = signaturePosY.text.toString()
+                val (sigPortraitX, sigPortraitY) = currentSignaturePosition(false)
+                val (sigLandscapeX, sigLandscapeY) = currentSignaturePosition(true)
                 val scale = scaleMode().scale
                 val fit = scaleMode().fit
                 val fileNameTemplate = fileNameEt.text?.toString() ?: ""
                 val passwordOutChecked = passwordOutCb.isChecked
+                val sigDpiIndex = prefs.getInt(KEY_LAST_SIG_DPI_INDEX, 0)
+                val scanEffect = prefs.getBoolean(KEY_LAST_SCAN_EFFECT, false)
+                val grayscale = prefs.getBoolean(KEY_LAST_GRAYSCALE, false)
 
                 when (type) {
-                    "normal" -> {
-                        putString(KEY_NORMAL_ROWS, rows)
-                        putString(KEY_NORMAL_COLUMNS, columns)
-                        putString(KEY_NORMAL_MARGIN, marginVal)
-                        putBoolean(KEY_NORMAL_ORIENTATION, isPortrait)
-                        putBoolean(KEY_NORMAL_DRAW_FRAME, drawFrame)
-                        putString(KEY_NORMAL_SIG_POS_X, sigX)
-                        putString(KEY_NORMAL_SIG_POS_Y, sigY)
-                        putBoolean(KEY_NORMAL_SCALE, scale)
-                        putBoolean(KEY_NORMAL_FIT, fit)
-                        putInt(KEY_NORMAL_POSITION, defaultPosition)
-                        putBoolean(KEY_NORMAL_CROP, cropAllPages)
-                        putBoolean(KEY_NORMAL_PASSWORD_OUT, passwordOutChecked)
-                        putString(KEY_NORMAL_FILE_NAME_TEMPLATE, fileNameTemplate)
+                    "reeprofile1" -> {
+                        putString(KEY_REEPROFILE1_ROWS, rows)
+                        putString(KEY_REEPROFILE1_COLUMNS, columns)
+                        putString(KEY_REEPROFILE1_MARGIN, marginVal)
+                        putBoolean(KEY_REEPROFILE1_ORIENTATION, isPortrait)
+                        putBoolean(KEY_REEPROFILE1_DRAW_FRAME, drawFrame)
+                        putString(KEY_REEPROFILE1_SIG_POS_PORTRAIT_X, sigPortraitX)
+                        putString(KEY_REEPROFILE1_SIG_POS_PORTRAIT_Y, sigPortraitY)
+                        putString(KEY_REEPROFILE1_SIG_POS_LANDSCAPE_X, sigLandscapeX)
+                        putString(KEY_REEPROFILE1_SIG_POS_LANDSCAPE_Y, sigLandscapeY)
+                        putBoolean(KEY_REEPROFILE1_SCALE, scale)
+                        putBoolean(KEY_REEPROFILE1_FIT, fit)
+                        putInt(KEY_REEPROFILE1_POSITION, defaultPosition)
+                        putBoolean(KEY_REEPROFILE1_CROP, cropAllPages)
+                        putBoolean(KEY_REEPROFILE1_PASSWORD_OUT, passwordOutChecked)
+                        putString(KEY_REEPROFILE1_FILE_NAME_TEMPLATE, fileNameTemplate)
+                        putInt(KEY_REEPROFILE1_SIG_DPI_INDEX, sigDpiIndex)
+                        putBoolean(KEY_REEPROFILE1_SCAN_EFFECT, scanEffect)
+                        putBoolean(KEY_REEPROFILE1_GRAYSCALE, grayscale)
                     }
 
-                    "custom" -> {
-                        putString(KEY_CUSTOM_ROWS, rows)
-                        putString(KEY_CUSTOM_COLUMNS, columns)
-                        putString(KEY_CUSTOM_MARGIN, marginVal)
-                        putBoolean(KEY_CUSTOM_ORIENTATION, isPortrait)
-                        putBoolean(KEY_CUSTOM_DRAW_FRAME, drawFrame)
-                        putString(KEY_CUSTOM_SIG_POS_X, sigX)
-                        putString(KEY_CUSTOM_SIG_POS_Y, sigY)
-                        putBoolean(KEY_CUSTOM_SCALE, scale)
-                        putBoolean(KEY_CUSTOM_FIT, fit)
-                        putInt(KEY_CUSTOM_POSITION, defaultPosition)
-                        putBoolean(KEY_CUSTOM_CROP, cropAllPages)
-                        putBoolean(KEY_CUSTOM_PASSWORD_OUT, passwordOutChecked)
-                        putString(KEY_CUSTOM_FILE_NAME_TEMPLATE, fileNameTemplate)
+                    "reeprofile2" -> {
+                        putString(KEY_REEPROFILE2_ROWS, rows)
+                        putString(KEY_REEPROFILE2_COLUMNS, columns)
+                        putString(KEY_REEPROFILE2_MARGIN, marginVal)
+                        putBoolean(KEY_REEPROFILE2_ORIENTATION, isPortrait)
+                        putBoolean(KEY_REEPROFILE2_DRAW_FRAME, drawFrame)
+                        putString(KEY_REEPROFILE2_SIG_POS_PORTRAIT_X, sigPortraitX)
+                        putString(KEY_REEPROFILE2_SIG_POS_PORTRAIT_Y, sigPortraitY)
+                        putString(KEY_REEPROFILE2_SIG_POS_LANDSCAPE_X, sigLandscapeX)
+                        putString(KEY_REEPROFILE2_SIG_POS_LANDSCAPE_Y, sigLandscapeY)
+                        putBoolean(KEY_REEPROFILE2_SCALE, scale)
+                        putBoolean(KEY_REEPROFILE2_FIT, fit)
+                        putInt(KEY_REEPROFILE2_POSITION, defaultPosition)
+                        putBoolean(KEY_REEPROFILE2_CROP, cropAllPages)
+                        putBoolean(KEY_REEPROFILE2_PASSWORD_OUT, passwordOutChecked)
+                        putString(KEY_REEPROFILE2_FILE_NAME_TEMPLATE, fileNameTemplate)
+                        putInt(KEY_REEPROFILE2_SIG_DPI_INDEX, sigDpiIndex)
+                        putBoolean(KEY_REEPROFILE2_SCAN_EFFECT, scanEffect)
+                        putBoolean(KEY_REEPROFILE2_GRAYSCALE, grayscale)
                     }
                 }
                 putString(KEY_ROWS, rows)
@@ -3188,8 +3269,10 @@ class MainActivity : AppCompatActivity() {
                 putString(KEY_MARGIN, marginVal)
                 putBoolean(KEY_ORIENTATION, isPortrait)
                 putBoolean(KEY_DRAW_FRAME, drawFrame)
-                putString(KEY_SIG_POS_X, sigX)
-                putString(KEY_SIG_POS_Y, sigY)
+                putString(KEY_SIG_POS_PORTRAIT_X, sigPortraitX)
+                putString(KEY_SIG_POS_PORTRAIT_Y, sigPortraitY)
+                putString(KEY_SIG_POS_LANDSCAPE_X, sigLandscapeX)
+                putString(KEY_SIG_POS_LANDSCAPE_Y, sigLandscapeY)
                 putBoolean(KEY_SCALE, scale)
                 putBoolean(KEY_FIT, fit)
                 putInt(KEY_POSITION, defaultPosition)
@@ -3212,8 +3295,8 @@ class MainActivity : AppCompatActivity() {
                 putString(KEY_MARGIN, margin.text.toString())
                 putBoolean(KEY_ORIENTATION, !landscape.isChecked)
                 putBoolean(KEY_DRAW_FRAME, drawFrameSwitch.isChecked)
-                putString(KEY_SIG_POS_X, signaturePosX.text.toString())
-                putString(KEY_SIG_POS_Y, signaturePosY.text.toString())
+                putString(sigPosXKey(landscape.isChecked), signaturePosX.text.toString())
+                putString(sigPosYKey(landscape.isChecked), signaturePosY.text.toString())
                 putBoolean(KEY_SCALE, scaleMode().scale)
                 putBoolean(KEY_FIT, scaleMode().fit)
                 putInt(KEY_POSITION, defaultPosition)
@@ -3244,8 +3327,8 @@ class MainActivity : AppCompatActivity() {
             marginVal = prefs.getString(KEY_MARGIN, "0") ?: "0"
             isPortrait = prefs.getBoolean(KEY_ORIENTATION, true)
             drawFrame = prefs.getBoolean(KEY_DRAW_FRAME, false)
-            sigX = prefs.getString(KEY_SIG_POS_X, DEFAULT_SIG_POS_X_MM.toString()) ?: DEFAULT_SIG_POS_X_MM.toString()
-            sigY = prefs.getString(KEY_SIG_POS_Y, DEFAULT_SIG_POS_Y_MM.toString()) ?: DEFAULT_SIG_POS_Y_MM.toString()
+            sigX = prefs.getString(sigPosXKey(!isPortrait), defaultSigPosX(!isPortrait)) ?: defaultSigPosX(!isPortrait)
+            sigY = prefs.getString(sigPosYKey(!isPortrait), defaultSigPosY(!isPortrait)) ?: defaultSigPosY(!isPortrait)
             scale = prefs.getBoolean(KEY_SCALE, false)
             fit = prefs.getBoolean(KEY_FIT, false)
             defaultPosition = validPosition(prefs.getInt(KEY_POSITION, DEFAULT_POSITION))
@@ -3256,7 +3339,9 @@ class MainActivity : AppCompatActivity() {
         numberOfRows.setText(rows)
         numberOfColumns.setText(columns)
         margin.setText(marginVal)
+        suppressSigPosSwap = true
         landscape.isChecked = !isPortrait
+        suppressSigPosSwap = false
         drawFrameSwitch.isChecked = drawFrame
         signaturePosX.setText(sigX)
         signaturePosY.setText(sigY)
@@ -3270,7 +3355,7 @@ class MainActivity : AppCompatActivity() {
         setupEnterClosesEditTextAndHidesKeyboard(signaturePosY)
 
         val fileNameEt: EditText = findViewById(R.id.file_name)
-        val defaultTemplate = getString(R.string.default_tmpl_normal)
+        val defaultTemplate = getString(R.string.default_tmpl_reeprofile1)
         val tmpl = synchronized(prefsBackupLock) {
             prefs.getString(KEY_FILE_NAME_TEMPLATE, defaultTemplate) ?: defaultTemplate
         }
@@ -3308,54 +3393,76 @@ class MainActivity : AppCompatActivity() {
                 val prefs = getSharedPreferences(PREFS_NAME_FRAGMENT, MODE_PRIVATE)
                 synchronized(prefsBackupLock) {
                     when (type) {
-                        "normal" -> mapOf(
-                            "nlRows" to (prefs.getString(KEY_NORMAL_ROWS, "1") ?: "1"),
-                            "nlColumns" to (prefs.getString(KEY_NORMAL_COLUMNS, "1") ?: "1"),
-                            "nlMargin" to (prefs.getString(KEY_NORMAL_MARGIN, "0") ?: "0"),
-                            "nlOrientation" to prefs.getBoolean(KEY_NORMAL_ORIENTATION, true),
-                            "nlDrawFrame" to prefs.getBoolean(KEY_NORMAL_DRAW_FRAME, false),
-                            "nlSigPosX" to (prefs.getString(
-                                KEY_NORMAL_SIG_POS_X,
-                                DEFAULT_SIG_POS_X_MM.toString()
-                            ) ?: DEFAULT_SIG_POS_X_MM.toString()),
-                            "nlSigPosY" to (prefs.getString(
-                                KEY_NORMAL_SIG_POS_Y,
-                                DEFAULT_SIG_POS_Y_MM.toString()
-                            ) ?: DEFAULT_SIG_POS_Y_MM.toString()),
-                            "nlScale" to prefs.getBoolean(KEY_NORMAL_SCALE, false),
-                            "nlFit" to prefs.getBoolean(KEY_NORMAL_FIT, false),
-                            "nlPosition" to prefs.getInt(KEY_NORMAL_POSITION, DEFAULT_POSITION),
-                            "nlCrop" to prefs.getBoolean(KEY_NORMAL_CROP, false),
-                            "nlPasswordOut" to prefs.getBoolean(KEY_NORMAL_PASSWORD_OUT, false),
+                        "reeprofile1" -> mapOf(
+                            "nlRows" to (prefs.getString(KEY_REEPROFILE1_ROWS, "1") ?: "1"),
+                            "nlColumns" to (prefs.getString(KEY_REEPROFILE1_COLUMNS, "1") ?: "1"),
+                            "nlMargin" to (prefs.getString(KEY_REEPROFILE1_MARGIN, "0") ?: "0"),
+                            "nlOrientation" to prefs.getBoolean(KEY_REEPROFILE1_ORIENTATION, true),
+                            "nlDrawFrame" to prefs.getBoolean(KEY_REEPROFILE1_DRAW_FRAME, false),
+                            "nlSigPosPortraitX" to (prefs.getString(
+                                KEY_REEPROFILE1_SIG_POS_PORTRAIT_X,
+                                DEFAULT_SIG_POS_PORTRAIT_X_MM.toString()
+                            ) ?: DEFAULT_SIG_POS_PORTRAIT_X_MM.toString()),
+                            "nlSigPosPortraitY" to (prefs.getString(
+                                KEY_REEPROFILE1_SIG_POS_PORTRAIT_Y,
+                                DEFAULT_SIG_POS_PORTRAIT_Y_MM.toString()
+                            ) ?: DEFAULT_SIG_POS_PORTRAIT_Y_MM.toString()),
+                            "nlSigPosLandscapeX" to (prefs.getString(
+                                KEY_REEPROFILE1_SIG_POS_LANDSCAPE_X,
+                                DEFAULT_SIG_POS_LANDSCAPE_X_MM.toString()
+                            ) ?: DEFAULT_SIG_POS_LANDSCAPE_X_MM.toString()),
+                            "nlSigPosLandscapeY" to (prefs.getString(
+                                KEY_REEPROFILE1_SIG_POS_LANDSCAPE_Y,
+                                DEFAULT_SIG_POS_LANDSCAPE_Y_MM.toString()
+                            ) ?: DEFAULT_SIG_POS_LANDSCAPE_Y_MM.toString()),
+                            "nlScale" to prefs.getBoolean(KEY_REEPROFILE1_SCALE, false),
+                            "nlFit" to prefs.getBoolean(KEY_REEPROFILE1_FIT, false),
+                            "nlPosition" to prefs.getInt(KEY_REEPROFILE1_POSITION, DEFAULT_POSITION),
+                            "nlCrop" to prefs.getBoolean(KEY_REEPROFILE1_CROP, false),
+                            "nlPasswordOut" to prefs.getBoolean(KEY_REEPROFILE1_PASSWORD_OUT, false),
+                            "nlSigDpiIndex" to prefs.getInt(KEY_REEPROFILE1_SIG_DPI_INDEX, 0),
+                            "nlScanEffect" to prefs.getBoolean(KEY_REEPROFILE1_SCAN_EFFECT, false),
+                            "nlGrayscale" to prefs.getBoolean(KEY_REEPROFILE1_GRAYSCALE, false),
                             "nlFileNameTemplate" to (prefs.getString(
-                                KEY_NORMAL_FILE_NAME_TEMPLATE,
-                                getString(R.string.default_tmpl_normal)
-                            ) ?: getString(R.string.default_tmpl_normal))
+                                KEY_REEPROFILE1_FILE_NAME_TEMPLATE,
+                                getString(R.string.default_tmpl_reeprofile1)
+                            ) ?: getString(R.string.default_tmpl_reeprofile1))
                         )
 
-                        "custom" -> mapOf(
-                            "nlRows" to (prefs.getString(KEY_CUSTOM_ROWS, "2") ?: "2"),
-                            "nlColumns" to (prefs.getString(KEY_CUSTOM_COLUMNS, "2") ?: "2"),
-                            "nlMargin" to (prefs.getString(KEY_CUSTOM_MARGIN, "2") ?: "2"),
-                            "nlOrientation" to prefs.getBoolean(KEY_CUSTOM_ORIENTATION, true),
-                            "nlDrawFrame" to prefs.getBoolean(KEY_CUSTOM_DRAW_FRAME, false),
-                            "nlSigPosX" to (prefs.getString(
-                                KEY_CUSTOM_SIG_POS_X,
-                                DEFAULT_SIG_POS_X_MM.toString()
-                            ) ?: DEFAULT_SIG_POS_X_MM.toString()),
-                            "nlSigPosY" to (prefs.getString(
-                                KEY_CUSTOM_SIG_POS_Y,
-                                DEFAULT_SIG_POS_Y_MM.toString()
-                            ) ?: DEFAULT_SIG_POS_Y_MM.toString()),
-                            "nlScale" to prefs.getBoolean(KEY_CUSTOM_SCALE, true),
-                            "nlFit" to prefs.getBoolean(KEY_CUSTOM_FIT, false),
-                            "nlPosition" to prefs.getInt(KEY_CUSTOM_POSITION, DEFAULT_POSITION),
-                            "nlCrop" to prefs.getBoolean(KEY_CUSTOM_CROP, false),
-                            "nlPasswordOut" to prefs.getBoolean(KEY_CUSTOM_PASSWORD_OUT, false),
+                        "reeprofile2" -> mapOf(
+                            "nlRows" to (prefs.getString(KEY_REEPROFILE2_ROWS, "2") ?: "2"),
+                            "nlColumns" to (prefs.getString(KEY_REEPROFILE2_COLUMNS, "2") ?: "2"),
+                            "nlMargin" to (prefs.getString(KEY_REEPROFILE2_MARGIN, "2") ?: "2"),
+                            "nlOrientation" to prefs.getBoolean(KEY_REEPROFILE2_ORIENTATION, true),
+                            "nlDrawFrame" to prefs.getBoolean(KEY_REEPROFILE2_DRAW_FRAME, false),
+                            "nlSigPosPortraitX" to (prefs.getString(
+                                KEY_REEPROFILE2_SIG_POS_PORTRAIT_X,
+                                DEFAULT_SIG_POS_PORTRAIT_X_MM.toString()
+                            ) ?: DEFAULT_SIG_POS_PORTRAIT_X_MM.toString()),
+                            "nlSigPosPortraitY" to (prefs.getString(
+                                KEY_REEPROFILE2_SIG_POS_PORTRAIT_Y,
+                                DEFAULT_SIG_POS_PORTRAIT_Y_MM.toString()
+                            ) ?: DEFAULT_SIG_POS_PORTRAIT_Y_MM.toString()),
+                            "nlSigPosLandscapeX" to (prefs.getString(
+                                KEY_REEPROFILE2_SIG_POS_LANDSCAPE_X,
+                                DEFAULT_SIG_POS_LANDSCAPE_X_MM.toString()
+                            ) ?: DEFAULT_SIG_POS_LANDSCAPE_X_MM.toString()),
+                            "nlSigPosLandscapeY" to (prefs.getString(
+                                KEY_REEPROFILE2_SIG_POS_LANDSCAPE_Y,
+                                DEFAULT_SIG_POS_LANDSCAPE_Y_MM.toString()
+                            ) ?: DEFAULT_SIG_POS_LANDSCAPE_Y_MM.toString()),
+                            "nlScale" to prefs.getBoolean(KEY_REEPROFILE2_SCALE, true),
+                            "nlFit" to prefs.getBoolean(KEY_REEPROFILE2_FIT, false),
+                            "nlPosition" to prefs.getInt(KEY_REEPROFILE2_POSITION, DEFAULT_POSITION),
+                            "nlCrop" to prefs.getBoolean(KEY_REEPROFILE2_CROP, false),
+                            "nlPasswordOut" to prefs.getBoolean(KEY_REEPROFILE2_PASSWORD_OUT, false),
+                            "nlSigDpiIndex" to prefs.getInt(KEY_REEPROFILE2_SIG_DPI_INDEX, 0),
+                            "nlScanEffect" to prefs.getBoolean(KEY_REEPROFILE2_SCAN_EFFECT, false),
+                            "nlGrayscale" to prefs.getBoolean(KEY_REEPROFILE2_GRAYSCALE, false),
                             "nlFileNameTemplate" to (prefs.getString(
-                                KEY_CUSTOM_FILE_NAME_TEMPLATE,
-                                getString(R.string.default_tmpl_custom)
-                            ) ?: getString(R.string.default_tmpl_custom))
+                                KEY_REEPROFILE2_FILE_NAME_TEMPLATE,
+                                getString(R.string.default_tmpl_reeprofile2)
+                            ) ?: getString(R.string.default_tmpl_reeprofile2))
                         )
 
                         else -> emptyMap()
@@ -3367,10 +3474,17 @@ class MainActivity : AppCompatActivity() {
             numberOfColumns.setText(data["nlColumns"] as String)
             margin.setText(data["nlMargin"] as String)
             val isPortrait = data["nlOrientation"] as Boolean
+            suppressSigPosSwap = true
             landscape.isChecked = !isPortrait
+            suppressSigPosSwap = false
             drawFrameSwitch.isChecked = data["nlDrawFrame"] as Boolean
-            signaturePosX.setText(data["nlSigPosX"] as String)
-            signaturePosY.setText(data["nlSigPosY"] as String)
+            if (isPortrait) {
+                signaturePosX.setText(data["nlSigPosPortraitX"] as String)
+                signaturePosY.setText(data["nlSigPosPortraitY"] as String)
+            } else {
+                signaturePosX.setText(data["nlSigPosLandscapeX"] as String)
+                signaturePosY.setText(data["nlSigPosLandscapeY"] as String)
+            }
             setScaleMode(data["nlScale"] as Boolean, data["nlFit"] as Boolean)
             val profilePosition = validPosition(data["nlPosition"] as Int)
             cropAllPages = data["nlCrop"] as Boolean
@@ -3383,6 +3497,13 @@ class MainActivity : AppCompatActivity() {
             synchronized(prefsBackupLock) {
                 prefs2.edit {
                     putString(KEY_FILE_NAME_TEMPLATE, fileNameEt.text?.toString() ?: "")
+                    putString(KEY_SIG_POS_PORTRAIT_X, data["nlSigPosPortraitX"] as String)
+                    putString(KEY_SIG_POS_PORTRAIT_Y, data["nlSigPosPortraitY"] as String)
+                    putString(KEY_SIG_POS_LANDSCAPE_X, data["nlSigPosLandscapeX"] as String)
+                    putString(KEY_SIG_POS_LANDSCAPE_Y, data["nlSigPosLandscapeY"] as String)
+                    putInt(KEY_LAST_SIG_DPI_INDEX, data["nlSigDpiIndex"] as Int)
+                    putBoolean(KEY_LAST_SCAN_EFFECT, data["nlScanEffect"] as Boolean)
+                    putBoolean(KEY_LAST_GRAYSCALE, data["nlGrayscale"] as Boolean)
                     putString(KEY_LAST_LOADED_PROFILE, type)
                 }
             }
@@ -3409,6 +3530,7 @@ class MainActivity : AppCompatActivity() {
             if (!positionsGoWithRebuild) {
                 defaultPosition = profilePosition
                 sourcePosition.fill(defaultPosition)
+                updateButtonsState()
             }
         }
     }
@@ -3416,12 +3538,12 @@ class MainActivity : AppCompatActivity() {
     private fun defaultFileNameTemplatesOfAllLanguages(): List<Pair<String, String>> =
         listOf(Locale.ENGLISH, Locale.forLanguageTag("hu")).map { locale ->
             val localized = createConfigurationContext(Configuration(resources.configuration).apply { setLocale(locale) })
-            localized.getString(R.string.default_tmpl_normal) to localized.getString(R.string.default_tmpl_custom)
+            localized.getString(R.string.default_tmpl_reeprofile1) to localized.getString(R.string.default_tmpl_reeprofile2)
         }
 
     private fun localizeDefaultFileNameTemplate(value: String, defaults: List<Pair<String, String>>): String = when {
-        defaults.any { it.first == value } -> getString(R.string.default_tmpl_normal)
-        defaults.any { it.second == value } -> getString(R.string.default_tmpl_custom)
+        defaults.any { it.first == value } -> getString(R.string.default_tmpl_reeprofile1)
+        defaults.any { it.second == value } -> getString(R.string.default_tmpl_reeprofile2)
         else -> value
     }
 
@@ -3429,7 +3551,7 @@ class MainActivity : AppCompatActivity() {
         val defaults = defaultFileNameTemplatesOfAllLanguages()
         val prefs = getSharedPreferences(PREFS_NAME_FRAGMENT, MODE_PRIVATE)
         synchronized(prefsBackupLock) {
-            val changes = listOf(KEY_FILE_NAME_TEMPLATE, KEY_NORMAL_FILE_NAME_TEMPLATE, KEY_CUSTOM_FILE_NAME_TEMPLATE)
+            val changes = listOf(KEY_FILE_NAME_TEMPLATE, KEY_REEPROFILE1_FILE_NAME_TEMPLATE, KEY_REEPROFILE2_FILE_NAME_TEMPLATE)
                 .mapNotNull { key ->
                     val value = prefs.getString(key, null) ?: return@mapNotNull null
                     val localized = localizeDefaultFileNameTemplate(value, defaults)
@@ -3451,14 +3573,14 @@ class MainActivity : AppCompatActivity() {
         val isRowsEmpty = rowsStr.isEmpty()
         val isColsEmpty = colsStr.isEmpty()
 
-        val isNormal =
+        val isReeProfile1 =
             (isRowsEmpty && isColsEmpty) ||
                     (isRowsEmpty && cols == 1) ||
                     (rows == 1 && isColsEmpty) ||
                     (rows == 1 && cols == 1)
 
         val fileNameEt: EditText = findViewById(R.id.file_name)
-        val hintRes = if (isNormal) R.string.default_tmpl_normal else R.string.default_tmpl_custom
+        val hintRes = if (isReeProfile1) R.string.default_tmpl_reeprofile1 else R.string.default_tmpl_reeprofile2
         fileNameEt.hint = getString(hintRes)
     }
 
@@ -6495,12 +6617,12 @@ class MainActivity : AppCompatActivity() {
         val colsStr = numberOfColumns.text?.toString()?.trim().orEmpty()
         val rows = rowsStr.toIntOrNull() ?: 1
         val cols = colsStr.toIntOrNull() ?: 1
-        val isNormalByRowsCols = (rows in 0..1) && (cols in 0..1)
+        val isReeProfile1ByRowsCols = (rows in 0..1) && (cols in 0..1)
 
-        val defTemplate = if (isNormalByRowsCols) {
-            getString(R.string.default_tmpl_normal)
+        val defTemplate = if (isReeProfile1ByRowsCols) {
+            getString(R.string.default_tmpl_reeprofile1)
         } else {
-            getString(R.string.default_tmpl_custom)
+            getString(R.string.default_tmpl_reeprofile2)
         }
 
         return OutputFileName.replaceTimeTokens(defTemplate)
@@ -6912,18 +7034,23 @@ class MainActivity : AppCompatActivity() {
             serializer.attribute(null, "name", name)
 
             val allowedKeys = setOf(
-                KEY_NORMAL_ROWS, KEY_CUSTOM_ROWS,
-                KEY_NORMAL_COLUMNS, KEY_CUSTOM_COLUMNS,
-                KEY_NORMAL_SCALE, KEY_CUSTOM_SCALE,
-                KEY_NORMAL_FIT, KEY_CUSTOM_FIT, KEY_NORMAL_POSITION, KEY_CUSTOM_POSITION,
-                KEY_NORMAL_CROP, KEY_CUSTOM_CROP,
-                KEY_NORMAL_MARGIN, KEY_CUSTOM_MARGIN,
-                KEY_NORMAL_ORIENTATION, KEY_CUSTOM_ORIENTATION,
-                KEY_NORMAL_DRAW_FRAME, KEY_CUSTOM_DRAW_FRAME,
-                KEY_NORMAL_SIG_POS_X, KEY_CUSTOM_SIG_POS_X,
-                KEY_NORMAL_SIG_POS_Y, KEY_CUSTOM_SIG_POS_Y,
-                KEY_NORMAL_PASSWORD_OUT, KEY_CUSTOM_PASSWORD_OUT,
-                KEY_NORMAL_FILE_NAME_TEMPLATE, KEY_CUSTOM_FILE_NAME_TEMPLATE,
+                KEY_REEPROFILE1_ROWS, KEY_REEPROFILE2_ROWS,
+                KEY_REEPROFILE1_COLUMNS, KEY_REEPROFILE2_COLUMNS,
+                KEY_REEPROFILE1_SCALE, KEY_REEPROFILE2_SCALE,
+                KEY_REEPROFILE1_FIT, KEY_REEPROFILE2_FIT, KEY_REEPROFILE1_POSITION, KEY_REEPROFILE2_POSITION,
+                KEY_REEPROFILE1_CROP, KEY_REEPROFILE2_CROP,
+                KEY_REEPROFILE1_MARGIN, KEY_REEPROFILE2_MARGIN,
+                KEY_REEPROFILE1_ORIENTATION, KEY_REEPROFILE2_ORIENTATION,
+                KEY_REEPROFILE1_DRAW_FRAME, KEY_REEPROFILE2_DRAW_FRAME,
+                KEY_REEPROFILE1_SIG_POS_PORTRAIT_X, KEY_REEPROFILE2_SIG_POS_PORTRAIT_X,
+                KEY_REEPROFILE1_SIG_POS_PORTRAIT_Y, KEY_REEPROFILE2_SIG_POS_PORTRAIT_Y,
+                KEY_REEPROFILE1_SIG_POS_LANDSCAPE_X, KEY_REEPROFILE2_SIG_POS_LANDSCAPE_X,
+                KEY_REEPROFILE1_SIG_POS_LANDSCAPE_Y, KEY_REEPROFILE2_SIG_POS_LANDSCAPE_Y,
+                KEY_REEPROFILE1_PASSWORD_OUT, KEY_REEPROFILE2_PASSWORD_OUT,
+                KEY_REEPROFILE1_FILE_NAME_TEMPLATE, KEY_REEPROFILE2_FILE_NAME_TEMPLATE,
+                KEY_REEPROFILE1_SIG_DPI_INDEX, KEY_REEPROFILE2_SIG_DPI_INDEX,
+                KEY_REEPROFILE1_SCAN_EFFECT, KEY_REEPROFILE2_SCAN_EFFECT,
+                KEY_REEPROFILE1_GRAYSCALE, KEY_REEPROFILE2_GRAYSCALE,
                 KEY_LAST_SIG_DPI_INDEX, KEY_LAST_SCAN_EFFECT, KEY_LAST_GRAYSCALE,
                 KEY_LAST_INNER_PDF_READER, KEY_LAST_LOADED_PROFILE,
                 KEY_RESTORE_LOCK_UNTIL_RELOAD, KEY_FIRST_RUN_INITIALIZED
@@ -6978,18 +7105,23 @@ class MainActivity : AppCompatActivity() {
         var foundTargetMap = false
 
         val allowedKeys = setOf(
-            KEY_NORMAL_ROWS, KEY_CUSTOM_ROWS,
-            KEY_NORMAL_COLUMNS, KEY_CUSTOM_COLUMNS,
-            KEY_NORMAL_SCALE, KEY_CUSTOM_SCALE,
-            KEY_NORMAL_FIT, KEY_CUSTOM_FIT, KEY_NORMAL_POSITION, KEY_CUSTOM_POSITION,
-            KEY_NORMAL_CROP, KEY_CUSTOM_CROP,
-            KEY_NORMAL_MARGIN, KEY_CUSTOM_MARGIN,
-            KEY_NORMAL_ORIENTATION, KEY_CUSTOM_ORIENTATION,
-            KEY_NORMAL_DRAW_FRAME, KEY_CUSTOM_DRAW_FRAME,
-            KEY_NORMAL_SIG_POS_X, KEY_CUSTOM_SIG_POS_X,
-            KEY_NORMAL_SIG_POS_Y, KEY_CUSTOM_SIG_POS_Y,
-            KEY_NORMAL_PASSWORD_OUT, KEY_CUSTOM_PASSWORD_OUT,
-            KEY_NORMAL_FILE_NAME_TEMPLATE, KEY_CUSTOM_FILE_NAME_TEMPLATE,
+            KEY_REEPROFILE1_ROWS, KEY_REEPROFILE2_ROWS,
+            KEY_REEPROFILE1_COLUMNS, KEY_REEPROFILE2_COLUMNS,
+            KEY_REEPROFILE1_SCALE, KEY_REEPROFILE2_SCALE,
+            KEY_REEPROFILE1_FIT, KEY_REEPROFILE2_FIT, KEY_REEPROFILE1_POSITION, KEY_REEPROFILE2_POSITION,
+            KEY_REEPROFILE1_CROP, KEY_REEPROFILE2_CROP,
+            KEY_REEPROFILE1_MARGIN, KEY_REEPROFILE2_MARGIN,
+            KEY_REEPROFILE1_ORIENTATION, KEY_REEPROFILE2_ORIENTATION,
+            KEY_REEPROFILE1_DRAW_FRAME, KEY_REEPROFILE2_DRAW_FRAME,
+            KEY_REEPROFILE1_SIG_POS_PORTRAIT_X, KEY_REEPROFILE2_SIG_POS_PORTRAIT_X,
+            KEY_REEPROFILE1_SIG_POS_PORTRAIT_Y, KEY_REEPROFILE2_SIG_POS_PORTRAIT_Y,
+            KEY_REEPROFILE1_SIG_POS_LANDSCAPE_X, KEY_REEPROFILE2_SIG_POS_LANDSCAPE_X,
+            KEY_REEPROFILE1_SIG_POS_LANDSCAPE_Y, KEY_REEPROFILE2_SIG_POS_LANDSCAPE_Y,
+            KEY_REEPROFILE1_PASSWORD_OUT, KEY_REEPROFILE2_PASSWORD_OUT,
+            KEY_REEPROFILE1_FILE_NAME_TEMPLATE, KEY_REEPROFILE2_FILE_NAME_TEMPLATE,
+            KEY_REEPROFILE1_SIG_DPI_INDEX, KEY_REEPROFILE2_SIG_DPI_INDEX,
+            KEY_REEPROFILE1_SCAN_EFFECT, KEY_REEPROFILE2_SCAN_EFFECT,
+            KEY_REEPROFILE1_GRAYSCALE, KEY_REEPROFILE2_GRAYSCALE,
             KEY_LAST_SIG_DPI_INDEX, KEY_LAST_SCAN_EFFECT, KEY_LAST_GRAYSCALE,
             KEY_LAST_INNER_PDF_READER, KEY_LAST_LOADED_PROFILE,
             KEY_RESTORE_LOCK_UNTIL_RELOAD, KEY_FIRST_RUN_INITIALIZED
