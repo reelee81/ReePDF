@@ -49,7 +49,14 @@ class PdfOperationRunner(
             held = true
             handedOver = false
         }
-        keepAlive.begin(request)
+        try {
+            keepAlive.begin(request)
+        } catch (e: Exception) {
+            synchronized(holdLock) { held = false }
+            runCatching { keepAlive.end() }
+            mutableState.update { it.fail(request.id, e) }
+            return request.id
+        }
 
         scope.launch {
             var ending: (PdfOperationState) -> PdfOperationState = { it.cancelled(request.id) }
@@ -73,7 +80,13 @@ class PdfOperationRunner(
                 val error = failure
                 val value = result
                 when {
-                    job.isCancelled || isCancelling(request.id) -> onCancelled()
+                    job.isCancelled || isCancelling(request.id) -> try {
+                        onCancelled()
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        ending = { it.cancelFailed(request.id, e) }
+                    }
                     error != null -> ending = { it.fail(request.id, error) }
                     else -> ending = { it.finish(request.id, value) }
                 }

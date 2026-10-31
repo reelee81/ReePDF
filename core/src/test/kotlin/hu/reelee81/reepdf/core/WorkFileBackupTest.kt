@@ -1,8 +1,11 @@
 package hu.reelee81.reepdf.core
 
 import java.io.File
+import java.io.IOException
+import kotlin.coroutines.cancellation.CancellationException
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
 import org.junit.Rule
@@ -121,6 +124,25 @@ class WorkFileBackupTest {
     }
 
     @Test
+    fun aCancelledBackupStopsLeavesNoCopiesAndKeepsTheWorkFiles() {
+        val dir = temp.newFolder()
+        val source = File(dir, "source").apply { mkdirs() }
+        File(source, "0001.pdf").writeText("first")
+        File(source, "0002.pdf").writeText("second")
+        File(dir, "nup.pdf").writeText("nup")
+        val backup = WorkFileBackup(dir, "source", "nup.pdf", "source_copy", "nup_copy.pdf")
+        var checks = 0
+
+        assertThrows(CancellationException::class.java) {
+            backup.backup { if (++checks == 3) throw CancellationException("cancelled") }
+        }
+
+        assertEquals(setOf("source", "nup.pdf"), dir.list()!!.toSet())
+        assertEquals(setOf("0001.pdf", "0002.pdf"), source.list()!!.toSet())
+        assertEquals("nup", File(dir, "nup.pdf").readText())
+    }
+
+    @Test
     fun aBackupWithoutALayoutDropsAnOlderLayoutCopy() {
         val dir = temp.newFolder()
         File(dir, "source.pdf").writeText("source")
@@ -147,12 +169,33 @@ class WorkFileBackupTest {
         assumeTrue(locked.parentFile!!.setWritable(false))
 
         try {
-            assertFalse(backup.restore())
+            assertTrue(runCatching { backup.restore() }.exceptionOrNull() is IOException)
             assertEquals("nup", File(dir, "nup_copy.pdf").readText())
         } finally {
             locked.parentFile!!.setWritable(true)
         }
         assertEquals("source", File(dir, "source.pdf").readText())
+    }
+
+    @Test
+    fun aRestoreThatCannotPutBackTheSourceThrowsAndKeepsTheSourceCopy() {
+        val dir = temp.newFolder()
+        val source = File(dir, "source").apply { mkdirs() }
+        File(source, "0001.pdf").writeText("first")
+        File(dir, "nup.pdf").writeText("nup")
+        val backup = WorkFileBackup(dir, "source", "nup.pdf", "source_copy", "nup_copy.pdf")
+        backup.backup()
+        File(source, "0001.pdf").writeText("modified")
+        val locked = File(source, "inner").apply { mkdirs() }.resolve("part.pdf").apply { writeText("x") }
+        assumeTrue(locked.parentFile!!.setWritable(false))
+
+        try {
+            assertTrue(runCatching { backup.restore() }.exceptionOrNull() is IOException)
+            assertEquals("first", File(dir, "source_copy").resolve("0001.pdf").readText())
+        } finally {
+            locked.parentFile!!.setWritable(true)
+        }
+        assertEquals("nup", File(dir, "nup.pdf").readText())
     }
 
     @Test

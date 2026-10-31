@@ -7,6 +7,7 @@ import com.itextpdf.kernel.pdf.PdfReader
 import com.itextpdf.kernel.pdf.PdfWriter
 import hu.reelee81.reepdf.core.SourcePartLayout
 import hu.reelee81.reepdf.core.SourcePartPlan
+import hu.reelee81.reepdf.core.WorkFiles
 import java.io.File
 import java.io.IOException
 import java.util.Locale
@@ -14,7 +15,7 @@ import java.util.Locale
 class PdfSourceParts private constructor(val dir: File, private val files: List<File>, val layout: SourcePartLayout) {
     class Location(val file: File, val page: Int)
 
-    class Incoming(val file: File, val password: ByteArray?)
+    class Incoming(val file: File, val password: ByteArray?, val onMissingAppearance: () -> Unit = {})
 
     class Inputs(
         val incoming: List<Incoming> = emptyList(),
@@ -114,12 +115,11 @@ class PdfSourceParts private constructor(val dir: File, private val files: List<
         }
         progress.idle()
 
-        for ((work, target) in written) {
-            if (target.exists() && !target.delete()) throw IOException("Could not replace ${target.name}")
-            if (!work.renameTo(target)) throw IOException("Could not rename ${work.name}")
-        }
+        for ((work, target) in written) WorkFiles.replace(work, target)
         val kept = targets.toSet()
-        for (file in files) if (file !in kept) runCatching { file.delete() }
+        for (file in files) {
+            if (file !in kept && file.exists() && !file.delete()) throw IOException("Could not delete ${file.name}")
+        }
 
         return PdfSourceParts(dir, targets, SourcePartLayout(pageCounts))
     }
@@ -196,7 +196,7 @@ class PdfSourceParts private constructor(val dir: File, private val files: List<
         while (from <= to1) {
             val to = PdfDocument(PdfIo.reader(input.file.absolutePath, input.password)).use { src ->
                 val end = PdfPageCost.batchEnd(src, from, to1, batch, budget)
-                src.copyPagesTo(from, end, dest, PdfVisibleAppearanceCopier(copierDir))
+                src.copyPagesTo(from, end, dest, PdfVisibleAppearanceCopier(copierDir, input.onMissingAppearance))
                 runCatching { PdfCopySupport.flushCopiedObjects(dest, src) }
                 end
             }

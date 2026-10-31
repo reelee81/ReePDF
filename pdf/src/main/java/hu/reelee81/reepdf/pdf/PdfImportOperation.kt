@@ -30,7 +30,13 @@ class PdfImportOperation(
     private val repair: Repair = Repair(PdfMuPdfRepair::withRepairedParts),
     private val warn: (message: String, error: Throwable) -> Unit = { _, _ -> }
 ) {
-    class Source(val file: File, val password: ByteArray?, val openFailure: Exception?, val isImage: Boolean = false)
+    class Source(
+        val file: File,
+        val password: ByteArray?,
+        val openFailure: Exception?,
+        val isImage: Boolean = false,
+        val name: String = file.name
+    )
 
     class Input(
         val sources: List<Source>,
@@ -52,10 +58,21 @@ class PdfImportOperation(
             batchSize: Int,
             ensureActive: () -> Unit,
             block: (List<File>) -> Unit
-        ): Boolean
+        ): PdfMuPdfRepair.Repaired?
     }
 
     class Probe(val canOpen: Boolean, val noPages: Boolean, val failure: Exception?)
+
+    private class Loss {
+        var skippedPages = 0
+        var missingContent = false
+        var earlierRevision = false
+
+        fun warningFor(name: String): PdfImportWarning? =
+            if (skippedPages > 0 || missingContent || earlierRevision) {
+                PdfImportWarning(name, skippedPages, missingContent, earlierRevision)
+            } else null
+    }
 
     @Volatile private var backedUp = false
 
@@ -83,23 +100,26 @@ class PdfImportOperation(
                     PageGroups.sourcePagesOfGroups(input.selected, input.oldPerGroup, oldTotal)
                 } else emptySet()
 
-                files.backup.backup()
+                files.backup.backup(ensureActive)
                 backedUp = true
 
                 try {
                     var rotation = input.rotation
                     var position = input.position
+                    val warnings = ArrayList<PdfImportWarning>()
                     for (source in input.sources) {
+                        val loss = Loss()
                         if (source.isImage) {
                             val imagePdf = imageToPdf(source.file)
                             try {
-                                append(listOf(imagePdf), null, tracker)
+                                append(listOf(imagePdf), null, tracker, loss)
                             } finally {
                                 runCatching { imagePdf.delete() }
                             }
                         } else {
-                            appendOrRepair(source, tracker, ensureActive)
+                            appendOrRepair(source, tracker, ensureActive, loss)
                         }
+                        loss.warningFor(source.name)?.let(warnings::add)
                         runCatching { source.file.delete() }
 
                         val grownTotal = sourcePageCount()
@@ -136,12 +156,12 @@ class PdfImportOperation(
 
                     PdfLayoutChangeOperation.Result(
                         input.crops, rotation, position, input.defaultPosition, input.config,
-                        selected, tracker.snapshot(), pageSizes
+                        selected, tracker.snapshot(), pageSizes, importWarnings = warnings
                     )
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
-                    files.backup.restore()
+                    runCatching { files.backup.restore() }.exceptionOrNull()?.let(e::addSuppressed)
                     backedUp = false
                     throw e
                 }
@@ -151,10 +171,10 @@ class PdfImportOperation(
         }
     }
 
-    private fun appendOrRepair(source: Source, tracker: ProgressTracker, ensureActive: () -> Unit) {
+    private fun appendOrRepair(source: Source, tracker: ProgressTracker, ensureActive: () -> Unit, loss: Loss) {
         val doneBefore = tracker.doneUnits()
         val failure = source.openFailure ?: try {
-            append(listOf(source.file), source.password, tracker)
+            append(listOf(source.file), source.password, tracker, loss)
             return
         } catch (e: CancellationException) {
             throw e
@@ -162,6 +182,7 @@ class PdfImportOperation(
             tracker.resetDoneUnits(doneBefore)
             e
         }
+        loss.missingContent = false
 
         ensureActive()
         val repaired = repair.withRepairedParts(
@@ -170,8 +191,12 @@ class PdfImportOperation(
             workDir = files.workDir,
             batchSize = input.batchSize,
             ensureActive = ensureActive
-        ) { parts -> append(parts, null, tracker) }
-        if (repaired) return
+        ) { parts -> append(parts, null, tracker, loss) }
+        if (repaired != null) {
+            loss.skippedPages = repaired.skippedPages
+            if (repaired.annotationsLost) loss.missingContent = true
+            return
+        }
 
         ensureActive()
         val recovered = PdfRevisionRecovery.withEarlierRevision(
@@ -187,11 +212,12 @@ class PdfImportOperation(
                     false
                 }
             }
-        ) { revision -> append(listOf(revision), source.password, tracker) }
+        ) { revision -> append(listOf(revision), source.password, tracker, loss) }
         if (!recovered) throw failure
+        loss.earlierRevision = true
     }
 
-    private fun append(srcPdfs: List<File>, password: ByteArray?, tracker: ProgressTracker) {
+    private fun append(srcPdfs: List<File>, password: ByteArray?, tracker: ProgressTracker, loss: Loss) {
         val source = if (PdfSourceParts.exists(files.sourceDir)) PdfSourceParts.open(files.sourceDir) else PdfSourceParts.empty(files.sourceDir)
         val pages = srcPdfs.map { file -> PdfDocument(PdfIo.reader(file.absolutePath, password)).use { it.numberOfPages } }
         val pieces = pages.mapIndexedNotNull { index, count -> if (count > 0) SourcePartPlan.Piece.Incoming(index, 0, count - 1) else null }
@@ -203,7 +229,10 @@ class PdfImportOperation(
             plan,
             input.batchSize,
             stage,
-            PdfSourceParts.Inputs(incoming = srcPdfs.map { PdfSourceParts.Incoming(it, password) }, copierDir = files.workDir)
+            PdfSourceParts.Inputs(
+                incoming = srcPdfs.map { PdfSourceParts.Incoming(it, password) { loss.missingContent = true } },
+                copierDir = files.workDir
+            )
         )
     }
 

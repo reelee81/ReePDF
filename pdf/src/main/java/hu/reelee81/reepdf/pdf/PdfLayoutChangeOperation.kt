@@ -21,6 +21,8 @@ import kotlin.coroutines.cancellation.CancellationException
 import kotlin.math.min
 import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 
 class PdfLayoutChangeOperation(
@@ -65,7 +67,8 @@ class PdfLayoutChangeOperation(
         val selected: List<Int>,
         val progress: ProgressTracker.Snapshot,
         override val pageSizes: PageSizes?,
-        val cleared: Boolean = false
+        val cleared: Boolean = false,
+        val importWarnings: List<PdfImportWarning> = emptyList()
     ) : PdfOperationResult
 
     @Volatile private var backedUp = false
@@ -76,6 +79,7 @@ class PdfLayoutChangeOperation(
     suspend fun execute(report: (Int?) -> Unit): Result? = withContext(Dispatchers.IO) {
         val tracker = ProgressTracker(progress.clock)
         tracker.reset()
+        val job = coroutineContext[Job]
 
         val built = ProgressTicker.run(
             tick = progress.tickMs.milliseconds,
@@ -99,7 +103,7 @@ class PdfLayoutChangeOperation(
                 return@run Built(emptyMap(), IntArray(0), IntArray(0), null, emptyList(), cleared = true)
             }
 
-            files.backup.backup()
+            files.backup.backup { job?.ensureActive() }
             backedUp = true
 
             try {
@@ -129,7 +133,7 @@ class PdfLayoutChangeOperation(
                 throw e
             } catch (e: Exception) {
                 if (rewritesSource) {
-                    files.backup.restore()
+                    runCatching { files.backup.restore() }.exceptionOrNull()?.let(e::addSuppressed)
                     backedUp = false
                 }
                 throw e

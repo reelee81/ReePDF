@@ -2,6 +2,8 @@ package hu.reelee81.reepdf
 
 import android.os.Bundle
 import android.os.CancellationSignal
+import android.os.Handler
+import android.os.Looper
 import android.os.ParcelFileDescriptor
 import android.print.PageRange
 import android.print.PrintAttributes
@@ -42,6 +44,19 @@ class PdfDocumentAdapter(
         cancellationSignal: CancellationSignal?,
         callback: WriteResultCallback?
     ) {
+        val main = Handler(Looper.getMainLooper())
+        Thread({
+            val outcome = write(destination, cancellationSignal, callback)
+            main.post(outcome)
+        }, "ReePDF-print").start()
+    }
+
+    private fun write(
+        destination: ParcelFileDescriptor?,
+        cancellationSignal: CancellationSignal?,
+        callback: WriteResultCallback?
+    ): () -> Unit {
+        var outcome: () -> Unit = {}
         try {
             FileInputStream(filePath).use { inputStream ->
                 destination?.let { pfd ->
@@ -53,17 +68,18 @@ class PdfDocumentAdapter(
                             } > 0 && cancellationSignal?.isCanceled != true) {
                             outputStream.write(buffer, 0, bytesRead)
                         }
-                        if (cancellationSignal?.isCanceled == true) {
-                            callback?.onWriteCancelled()
+                        outcome = if (cancellationSignal?.isCanceled == true) {
+                            { callback?.onWriteCancelled() }
                         } else {
-                            callback?.onWriteFinished(arrayOf(PageRange.ALL_PAGES))
+                            { callback?.onWriteFinished(arrayOf(PageRange.ALL_PAGES)) }
                         }
                     }
                 }
             }
         } catch (e: IOException) {
-            callback?.onWriteFailed(e.message)
+            outcome = { callback?.onWriteFailed(e.message) }
             Log.e("ReePDF", "Print write failed: ${e.message}", e)
         }
+        return outcome
     }
 }

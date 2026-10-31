@@ -5,7 +5,7 @@ import java.util.Date
 import java.util.Locale
 
 object OutputFileName {
-    private const val MAX_BASE_LEN = 251
+    private const val MAX_BASE_BYTES = 251
 
     fun replaceTimeTokens(template: String, now: Date = Date(), locale: Locale = Locale.getDefault()): String {
         var s = template
@@ -46,8 +46,24 @@ object OutputFileName {
         )
         if (trimmed.uppercase() in reserved) trimmed = "_$trimmed"
 
-        if (trimmed.length > MAX_BASE_LEN) trimmed = trimmed.take(MAX_BASE_LEN)
+        return takeBaseBytes(trimmed)
+    }
 
-        return trimmed
+    private fun takeBaseBytes(text: String): String {
+        var bytes = 0
+        var end = 0
+        while (end < text.length) {
+            val codePoint = text.codePointAt(end)
+            val size = when {
+                codePoint < 0x80 -> 1
+                codePoint < 0x800 -> 2
+                codePoint < 0x10000 -> 3
+                else -> 4
+            }
+            if (bytes + size > MAX_BASE_BYTES) break
+            bytes += size
+            end += Character.charCount(codePoint)
+        }
+        return text.substring(0, end)
     }
 }

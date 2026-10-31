@@ -10,13 +10,13 @@ object PdfRevisionRecovery {
         isUsable: (File) -> Boolean,
         block: (File) -> Unit
     ): Boolean {
-        val ends = endOfFileMarkers(input)
+        val ends = endOfFileMarkers(input, ensureActive)
         if (ends.size < 2) return false
         val revision = File(workDir, "revision_${System.nanoTime()}.pdf")
         try {
             for (end in ends.dropLast(1).asReversed()) {
                 ensureActive()
-                copyPrefix(input, revision, end)
+                copyPrefix(input, revision, end, ensureActive)
                 if (isUsable(revision)) {
                     block(revision)
                     return true
@@ -28,13 +28,14 @@ object PdfRevisionRecovery {
         }
     }
 
-    private fun endOfFileMarkers(input: File): List<Long> {
+    private fun endOfFileMarkers(input: File, ensureActive: () -> Unit): List<Long> {
         val ends = ArrayList<Long>()
         val buffer = ByteArray(BUFFER_SIZE)
         var state = 0
         var position = 0L
         input.inputStream().use { stream ->
             while (true) {
+                ensureActive()
                 val read = stream.read(buffer)
                 if (read < 0) break
                 for (index in 0 until read) {
@@ -56,12 +57,13 @@ object PdfRevisionRecovery {
         return ends
     }
 
-    private fun copyPrefix(input: File, output: File, length: Long) {
+    private fun copyPrefix(input: File, output: File, length: Long, ensureActive: () -> Unit) {
         val buffer = ByteArray(BUFFER_SIZE)
         input.inputStream().use { source ->
             output.outputStream().use { target ->
                 var remaining = length
                 while (remaining > 0) {
+                    ensureActive()
                     val read = source.read(buffer, 0, minOf(buffer.size.toLong(), remaining).toInt())
                     if (read < 0) break
                     target.write(buffer, 0, read)

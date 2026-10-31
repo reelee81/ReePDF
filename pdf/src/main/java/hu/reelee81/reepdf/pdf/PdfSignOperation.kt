@@ -25,7 +25,9 @@ import java.io.FileNotFoundException
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.yield
 
@@ -55,6 +57,7 @@ class PdfSignOperation(
     suspend fun execute(report: (Int?) -> Unit): PdfLayoutChangeOperation.Result = withContext(Dispatchers.IO) {
         val tracker = ProgressTracker(progress.clock)
         tracker.reset()
+        val job = coroutineContext[Job]
         val signed = mutableMapOf<Int, File>()
 
         try {
@@ -70,7 +73,7 @@ class PdfSignOperation(
             ) {
                 saveSelection()
 
-                files.backup.backup()
+                files.backup.backup { job?.ensureActive() }
                 backedUp = true
 
                 try {
@@ -142,7 +145,7 @@ class PdfSignOperation(
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
-                    files.backup.restore()
+                    runCatching { files.backup.restore() }.exceptionOrNull()?.let(e::addSuppressed)
                     backedUp = false
                     throw e
                 }

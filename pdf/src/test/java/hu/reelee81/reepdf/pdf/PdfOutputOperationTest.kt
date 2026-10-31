@@ -68,7 +68,7 @@ class PdfOutputOperationTest {
         assertTrue(runCatching { PdfDocument(PdfReader(result.file)).use { } }.exceptionOrNull() is BadPasswordException)
         assertEquals(pageContents(nup(), null), pageContents(result.file, password))
         assertEquals(pageWidths(nup(), null), pageWidths(result.file, password))
-        assertFalse(File(dir, "Profile_2_enc.pdf").exists())
+        assertFalse(File(dir, "output_encrypt.work").exists())
         assertEquals(5, PdfDocument(PdfReader(nup())).use { it.numberOfPages })
     }
 
@@ -90,12 +90,12 @@ class PdfOutputOperationTest {
         writeLayout(2)
         val operation = operation(password = password)
         val result = runBlocking { operation.execute {} }
-        File(dir, "Profile_2_enc.pdf").writeText("left over")
+        File(dir, "output_encrypt.work").writeText("left over")
 
         runBlocking { operation.discard() }
 
         assertFalse(result.file.exists())
-        assertFalse(File(dir, "Profile_2_enc.pdf").exists())
+        assertFalse(File(dir, "output_encrypt.work").exists())
         assertTrue(nup().exists())
     }
 
@@ -112,7 +112,7 @@ class PdfOutputOperationTest {
         assertTrue(failure != null)
         assertArrayEquals(before, nup().readBytes())
         assertTrue(File(dir, "Profile_2.pdf").isDirectory)
-        assertFalse(File(dir, "Profile_2_enc.pdf").exists())
+        assertFalse(File(dir, "output_encrypt.work").exists())
     }
 
     @Test
@@ -128,6 +128,21 @@ class PdfOutputOperationTest {
         }
         assertArrayEquals(before, nup().readBytes())
         assertEquals(setOf("nup_temp.pdf", "older.pdf"), dir.list()!!.toSet())
+    }
+
+    @Test
+    fun theLongestAllowedNamesAreExportedWithAndWithoutPassword() {
+        writeLayout(2)
+
+        for (base in listOf("a".repeat(300), "ő".repeat(200))) {
+            for (pwd in listOf(null, password)) {
+                val result = runBlocking { operation(baseName = base, password = pwd).execute {} }
+
+                assertTrue(result.file.name.toByteArray(Charsets.UTF_8).size <= 255)
+                assertEquals(pageContents(nup(), null), pageContents(result.file, pwd))
+                assertFalse(File(dir, "output_encrypt.work").exists())
+            }
+        }
     }
 
     private fun nup() = File(dir, "nup_temp.pdf")

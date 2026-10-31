@@ -7,6 +7,7 @@ import hu.reelee81.reepdf.core.SourcePartPlan
 import hu.reelee81.reepdf.core.SourcePartPlan.Piece.EmptyPage
 import hu.reelee81.reepdf.core.SourcePartPlan.Piece.Incoming
 import java.io.File
+import java.io.IOException
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -59,6 +60,18 @@ class PdfSourcePartsTest {
         assertEquals(listOf(listOf(101, 102, 103), listOf(104, 106)), partWidths(after))
         assertEquals(listOf("0001.pdf", "0002.pdf"), names())
         assertArrayEquals(untouched, File(dir, "0001.pdf").readBytes())
+    }
+
+    @Test
+    fun aDroppedPartThatCannotBeDeletedFailsTheWrite() {
+        val parts = imported(listOf(pdf("a.pdf", 101..108)))
+        val stuck = File(dir, "0003.pdf")
+        assertTrue(stuck.delete())
+        File(stuck, "inner.pdf").apply { parentFile!!.mkdirs() }.writeText("x")
+
+        assertThrows(IOException::class.java) {
+            parts.write(SourcePartPlan.removePages(parts.layout, setOf(4, 6, 7)), 2, NoProgress)
+        }
     }
 
     @Test

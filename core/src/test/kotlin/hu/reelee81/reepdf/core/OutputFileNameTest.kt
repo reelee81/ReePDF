@@ -79,6 +79,21 @@ class OutputFileNameTest {
     }
 
     @Test
+    fun longNamesAreCutTo251Utf8BytesWithoutSplittingACharacter() {
+        val accented = OutputFileName.sanitizeBase("ő".repeat(200), now, locale)
+        assertEquals("ő".repeat(125), accented)
+        assertEquals(250, accented.toByteArray(Charsets.UTF_8).size)
+
+        val mixed = OutputFileName.sanitizeBase("a" + "ő".repeat(200), now, locale)
+        assertEquals("a" + "ő".repeat(125), mixed)
+        assertEquals(251, mixed.toByteArray(Charsets.UTF_8).size)
+
+        val emoji = OutputFileName.sanitizeBase("😀".repeat(70), now, locale)
+        assertEquals("😀".repeat(62), emoji)
+        assertEquals(248, emoji.toByteArray(Charsets.UTF_8).size)
+    }
+
+    @Test
     fun accentedLettersAreKept() {
         assertEquals("Számla őszi ÁRVÍZTŰRŐ", OutputFileName.sanitizeBase("Számla őszi ÁRVÍZTŰRŐ", now, locale))
     }

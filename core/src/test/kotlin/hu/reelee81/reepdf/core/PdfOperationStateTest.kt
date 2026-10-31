@@ -57,6 +57,17 @@ class PdfOperationStateTest {
     }
 
     @Test
+    fun aFailedCancelCleanupEndsFailedOnlyForTheBusyOperation() {
+        val error = IllegalStateException("restore failed")
+        val cancelling = PdfOperationState.Idle.start(first)!!.cancel(1L)
+
+        assertEquals(PdfOperationState.Failed(first, error), cancelling.cancelFailed(1L, error))
+        assertSame(cancelling, cancelling.cancelFailed(2L, error))
+        val done = PdfOperationState.Idle.start(first)!!.finish(1L)
+        assertSame(done, done.cancelFailed(1L, error))
+    }
+
+    @Test
     fun theFailureKeepsItsCause() {
         val error = IllegalStateException("broken")
         val failed = PdfOperationState.Idle.start(first)!!.fail(1L, error)

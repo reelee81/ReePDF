@@ -1,8 +1,6 @@
 package hu.reelee81.reepdf.core
 
 import java.io.File
-import java.io.FileInputStream
-import java.io.FileOutputStream
 import java.io.IOException
 
 class WorkFileBackup(
@@ -17,11 +15,11 @@ class WorkFileBackup(
     private val sourceCopy = File(dir, sourceCopyName)
     private val nupCopy = File(dir, nupCopyName)
 
-    fun backup() {
+    fun backup(ensureActive: () -> Unit = {}) {
         discardCopies()
         try {
-            if (source.exists()) copy(source, sourceCopy)
-            if (nup.exists()) copy(nup, nupCopy)
+            if (source.exists()) copy(source, sourceCopy, ensureActive)
+            if (nup.exists()) copy(nup, nupCopy, ensureActive)
         } catch (e: Exception) {
             runCatching { discardCopies() }
             throw e
@@ -35,17 +33,21 @@ class WorkFileBackup(
             }
         }
 
-        putBack(sourceCopy, source)
-        return putBack(nupCopy, nup)
+        val sourceBack = putBack(sourceCopy, source)
+        val nupBack = putBack(nupCopy, nup)
+        if (sourceBack == null || nupBack == null) {
+            throw IOException("Could not restore ${if (sourceBack == null) source.name else nup.name}")
+        }
+        return nupBack
     }
 
-    private fun putBack(copy: File, target: File): Boolean {
+    private fun putBack(copy: File, target: File): Boolean? {
         if (!copy.exists()) {
             runCatching { target.deleteRecursively() }
             return false
         }
-        if (target.exists() && !target.deleteRecursively()) return false
-        return copy.renameTo(target)
+        if (target.exists() && !target.deleteRecursively()) return null
+        return if (copy.renameTo(target)) true else null
     }
 
     private fun discardCopies() {
@@ -53,14 +55,17 @@ class WorkFileBackup(
         if (nupCopy.exists() && !nupCopy.deleteRecursively()) throw IOException("Could not delete ${nupCopy.name}")
     }
 
-    private fun copy(from: File, to: File) {
-        if (from.isDirectory) {
-            check(from.copyRecursively(to)) { "Could not copy ${from.name}" }
+    private fun copy(from: File, to: File, ensureActive: () -> Unit) {
+        if (!from.isDirectory) {
+            WorkFiles.copy(from, to, ensureActive)
             return
         }
-        FileInputStream(from).use { input ->
-            FileOutputStream(to, false).use { output ->
-                input.copyTo(output)
+        for (file in from.walkTopDown()) {
+            val target = File(to, file.relativeTo(from).path)
+            if (file.isDirectory) {
+                if (!target.isDirectory && !target.mkdirs()) throw IOException("Could not copy ${from.name}")
+            } else {
+                WorkFiles.copy(file, target, ensureActive)
             }
         }
     }

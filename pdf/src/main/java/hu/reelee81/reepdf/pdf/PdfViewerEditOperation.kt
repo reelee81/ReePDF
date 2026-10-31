@@ -54,7 +54,7 @@ class PdfViewerEditOperation(
                 report = report,
                 onCancel = tracker::cancel
             ) {
-                files.backup.backup()
+                files.backup.backup { job?.ensureActive() }
                 backedUp = true
                 saveSelection()
 
@@ -102,7 +102,7 @@ class PdfViewerEditOperation(
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
-                    files.backup.restore()
+                    runCatching { files.backup.restore() }.exceptionOrNull()?.let(e::addSuppressed)
                     backedUp = false
                     throw e
                 }

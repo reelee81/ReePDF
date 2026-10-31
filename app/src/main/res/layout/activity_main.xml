@@ -264,6 +264,7 @@
                         <hu.reelee81.reepdf.TriStateSwitch
                             android:id="@+id/scale"
                             android:text="@string/print_page_scale"
+                            android:entries="@array/print_page_scale_states"
                             android:layout_width="wrap_content"
                             android:layout_height="@dimen/dp_48"
                             android:layout_gravity="left|center_vertical"
@@ -875,6 +876,37 @@
             app:layout_constraintWidth_max="@dimen/dp_9999_overlay">
 
             <include layout="@layout/dialog_max_coordinates" />
+        </LinearLayout>
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/overlay_dialog_import_warnings"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@color/dialog_overlay_background_color"
+        android:visibility="gone"
+        android:clickable="true"
+        android:focusable="true"
+        android:elevation="@dimen/dp_9999_overlay"
+        android:paddingTop="@dimen/dp_16"
+        android:paddingBottom="@dimen/dp_16"
+        android:paddingLeft="@dimen/dp_16"
+        android:paddingRight="@dimen/dp_16">
+
+        <LinearLayout
+            android:id="@+id/overlay_dialog_import_warnings_panel"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/bg_overlay_dialog_panel"
+            app:layout_constrainedHeight="true"
+            app:layout_constraintLeft_toLeftOf="parent"
+            app:layout_constraintRight_toRightOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintWidth_max="@dimen/dp_9999_overlay">
+
+            <include layout="@layout/dialog_import_warnings" />
         </LinearLayout>
     </androidx.constraintlayout.widget.ConstraintLayout>
 

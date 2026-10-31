@@ -66,6 +66,7 @@ class PdfImportOperationTest {
         assertFalse(imported.exists())
         assertFalse(File(dir, "nup_temp.pdf.part").exists())
         assertNull(result.pageSizes)
+        assertTrue(result.importWarnings.isEmpty())
         assertEquals(listOf("selection saved"), events)
     }
 
@@ -190,13 +191,64 @@ class PdfImportOperationTest {
                 repair = { input, _, _, _, _, block ->
                     repaired += input
                     block(listOf(repairedPart))
-                    true
+                    PdfMuPdfRepair.Repaired(skippedPages = 0, annotationsLost = false)
                 }
             ).execute {}
         }
 
         assertEquals(listOf(broken), repaired)
         assertEquals(listOf(200f, 600f, 601f), pageWidths(source()))
+    }
+
+    @Test
+    fun aPartlyRepairedFileIsReportedWithItsNameSkippedPagesAndLostAnnotations() {
+        writeMarked(source(), 1, firstWidth = 200f)
+        val good = writeMarked(File(dir, "1_good.pdf"), 1, firstWidth = 300f)
+        val broken = writeMarked(File(dir, "2_broken.pdf"), 1, firstWidth = 400f)
+        val repairedPart = writeMarked(File(dir, "part.pdf"), 2, firstWidth = 600f)
+
+        val result = runBlocking {
+            operation(
+                listOf(
+                    PdfImportOperation.Source(good, null, null, name = "good.pdf"),
+                    PdfImportOperation.Source(broken, null, IOException("open failed"), name = "broken.pdf")
+                ),
+                repair = { _, _, _, _, _, block ->
+                    block(listOf(repairedPart))
+                    PdfMuPdfRepair.Repaired(skippedPages = 3, annotationsLost = true)
+                }
+            ).execute {}
+        }
+
+        assertEquals(listOf(200f, 300f, 600f, 601f), pageWidths(source()))
+        val warning = result.importWarnings.single()
+        assertEquals("broken.pdf", warning.name)
+        assertEquals(3, warning.skippedPages)
+        assertTrue(warning.missingContent)
+        assertFalse(warning.earlierRevision)
+    }
+
+    @Test
+    fun aFileOpenedFromAnEarlierRevisionIsReported() {
+        writeMarked(source(), 1, firstWidth = 200f)
+        val valid = writeMarked(File(dir, "valid.pdf"), 1, firstWidth = 300f).readBytes()
+        val overwritten = File(dir, "1_overwritten.pdf").apply {
+            writeBytes(valid + "\n9 0 obj\n<</Garbage true>>\nendobj\ntrailer\n<</Size 10/Root 9 0 R>>\nstartxref\n0\n%%EOF\n".toByteArray(Charsets.ISO_8859_1))
+        }
+
+        val result = runBlocking {
+            operation(
+                listOf(PdfImportOperation.Source(overwritten, null, IOException("open failed"), name = "overwritten.pdf")),
+                repair = { _, _, _, _, _, _ -> null }
+            ).execute {}
+        }
+
+        assertEquals(listOf(200f, 300f), pageWidths(source()))
+        val warning = result.importWarnings.single()
+        assertEquals("overwritten.pdf", warning.name)
+        assertEquals(0, warning.skippedPages)
+        assertFalse(warning.missingContent)
+        assertTrue(warning.earlierRevision)
     }
 
     @Test
@@ -207,7 +259,7 @@ class PdfImportOperationTest {
         val broken = File(dir, "2_broken.pdf").apply { writeText("not a pdf") }
         val operation = operation(
             listOf(PdfImportOperation.Source(good, null, null), PdfImportOperation.Source(broken, null, IOException("open failed"))),
-            repair = { _, _, _, _, _, _ -> false }
+            repair = { _, _, _, _, _, _ -> null }
         )
 
         val failure = runCatching { runBlocking { operation.execute {} } }.exceptionOrNull()

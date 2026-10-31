@@ -79,6 +79,11 @@ sealed interface PdfOperationState {
         return if (isBusy && current != null && current.id == id) Cancelled(current) else this
     }
 
+    fun cancelFailed(id: Long, error: Throwable): PdfOperationState {
+        val current = request
+        return if (isBusy && current != null && current.id == id) Failed(current, error) else this
+    }
+
     fun acknowledge(id: Long): PdfOperationState {
         val current = request
         return if (!isBusy && current != null && current.id == id) Idle else this

@@ -37,6 +37,9 @@
     <string name="opt_second_ss">Second [ss]</string>
     <string name="landscape">Land.</string>
     <string name="print_page_scale">Scale</string>
+    <string name="print_page_scale_off">Off</string>
+    <string name="print_page_scale_cell">Page scaled to the cell</string>
+    <string name="print_page_scale_content">Content scaled to the cell</string>
     <string name="print_page_grayscale">Grayscale background</string>
     <string name="print_page_border">Border</string>
     <string name="tv_size_label_text">--cm x --cm</string>
@@ -49,6 +52,7 @@
     <string name="password_hint">Password</string>
     <string name="toggle_password_visibility">Toggle password visibility</string>
     <string name="wrong_password">Wrong password</string>
+    <string name="password_empty">Password cannot be empty</string>
     <string name="password_do_not_match">Passwords don\'t match</string>
     <string name="in_progress_my">Processing in progress\u2026</string>
     <string name="in_progress_opening">Opening\u2026</string>
@@ -56,7 +60,6 @@
     <string name="in_progress_delete">Delete\u2026</string>
     <string name="in_progress_reordering">Reordering\u2026</string>
     <string name="in_progress_signing">Signing\u2026</string>
-    <string name="in_progress_signature_editing">Signature editing\u2026</string>
     <string name="in_progress_rotation">Rotation\u2026</string>
     <string name="in_progress_position">Positioning\u2026</string>
     <string name="in_progress_crop">Cropping\u2026</string>
@@ -107,6 +110,13 @@
     <string name="failed_to_delete_page_group_with_msg">Failed to delete page group: %1$s</string>
     <string name="temporary_pdf_not_found">Temporary PDF not found</string>
     <string name="no_source_pages">No source pages</string>
+    <string name="import_warnings_title">Incomplete import</string>
+    <plurals name="import_warning_skipped_pages">
+        <item quantity="one">%1$s: %2$d page could not be repaired and was left out.</item>
+        <item quantity="other">%1$s: %2$d pages could not be repaired and were left out.</item>
+    </plurals>
+    <string name="import_warning_missing_content">%1$s: some form fields or annotations are missing.</string>
+    <string name="import_warning_earlier_revision">%1$s: only an earlier saved version could be opened; later changes are missing.</string>
     <string name="cannot_open_uri">Cannot open %1$s</string>
     <string name="page_size_cm_by_cm">%1$.2fcm x %2$.2fcm</string>
     <string name="pdf_viewer_requires">The built-in PDF viewer requires Android 9 or higher.</string>
@@ -131,6 +141,7 @@
     <string name="msg_prefs_load_failed">Load failed: %1$s</string>
     <string name="error_invalid_prefs_file">Invalid file: missing &quot;%1$s&quot; settings map.</string>
     <string name="error_invalid_prefs_value">Invalid file: wrong value for &quot;%1$s&quot;.</string>
+    <string name="error_prefs_file_too_large">Invalid file: larger than 1 MB.</string>
     <string name="output_stream_is_null">OutputStream is null</string>
     <string name="bitmap_region_decoder_init_failed">BitmapRegionDecoder init failed</string>
     <string name="decode_region_returned_null_at">decodeRegion returned null at y=%1$d</string>

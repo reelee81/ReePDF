@@ -8,12 +8,13 @@ import hu.reelee81.reepdf.core.OutputFileName
 import hu.reelee81.reepdf.core.PdfOperationResult
 import hu.reelee81.reepdf.core.ProgressNotifyPacing
 import hu.reelee81.reepdf.core.ProgressTicker
+import hu.reelee81.reepdf.core.WorkFiles
 import java.io.File
-import java.io.FileInputStream
-import java.io.FileOutputStream
 import java.io.IOException
 import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 
 class PdfOutputOperation(
@@ -41,6 +42,7 @@ class PdfOutputOperation(
     suspend fun execute(report: (Int?) -> Unit): Result = withContext(Dispatchers.IO) {
         val tracker = ProgressTracker(progress.clock)
         tracker.reset()
+        val job = coroutineContext[Job]
 
         ProgressTicker.run(
             tick = progress.tickMs.milliseconds,
@@ -56,7 +58,7 @@ class PdfOutputOperation(
 
             if (!files.nup.exists()) throw IllegalStateException(input.messages.layoutMissing)
 
-            val named = exportNamed()
+            val named = exportNamed { job?.ensureActive() }
 
             input.password?.let { encryptInPlace(named, it, tracker::stage) }
 
@@ -72,7 +74,7 @@ class PdfOutputOperation(
         }
     }
 
-    private fun exportNamed(): File {
+    private fun exportNamed(ensureActive: () -> Unit): File {
         val safe = OutputFileName.sanitizeBase(input.baseName)
         if ("$safe.pdf" in files.protectedNames) throw IOException(input.messages.nameReserved)
 
@@ -80,13 +82,11 @@ class PdfOutputOperation(
 
         val out = File(files.workDir, "$safe.pdf")
         output = out
-        FileInputStream(files.nup).use { inp ->
-            FileOutputStream(out).use { outP -> inp.copyTo(outP) }
-        }
+        WorkFiles.copy(files.nup, out, ensureActive)
         return out
     }
 
-    private fun encryptedWork(file: File): File = File(file.parentFile, file.nameWithoutExtension + "_enc.pdf")
+    private fun encryptedWork(file: File): File = File(file.parentFile, ENCRYPT_WORK_NAME)
 
     private fun encryptInPlace(file: File, password: ByteArray, stage: (Long) -> PdfProgress) {
         val tmp = encryptedWork(file)
@@ -135,5 +135,9 @@ class PdfOutputOperation(
         if (!tmp.renameTo(file)) {
             throw IOException(input.messages.renameFailed)
         }
+    }
+
+    private companion object {
+        const val ENCRYPT_WORK_NAME = "output_encrypt.work"
     }
 }

@@ -11,6 +11,10 @@ import kotlin.coroutines.cancellation.CancellationException
 import kotlin.math.min
 
 object PdfMuPdfRepair {
+    class Repaired(val skippedPages: Int, val annotationsLost: Boolean)
+
+    private class Parts(val files: List<File>, val skippedPages: Int, val annotationsLost: Boolean)
+
     fun withRepairedParts(
         input: File,
         password: ByteArray?,
@@ -18,7 +22,7 @@ object PdfMuPdfRepair {
         batchSize: Int,
         ensureActive: () -> Unit,
         block: (List<File>) -> Unit
-    ): Boolean {
+    ): Repaired? {
         val partDir = File(workDir, "mupdf_repair_${System.nanoTime()}")
         try {
             val parts = try {
@@ -27,9 +31,9 @@ object PdfMuPdfRepair {
                 throw e
             } catch (_: Exception) {
                 null
-            } ?: return false
-            block(parts)
-            return true
+            } ?: return null
+            block(parts.files)
+            return Repaired(parts.skippedPages, parts.annotationsLost)
         } finally {
             partDir.deleteRecursively()
         }
@@ -58,25 +62,31 @@ object PdfMuPdfRepair {
         partDir: File,
         batchSize: Int,
         ensureActive: () -> Unit
-    ): List<File>? {
+    ): Parts? {
         if (!partDir.mkdirs()) return null
         val total = withSource(input, password) { it.countPages() } ?: return null
         if (total <= 0) return null
 
         val parts = ArrayList<File>()
+        var copiedPages = 0
+        var annotationsLost = false
         var from = 0
         while (from < total) {
             ensureActive()
             val to = min(from + batchSize.coerceAtLeast(1), total)
             val part = File(partDir, "part_${parts.size}.pdf")
-            val copied = withSource(input, password) { source -> graftBatch(source, from, to, part) } ?: return null
+            val copied = withSource(input, password) { source ->
+                graftBatch(source, from, to, part) { annotationsLost = true }
+            } ?: return null
             if (copied > 0) parts += part
+            copiedPages += copied
             from = to
         }
-        return parts.ifEmpty { null }
+        if (parts.isEmpty()) return null
+        return Parts(parts, total - copiedPages, annotationsLost)
     }
 
-    private fun graftBatch(source: PDFDocument, from: Int, to: Int, part: File): Int {
+    private fun graftBatch(source: PDFDocument, from: Int, to: Int, part: File, onAnnotationsLost: () -> Unit): Int {
         val target = PDFDocument()
         val map = target.newPDFGraftMap()
         try {
@@ -85,7 +95,7 @@ object PdfMuPdfRepair {
                 try {
                     map.graftPage(pages, source, index)
                     runCatching { ensureMediaBox(target, pages) }
-                    runCatching { copyAnnotations(map, source, index, target, pages) }
+                    runCatching { copyAnnotations(map, source, index, target, pages) }.onFailure { onAnnotationsLost() }
                     pages++
                 } catch (_: RuntimeException) {
                 }

@@ -2,6 +2,7 @@
 <resources>
     <declare-styleable name="TriStateSwitch">
         <attr name="android:text" />
+        <attr name="android:entries" />
         <attr name="switchPadding" />
     </declare-styleable>
 </resources>

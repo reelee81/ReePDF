@@ -1,5 +1,6 @@
 package hu.reelee81.reepdf.core
 
+import java.io.IOException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.awaitCancellation
@@ -340,5 +341,59 @@ class PdfOperationRunnerTest {
         runner.ending()
         runner.acknowledge(second)
         assertEquals(listOf("begin $first", "begin $second", "end"), keepAlive.events)
+    }
+
+    @Test
+    fun aFailingKeepAliveStartEndsTheOperationFailedAndLetsTheNextOneStart() = runTest {
+        val error = IllegalStateException("no service")
+        val events = mutableListOf<String>()
+        var failNext = true
+        val keepAlive = object : PdfOperationKeepAlive {
+            override fun begin(request: PdfOperationRequest) {
+                events += "begin ${request.id}"
+                if (failNext) {
+                    failNext = false
+                    throw error
+                }
+            }
+
+            override fun end() {
+                events += "end"
+            }
+        }
+        val runner = PdfOperationRunner(this, keepAlive)
+        runner.screenStarted()
+        var ran = false
+
+        val first = runner.start(PdfOperationKind.CROP, "first") { ran = true; null }!!
+
+        val failed = runner.state.value as PdfOperationState.Failed
+        assertSame(error, failed.error)
+        assertFalse(runner.isHolding)
+        assertFalse(ran)
+        assertEquals(listOf("begin $first", "end"), events)
+
+        runner.acknowledge(first)
+        val second = runner.start(PdfOperationKind.CROP, "second") { null }!!
+        assertTrue(runner.ending() is PdfOperationState.Done)
+        runner.acknowledge(second)
+        assertEquals(listOf("begin $first", "end", "begin $second", "end"), events)
+    }
+
+    @Test
+    fun aFailingCancelCleanupEndsTheOperationFailedWithItsError() = runTest {
+        val keepAlive = FakeKeepAlive()
+        val runner = runner(keepAlive)
+        val error = IOException("restore failed")
+
+        val id = runner.start(PdfOperationKind.CROP, "crop", onCancelled = { throw error }) { awaitCancellation() }!!
+        runner.cancel(id)
+
+        val failed = runner.ending() as PdfOperationState.Failed
+        assertSame(error, failed.error)
+        assertEquals(listOf("begin $id", "end"), keepAlive.events)
+
+        runner.acknowledge(id)
+        assertSame(PdfOperationState.Idle, runner.state.value)
     }
 }

@@ -8,7 +8,6 @@ import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.ActivityInfo
 import android.content.pm.ApplicationInfo
-import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -23,9 +22,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Build.VERSION_CODES
 import android.os.Bundle
-import android.os.Handler
 import android.os.IBinder
-import android.os.Looper
 import android.os.ParcelFileDescriptor
 import android.os.StrictMode
 import android.os.SystemClock
@@ -133,6 +130,7 @@ import hu.reelee81.reepdf.core.PdfOperationResult
 import hu.reelee81.reepdf.core.PdfOperationRunner
 import hu.reelee81.reepdf.core.PdfOperationScreen
 import hu.reelee81.reepdf.core.PdfOperationState
+import hu.reelee81.reepdf.core.PrefsXmlFile
 import hu.reelee81.reepdf.core.ProfileLoadRebuild
 import hu.reelee81.reepdf.core.ProgressNotifyPacing
 import hu.reelee81.reepdf.core.ScaleMode
@@ -142,6 +140,7 @@ import hu.reelee81.reepdf.core.WorkFileBackup
 import hu.reelee81.reepdf.databinding.ActivityMainBinding
 import hu.reelee81.reepdf.pdf.MuPdfSignedPageRenderer
 import hu.reelee81.reepdf.pdf.PdfImportOperation
+import hu.reelee81.reepdf.pdf.PdfImportWarning
 import hu.reelee81.reepdf.pdf.PdfIo
 import hu.reelee81.reepdf.pdf.PdfLayoutChangeOperation
 import hu.reelee81.reepdf.pdf.PdfOutputOperation
@@ -172,6 +171,7 @@ import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.time.Duration.Companion.milliseconds
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.first
@@ -279,6 +279,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var viewModel: PageItemsViewModel
     private lateinit var adapter: ThumbnailAdapter
     private lateinit var timeStamp: String
+    private val pendingIncomingFiles = HashSet<String>()
+    private var incomingSequence = 0L
     private lateinit var pdfPickerLauncher: ActivityResultLauncher<Intent>
     private lateinit var pdfViewerLauncher: ActivityResultLauncher<Intent>
     private lateinit var signaturesDir: File
@@ -416,7 +418,8 @@ class MainActivity : AppCompatActivity() {
             val job = lifecycleScope.launch(Dispatchers.IO) {
                 try {
                     val xml = contentResolver.openInputStream(uri)?.use { inp ->
-                        inp.readBytes().toString(Charsets.UTF_8)
+                        val bytes = PrefsXmlFile.read(inp) ?: throw IOException(getString(R.string.error_prefs_file_too_large))
+                        bytes.toString(Charsets.UTF_8)
                     } ?: throw IOException(getString(R.string.input_stream_is_null))
 
                     importAllSharedPreferencesFromXml(xml)
@@ -1138,6 +1141,11 @@ class MainActivity : AppCompatActivity() {
                         binding.overlayDialogMaxCoordinates.performClick()
                         return
                     }
+
+                    if (binding.overlayDialogImportWarnings.isVisible) {
+                        binding.overlayDialogImportWarnings.performClick()
+                        return
+                    }
                 }
 
                 finishAndRemoveTask()
@@ -1210,6 +1218,7 @@ class MainActivity : AppCompatActivity() {
             binding.overlayDialogPositionOnPagePanel,
             binding.overlayDialogPdfCropPanel,
             binding.overlayDialogMaxCoordinatesPanel,
+            binding.overlayDialogImportWarningsPanel,
             binding.overlayProgressDialogPanel,
             binding.overlayProgressDialogUpdateUiPanel
         ).forEach { updateMatchConstraintMaxWidth(it, maxPxOverlay) }
@@ -2688,6 +2697,7 @@ class MainActivity : AppCompatActivity() {
         var lastPageBitmap: Bitmap? = null
         var lastSigBitmap: Bitmap? = null
         var lastRenderedAvailW = -1
+        var renderGeneration = 0
 
         var layoutRerenderRunnable: Runnable? = null
         var layoutListener: View.OnLayoutChangeListener? = null
@@ -2730,11 +2740,9 @@ class MainActivity : AppCompatActivity() {
         btnCancel.setOnClickListener {
             dismissWithResult(null, null)
         }
+        btnOk.isEnabled = false
         btnOk.setOnClickListener {
-            if (!okReady) {
-                Toast.makeText(ctx, getString(R.string.in_progress_signature_editing), Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
-            }
+            if (!okReady) return@setOnClickListener
             val leftWithin = (currentLeft - pageLeft).toFloat()
             val topWithin  = (currentTop  - pageTop).toFloat()
             val outXmmRaw = leftWithin / pxPerMMX
@@ -2763,38 +2771,14 @@ class MainActivity : AppCompatActivity() {
                 }
                 lastRenderedAvailW = availW
 
-                val carryXmm = if (keepCurrentPosition && okReady && pxPerMMX > 0f && pxPerMMY > 0f) {
-                    val leftWithin = (currentLeft - pageLeft).toFloat()
-                    (leftWithin / pxPerMMX).coerceAtLeast(0f)
-                } else {
-                    initXmm
-                }
-
-                val carryYmm = if (keepCurrentPosition && okReady && pxPerMMX > 0f && pxPerMMY > 0f) {
-                    val topWithin = (currentTop - pageTop).toFloat()
-                    (topWithin / pxPerMMY).coerceAtLeast(0f)
-                } else {
-                    initYmm
-                }
-
                 okReady = false
+                btnOk.isEnabled = false
 
                 val pageSize = if (isLand) PageSize.A4.rotate() else PageSize.A4
                 val pageAspect = pageSize.width / pageSize.height
 
                 val contentW = lastRenderedAvailW.coerceAtLeast(1)
                 val contentH = max(1, floor(contentW / pageAspect).toInt())
-
-                runCatching {
-                    pageView.setImageDrawable(null)
-                    lastPageBitmap?.let { if (!it.isRecycled) it.recycle() }
-                    lastPageBitmap = null
-                }
-                runCatching {
-                    sigView.setImageDrawable(null)
-                    lastSigBitmap?.let { if (!it.isRecycled) it.recycle() }
-                    lastSigBitmap = null
-                }
 
                 val nup = nupTempFile()
                 if (!nup.exists()) {
@@ -2803,34 +2787,91 @@ class MainActivity : AppCompatActivity() {
                     return@post
                 }
 
-                val pageBmp = kotlin.run {
-                    var bmp: Bitmap? = null
-                    try {
-                        ParcelFileDescriptor.open(nup, ParcelFileDescriptor.MODE_READ_ONLY).use { pfd ->
-                            PdfRenderer(pfd).use { renderer ->
-                                if (nupPageIndex !in 0 until renderer.pageCount) return@use
-                                renderer.openPage(nupPageIndex).use { page ->
-                                    val b = createBitmap(contentW, contentH, Bitmap.Config.ARGB_8888)
-                                    val sx = contentW.toFloat() / page.width.toFloat()
-                                    val sy = contentH.toFloat() / page.height.toFloat()
-                                    val mat = Matrix().apply { postScale(sx, sy) }
-                                    page.render(b, null, mat, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-                                    bmp = b
+                val sigRefPx = currentSignatureRefPx()
+                val gen = ++renderGeneration
+                lifecycleScope.launch {
+                    val rendered = withContext(Dispatchers.IO) {
+                        val pageBmp = kotlin.run {
+                            var bmp: Bitmap? = null
+                            try {
+                                ParcelFileDescriptor.open(nup, ParcelFileDescriptor.MODE_READ_ONLY).use { pfd ->
+                                    PdfRenderer(pfd).use { renderer ->
+                                        if (nupPageIndex !in 0 until renderer.pageCount) return@use
+                                        renderer.openPage(nupPageIndex).use { page ->
+                                            val b = createBitmap(contentW, contentH, Bitmap.Config.ARGB_8888)
+                                            val sx = contentW.toFloat() / page.width.toFloat()
+                                            val sy = contentH.toFloat() / page.height.toFloat()
+                                            val mat = Matrix().apply { postScale(sx, sy) }
+                                            page.render(b, null, mat, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                                            bmp = b
+                                        }
+                                    }
                                 }
-                            }
+                            } catch (_: Exception) { }
+                            bmp
+                        } ?: return@withContext null
+
+                        val sigBounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                        BitmapFactory.decodeFile(signatureFile.absolutePath, sigBounds)
+
+                        val refAxisPx = if (isLand) pageBmp.height else pageBmp.width
+                        val desiredSigW = max(1, floor(sigBounds.outWidth  * (refAxisPx / sigRefPx)).toInt())
+                        val desiredSigH = max(1, floor(sigBounds.outHeight * (refAxisPx / sigRefPx)).toInt())
+
+                        fun calcInSampleSize(sw0: Int, sh0: Int, dw: Int, dh: Int): Int {
+                            var sample = 1
+                            val halfW = sw0 / 2
+                            val halfH = sh0 / 2
+                            while (halfW / sample >= dw && halfH / sample >= dh) sample *= 2
+                            return sample.coerceAtLeast(1)
                         }
-                    } catch (_: Exception) { }
-                    bmp
-                }
+                        val sample = calcInSampleSize(sigBounds.outWidth, sigBounds.outHeight, desiredSigW, desiredSigH)
+                        val sigBmp = BitmapFactory.decodeFile(signatureFile.absolutePath, BitmapFactory.Options().apply {
+                            inSampleSize = sample
+                            inPreferredConfig = Bitmap.Config.ARGB_8888
+                        })
 
-                if (pageBmp == null) {
-                    Toast.makeText(ctx, getString(R.string.failed_to_open_pdf_with_msg, "render"), Toast.LENGTH_LONG).show()
-                    dismissWithResult(null, null)
-                    return@post
-                }
+                        SignaturePreviewBitmaps(pageBmp, sigBmp, sigBounds.outWidth, sigBounds.outHeight, desiredSigW, desiredSigH)
+                    }
 
-                if (inner == null) {
-                    inner = FrameLayout(ctx).apply {
+                    if (gen != renderGeneration || finished.get()) {
+                        rendered?.recycle()
+                        return@launch
+                    }
+
+                    if (rendered == null) {
+                        Toast.makeText(ctx, getString(R.string.failed_to_open_pdf_with_msg, "render"), Toast.LENGTH_LONG).show()
+                        dismissWithResult(null, null)
+                        return@launch
+                    }
+
+                    val pageBmp = rendered.page
+                    val sigBmp = rendered.signature
+                    val desiredSigW = rendered.width
+                    val desiredSigH = rendered.height
+
+                    if (sigBmp == null) {
+                        rendered.recycle()
+                        Toast.makeText(ctx, getString(R.string.signature_image_invalid), Toast.LENGTH_LONG).show()
+                        dismissWithResult(null, null)
+                        return@launch
+                    }
+
+                    val carryXmm = if (keepCurrentPosition && pxPerMMX > 0f && pxPerMMY > 0f) {
+                        val leftWithin = (currentLeft - pageLeft).toFloat()
+                        (leftWithin / pxPerMMX).coerceAtLeast(0f)
+                    } else {
+                        initXmm
+                    }
+
+                    val carryYmm = if (keepCurrentPosition && pxPerMMX > 0f && pxPerMMY > 0f) {
+                        val topWithin = (currentTop - pageTop).toFloat()
+                        (topWithin / pxPerMMY).coerceAtLeast(0f)
+                    } else {
+                        initYmm
+                    }
+
+                    val innerView = inner ?: FrameLayout(ctx).apply {
                         layoutParams = FrameLayout.LayoutParams(
                             pageBmp.width,
                             pageBmp.height,
@@ -2841,116 +2882,96 @@ class MainActivity : AppCompatActivity() {
 
                         val bg = ContextCompat.getColor(ctx, R.color.signature_position_pdf_bg)
                         setBackgroundColor(bg)
+                    }.also {
+                        inner = it
+                        stage.addView(it)
                     }
-                    stage.addView(inner)
-                } else {
-                    inner.layoutParams = (inner.layoutParams as FrameLayout.LayoutParams).apply {
+                    innerView.layoutParams = (innerView.layoutParams as FrameLayout.LayoutParams).apply {
                         width = pageBmp.width
                         height = pageBmp.height
                         gravity = Gravity.CENTER
                     }
-                }
 
-                if (pageView.parent !== inner) {
-                    (pageView.parent as? ViewGroup)?.removeView(pageView)
-                    inner.addView(
-                        pageView,
-                        FrameLayout.LayoutParams(pageBmp.width, pageBmp.height, Gravity.CENTER)
-                    )
-                } else {
-                    pageView.layoutParams = (pageView.layoutParams as FrameLayout.LayoutParams).apply {
-                        width = pageBmp.width
-                        height = pageBmp.height
-                        gravity = Gravity.CENTER
+                    if (pageView.parent !== innerView) {
+                        (pageView.parent as? ViewGroup)?.removeView(pageView)
+                        innerView.addView(
+                            pageView,
+                            FrameLayout.LayoutParams(pageBmp.width, pageBmp.height, Gravity.CENTER)
+                        )
+                    } else {
+                        pageView.layoutParams = (pageView.layoutParams as FrameLayout.LayoutParams).apply {
+                            width = pageBmp.width
+                            height = pageBmp.height
+                            gravity = Gravity.CENTER
+                        }
                     }
-                }
 
-                pageView.setImageBitmap(pageBmp)
-                lastPageBitmap = pageBmp
-                pageView.requestLayout()
+                    val oldPageBitmap = lastPageBitmap
+                    pageView.setImageBitmap(pageBmp)
+                    lastPageBitmap = pageBmp
+                    pageView.requestLayout()
+                    oldPageBitmap?.let { if (it !== pageBmp && !it.isRecycled) it.recycle() }
 
-                val sigBounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                BitmapFactory.decodeFile(signatureFile.absolutePath, sigBounds)
-
-                val refAxisPx = if (isLand) pageBmp.height else pageBmp.width
-                val desiredSigW = max(1, floor(sigBounds.outWidth  * (refAxisPx / currentSignatureRefPx())).toInt())
-                val desiredSigH = max(1, floor(sigBounds.outHeight * (refAxisPx / currentSignatureRefPx())).toInt())
-
-                fun calcInSampleSize(sw0: Int, sh0: Int, dw: Int, dh: Int): Int {
-                    var sample = 1
-                    val halfW = sw0 / 2
-                    val halfH = sh0 / 2
-                    while (halfW / sample >= dw && halfH / sample >= dh) sample *= 2
-                    return sample.coerceAtLeast(1)
-                }
-                val sample = calcInSampleSize(sigBounds.outWidth, sigBounds.outHeight, desiredSigW, desiredSigH)
-                val sigBmp = BitmapFactory.decodeFile(signatureFile.absolutePath, BitmapFactory.Options().apply {
-                    inSampleSize = sample
-                    inPreferredConfig = Bitmap.Config.ARGB_8888
-                })
-
-                if (sigBmp == null) {
-                    Toast.makeText(ctx, getString(R.string.signature_image_invalid), Toast.LENGTH_LONG).show()
-                    dismissWithResult(null, null)
-                    return@post
-                }
-
-                if (sigView.parent !== inner) {
-                    (sigView.parent as? ViewGroup)?.removeView(sigView)
-                    inner.addView(
-                        sigView,
-                        FrameLayout.LayoutParams(desiredSigW, desiredSigH).apply { gravity = Gravity.TOP or Gravity.LEFT }
-                    )
-                } else {
-                    sigView.layoutParams = (sigView.layoutParams as FrameLayout.LayoutParams).apply {
-                        width = desiredSigW
-                        height = desiredSigH
+                    if (sigView.parent !== innerView) {
+                        (sigView.parent as? ViewGroup)?.removeView(sigView)
+                        innerView.addView(
+                            sigView,
+                            FrameLayout.LayoutParams(desiredSigW, desiredSigH).apply { gravity = Gravity.TOP or Gravity.LEFT }
+                        )
+                    } else {
+                        sigView.layoutParams = (sigView.layoutParams as FrameLayout.LayoutParams).apply {
+                            width = desiredSigW
+                            height = desiredSigH
+                        }
                     }
+
+                    val oldSigBitmap = lastSigBitmap
+                    sigView.setImageBitmap(sigBmp)
+                    lastSigBitmap = sigBmp
+                    sigView.alpha = 1f
+                    sigView.visibility = View.VISIBLE
+                    sigView.bringToFront()
+                    sigView.requestLayout()
+                    oldSigBitmap?.let { if (it !== sigBmp && !it.isRecycled) it.recycle() }
+
+                    pxPerMMX = pageBmp.width.toFloat() / a4Wmm
+                    pxPerMMY = pageBmp.height.toFloat() / a4Hmm
+
+                    val (maxXmm, maxYmm) = SignatureGeometry.maxPositionMm(
+                        rendered.sourceWidth, rendered.sourceHeight, sigRefPx, isLand
+                    )
+                    val rawMaxXmm = maxXmm.coerceAtLeast(0f)
+                    val rawMaxYmm = maxYmm.coerceAtLeast(0f)
+                    allowedMaxXmm = floor(rawMaxXmm)
+                    allowedMaxYmm = floor(rawMaxYmm)
+                    val allowedMaxLeftPx = floor(allowedMaxXmm * pxPerMMX).toInt()
+                    val allowedMaxTopPx  = floor(allowedMaxYmm * pxPerMMY).toInt()
+
+                    val initialLeftWithin = (carryXmm * pxPerMMX).coerceIn(0f, allowedMaxLeftPx.toFloat())
+                    val initialTopWithin  = (carryYmm * pxPerMMY).coerceIn(0f, allowedMaxTopPx.toFloat())
+
+                    pageLeft = 0
+                    pageTop  = 0
+
+                    currentLeft = initialLeftWithin.toInt()
+                    currentTop  = initialTopWithin.toInt()
+
+                    sigView.minLeft = 0
+                    sigView.minTop  = 0
+
+                    sigView.maxLeft = allowedMaxLeftPx
+                    sigView.maxTop  = allowedMaxTopPx
+
+                    sigView.onMoved = { l, t ->
+                        currentLeft = l
+                        currentTop  = t
+                    }
+
+                    sigView.updatePosition(currentLeft, currentTop)
+
+                    okReady = true
+                    btnOk.isEnabled = true
                 }
-
-                sigView.setImageBitmap(sigBmp)
-                lastSigBitmap = sigBmp
-                sigView.alpha = 1f
-                sigView.visibility = View.VISIBLE
-                sigView.bringToFront()
-                sigView.requestLayout()
-
-                pxPerMMX = pageBmp.width.toFloat() / a4Wmm
-                pxPerMMY = pageBmp.height.toFloat() / a4Hmm
-
-                val (maxXmm, maxYmm) = SignatureGeometry.maxPositionMm(
-                    sigBounds.outWidth, sigBounds.outHeight, currentSignatureRefPx(), isLand
-                )
-                val rawMaxXmm = maxXmm.coerceAtLeast(0f)
-                val rawMaxYmm = maxYmm.coerceAtLeast(0f)
-                allowedMaxXmm = floor(rawMaxXmm)
-                allowedMaxYmm = floor(rawMaxYmm)
-                val allowedMaxLeftPx = floor(allowedMaxXmm * pxPerMMX).toInt()
-                val allowedMaxTopPx  = floor(allowedMaxYmm * pxPerMMY).toInt()
-
-                val initialLeftWithin = (carryXmm * pxPerMMX).coerceIn(0f, allowedMaxLeftPx.toFloat())
-                val initialTopWithin  = (carryYmm * pxPerMMY).coerceIn(0f, allowedMaxTopPx.toFloat())
-
-                pageLeft = 0
-                pageTop  = 0
-
-                currentLeft = initialLeftWithin.toInt()
-                currentTop  = initialTopWithin.toInt()
-
-                sigView.minLeft = 0
-                sigView.minTop  = 0
-
-                sigView.maxLeft = allowedMaxLeftPx
-                sigView.maxTop  = allowedMaxTopPx
-
-                sigView.onMoved = { l, t ->
-                    currentLeft = l
-                    currentTop  = t
-                }
-
-                sigView.updatePosition(currentLeft, currentTop)
-
-                okReady = true
             }
         }
 
@@ -2990,6 +3011,20 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private class SignaturePreviewBitmaps(
+        val page: Bitmap,
+        val signature: Bitmap?,
+        val sourceWidth: Int,
+        val sourceHeight: Int,
+        val width: Int,
+        val height: Int
+    ) {
+        fun recycle() {
+            if (!page.isRecycled) page.recycle()
+            signature?.let { if (!it.isRecycled) it.recycle() }
+        }
+    }
+
     private fun readImageBounds(path: String): Pair<Int, Int> {
         val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeFile(path, opts)
@@ -2997,28 +3032,40 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun copySignatureToAppDir(uri: Uri) {
-        try {
-            contentResolver.openInputStream(uri)?.use { inputStream ->
-                var fileName = extractFileName(uri)
-                if (!fileName.startsWith("sign_")) fileName = "sign_$fileName"
-                if (!fileName.endsWith(".png", ignoreCase = true)) {
-                    fileName = fileName.substringBeforeLast('.') + ".png"
-                }
+        lifecycleScope.launch {
+            try {
+                val copied = withContext(Dispatchers.IO) {
+                    contentResolver.openInputStream(uri)?.use { inputStream ->
+                        var fileName = extractFileName(uri)
+                        if (!fileName.startsWith("sign_")) fileName = "sign_$fileName"
+                        if (!fileName.endsWith(".png", ignoreCase = true)) {
+                            fileName = fileName.substringBeforeLast('.') + ".png"
+                        }
 
-                val targetFile = File(signaturesDir, fileName)
-                var uniqueFile = targetFile
-                var counter = 1
-                while (uniqueFile.exists()) {
-                    val baseName = fileName.substringBeforeLast('.')
-                    val extension = fileName.substringAfterLast('.', "png")
-                    uniqueFile = File(signaturesDir, "${baseName}_${counter}.$extension"); counter++
-                }
+                        val targetFile = File(signaturesDir, fileName)
+                        var uniqueFile = targetFile
+                        var counter = 1
+                        while (uniqueFile.exists()) {
+                            val baseName = fileName.substringBeforeLast('.')
+                            val extension = fileName.substringAfterLast('.', "png")
+                            uniqueFile = File(signaturesDir, "${baseName}_${counter}.$extension"); counter++
+                        }
 
-                FileOutputStream(uniqueFile).use { outputStream -> inputStream.copyTo(outputStream) }
-                showSignatureDialog()
+                        try {
+                            FileOutputStream(uniqueFile).use { outputStream -> inputStream.copyTo(outputStream) }
+                        } catch (e: Exception) {
+                            runCatching { uniqueFile.delete() }
+                            throw e
+                        }
+                        true
+                    } ?: false
+                }
+                if (copied) showSignatureDialog()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Toast.makeText(this@MainActivity, getString(R.string.error_copying_signature_with_msg, e.message), Toast.LENGTH_LONG).show()
             }
-        } catch (e: Exception) {
-            Toast.makeText(this, getString(R.string.error_copying_signature_with_msg, e.message), Toast.LENGTH_LONG).show()
         }
     }
 
@@ -4171,20 +4218,24 @@ class MainActivity : AppCompatActivity() {
         val job = lifecycleScope.launch(Dispatchers.IO) {
             val sources = ArrayList<PdfImportOperation.Source>()
             try {
-                for ((index, uri) in uris.withIndex()) {
-                    prepareImport(uri, index, detectImages)?.let { sources += it }
+                try {
+                    for (uri in uris) {
+                        prepareImport(uri, detectImages)?.let { sources += it }
+                    }
+                } catch (e: CancellationException) {
+                    for (source in sources) runCatching { source.file.delete() }
+                    throw e
                 }
-            } catch (e: CancellationException) {
-                for (source in sources) runCatching { source.file.delete() }
-                throw e
-            }
-            if (sources.isEmpty()) return@launch
+                if (sources.isEmpty()) return@launch
 
-            try {
-                withContext(Dispatchers.Main) { startImportWhenFree(sources) }
-            } catch (e: CancellationException) {
-                for (source in sources) runCatching { source.file.delete() }
-                throw e
+                try {
+                    withContext(Dispatchers.Main) { startImportWhenFree(sources) }
+                } catch (e: CancellationException) {
+                    for (source in sources) runCatching { source.file.delete() }
+                    throw e
+                }
+            } finally {
+                for (source in sources) releaseIncomingFile(source.file)
             }
         }
         activeJobs.add(job)
@@ -4203,26 +4254,42 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private suspend fun prepareImport(uri: Uri, index: Int, detectImages: Boolean): PdfImportOperation.Source? {
+    private fun newIncomingFile(): File = synchronized(pendingIncomingFiles) {
+        incomingSequence++
+        File(cacheDir, "${timeStamp}_in_$incomingSequence").also { pendingIncomingFiles += it.name }
+    }
+
+    private fun releaseIncomingFile(file: File) {
+        synchronized(pendingIncomingFiles) { pendingIncomingFiles -= file.name }
+    }
+
+    private fun discardIncomingFile(file: File) {
+        runCatching { file.delete() }
+        releaseIncomingFile(file)
+    }
+
+    private suspend fun prepareImport(uri: Uri, detectImages: Boolean): PdfImportOperation.Source? {
         val fileName = extractFileName(uri)
-        val tempSrc = File(cacheDir, "${timeStamp}_${index}_$fileName")
+        val tempSrc = newIncomingFile()
         try {
             val isImage = detectImages && run {
                 val mtLc = try { contentResolver.getType(uri)?.lowercase(Locale.ROOT) } catch (_: Exception) { null }
                 isSupportedImageMime(mtLc) || isSupportedImageFileName(fileName.lowercase(Locale.ROOT))
             }
 
+            val context = currentCoroutineContext()
             contentResolver.openInputStream(uri)?.use { inputStream ->
                 FileOutputStream(tempSrc).use { outputStream ->
                     val buffer = ByteArray(4096)
                     var bytesRead: Int
                     while (inputStream.read(buffer).also { bytesRead = it } > 0) {
+                        context.ensureActive()
                         outputStream.write(buffer, 0, bytesRead)
                     }
                 }
             } ?: throw IOException(getString(R.string.input_stream_is_null))
 
-            if (isImage) return PdfImportOperation.Source(tempSrc, null, null, isImage = true)
+            if (isImage) return PdfImportOperation.Source(tempSrc, null, null, isImage = true, name = fileName)
 
             var passwordBytes: ByteArray? = null
             var attempt = 0
@@ -4240,7 +4307,7 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 if (entered == null) {
-                    runCatching { tempSrc.delete() }
+                    discardIncomingFile(tempSrc)
                     return null
                 }
 
@@ -4248,12 +4315,12 @@ class MainActivity : AppCompatActivity() {
                 attempt++
             }
 
-            return PdfImportOperation.Source(tempSrc, passwordBytes, openFailure)
+            return PdfImportOperation.Source(tempSrc, passwordBytes, openFailure, name = fileName)
         } catch (e: CancellationException) {
-            runCatching { tempSrc.delete() }
+            discardIncomingFile(tempSrc)
             throw e
         } catch (e: Exception) {
-            runCatching { tempSrc.delete() }
+            discardIncomingFile(tempSrc)
             withContext(Dispatchers.Main) {
                 Toast.makeText(this@MainActivity, getString(R.string.error_loading_pdf_with_msg, e.message), Toast.LENGTH_LONG).show()
             }
@@ -4601,7 +4668,7 @@ class MainActivity : AppCompatActivity() {
                 val token = currentFocus?.windowToken ?: runCatching { overlay.windowToken }.getOrNull()
                 runCatching { imm?.hideSoftInputFromWindow(token, 0) }
 
-                val pwd = et.text?.toString()?.trim().orEmpty()
+                val pwd = et.text?.toString().orEmpty()
 
                 overlay.visibility = View.GONE
                 overlay.setOnClickListener(null)
@@ -4915,6 +4982,11 @@ class MainActivity : AppCompatActivity() {
                 } catch (_: Exception) {
                     emptyList()
                 }
+            }
+
+            if (myGen != reloadThumbnailsGeneration) {
+                releaseDeferredUnlockAndInvokeOnStarted()
+                return@launch
             }
 
             if (items.isEmpty()) {
@@ -5578,10 +5650,12 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        val importWarnings = if (kind == PdfOperationKind.IMPORT) result.importWarnings else emptyList()
         val onReloadStarted: () -> Unit = {
             hideInProgressIfShown()
             unlockScreenOrientation()
             finishHandover()
+            if (importWarnings.isNotEmpty()) showImportWarnings(importWarnings)
         }
 
         reloadThumbnailsFromNup(
@@ -5596,6 +5670,42 @@ class MainActivity : AppCompatActivity() {
 
         updateButtonsState()
         unlockScreenOrientation()
+    }
+
+    private fun showImportWarnings(warnings: List<PdfImportWarning>) {
+        val lines = warnings.flatMap { warning ->
+            buildList {
+                if (warning.skippedPages > 0) {
+                    add(resources.getQuantityString(R.plurals.import_warning_skipped_pages, warning.skippedPages, warning.name, warning.skippedPages))
+                }
+                if (warning.missingContent) add(getString(R.string.import_warning_missing_content, warning.name))
+                if (warning.earlierRevision) add(getString(R.string.import_warning_earlier_revision, warning.name))
+            }
+        }
+        if (lines.isEmpty()) return
+
+        val overlay = binding.overlayDialogImportWarnings
+        val panel = binding.overlayDialogImportWarningsPanel
+
+        panel.removeAllViews()
+        val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_import_warnings, panel, false)
+        panel.addView(dialogView)
+
+        overlay.visibility = View.VISIBLE
+
+        overlay.setOnClickListener {
+            overlay.visibility = View.GONE
+            overlay.setOnClickListener(null)
+        }
+        panel.setOnClickListener {
+        }
+
+        dialogView.findViewById<MaterialTextView>(R.id.iw_text)?.text = lines.joinToString("\n\n")
+
+        dialogView.findViewById<Button>(R.id.iw_btn_ok)?.setOnClickListener {
+            overlay.visibility = View.GONE
+            overlay.setOnClickListener(null)
+        }
     }
 
     private fun failLayoutChange(error: Throwable, restore: ThumbRestore?, kind: PdfOperationKind?) {
@@ -5865,9 +5975,11 @@ class MainActivity : AppCompatActivity() {
         } catch (_: Exception) { false }
 
     private fun cleanupCacheExceptTemps() {
+        if (PdfOperations.runner(this).state.value.isBusy) return
         val keep = setOf(SOURCE_TEMP_NAME, NUP_TEMP_NAME)
         cacheDir.listFiles()?.forEach { f ->
-            if (f.name !in keep) {
+            val pending = synchronized(pendingIncomingFiles) { f.name in pendingIncomingFiles }
+            if (f.name !in keep && !pending) {
                 runCatching { f.deleteRecursively() }
             }
         }
@@ -6414,7 +6526,7 @@ class MainActivity : AppCompatActivity() {
                 val token = currentFocus?.windowToken ?: runCatching { overlay.windowToken }.getOrNull()
                 runCatching { imm?.hideSoftInputFromWindow(token, 0) }
 
-                val pwd = et.text?.toString()?.trim().orEmpty()
+                val pwd = et.text?.toString().orEmpty()
 
                 overlay.visibility = View.GONE
                 overlay.setOnClickListener(null)
@@ -6464,12 +6576,16 @@ class MainActivity : AppCompatActivity() {
         }
 
     private suspend fun getConfirmedOutputPasswordOrNull(): ByteArray? {
-        var needErrorOnFirst = false
+        var errorOnFirst: Int? = null
         while (true) {
             val first = promptForPasswordForOutput(
                 titleResId = R.string.enter_pdf_password,
-                errorHintResId = if (needErrorOnFirst) R.string.password_do_not_match else null
+                errorHintResId = errorOnFirst
             ) ?: return null
+            if (first.isEmpty()) {
+                errorOnFirst = R.string.password_empty
+                continue
+            }
             val second = promptForPasswordForOutput(
                 titleResId = R.string.password_again,
                 errorHintResId = null
@@ -6478,7 +6594,7 @@ class MainActivity : AppCompatActivity() {
             if (first == second) {
                 return first.toByteArray(Charsets.UTF_8)
             } else {
-                needErrorOnFirst = true
+                errorOnFirst = R.string.password_do_not_match
             }
         }
     }
@@ -6653,58 +6769,23 @@ class MainActivity : AppCompatActivity() {
             putExtra(Intent.EXTRA_SUBJECT, displayName)
         }
 
-        val pm = packageManager
+        val resolves = packageManager.queryIntentActivities(sendIntent, 0)
+        val ownComponents = resolves
+            .filter { it.activityInfo.packageName == packageName }
+            .map { ComponentName(it.activityInfo.packageName, it.activityInfo.name) }
+            .toTypedArray()
 
-        if (Build.VERSION.SDK_INT >= VERSION_CODES.S) {
-            val resolves = pm.queryIntentActivities(sendIntent, 0)
-            val ownComponents = resolves
-                .filter { it.activityInfo.packageName == packageName }
-                .map { ComponentName(it.activityInfo.packageName, it.activityInfo.name) }
-                .toTypedArray()
-
-            val chooser = Intent.createChooser(sendIntent, chooserTitle).apply {
-                if (ownComponents.isNotEmpty()) {
-                    putExtra(Intent.EXTRA_EXCLUDE_COMPONENTS, ownComponents)
-                }
+        val chooser = Intent.createChooser(sendIntent, chooserTitle).apply {
+            if (ownComponents.isNotEmpty()) {
+                putExtra(Intent.EXTRA_EXCLUDE_COMPONENTS, ownComponents)
             }
-            try {
-                startActivity(chooser)
-                scheduleCacheCleanupAfterExternalReturn()
-            } catch (_: Exception) {
-                Toast.makeText(this, getString(R.string.no_app_can_share_pdf), Toast.LENGTH_LONG).show()
-                lifecycleScope.launch(Dispatchers.IO) { cleanupCacheExceptTemps() }
-            }
-        } else {
-            val resolves = pm.queryIntentActivities(sendIntent, 0)
-            val ownComponents = resolves
-                .filter { it.activityInfo.packageName == packageName }
-                .map { ComponentName(it.activityInfo.packageName, it.activityInfo.name) }
-
-            ownComponents.forEach {
-                pm.setComponentEnabledSetting(
-                    it,
-                    PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
-                    PackageManager.DONT_KILL_APP
-                )
-            }
-
-            try {
-                startActivity(Intent.createChooser(sendIntent, chooserTitle))
-                scheduleCacheCleanupAfterExternalReturn()
-            } catch (_: Exception) {
-                Toast.makeText(this, getString(R.string.no_app_can_share_pdf), Toast.LENGTH_LONG).show()
-                lifecycleScope.launch(Dispatchers.IO) { cleanupCacheExceptTemps() }
-            } finally {
-                Handler(Looper.getMainLooper()).postDelayed({
-                    ownComponents.forEach { comp ->
-                        pm.setComponentEnabledSetting(
-                            comp,
-                            PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
-                            PackageManager.DONT_KILL_APP
-                        )
-                    }
-                }, 500)
-            }
+        }
+        try {
+            startActivity(chooser)
+            scheduleCacheCleanupAfterExternalReturn()
+        } catch (_: Exception) {
+            Toast.makeText(this, getString(R.string.no_app_can_share_pdf), Toast.LENGTH_LONG).show()
+            lifecycleScope.launch(Dispatchers.IO) { cleanupCacheExceptTemps() }
         }
     }
 

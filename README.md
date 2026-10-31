@@ -65,7 +65,8 @@ We publish the source code so that others can use it, modify it and learn from i
 - Choose the resolution: 144 dpi or 300 dpi
 - Optional **scan effect** and **grayscale background**
 - The signed page is rasterized: the page content and the image become a single picture,
-  so the signature cannot be removed from the PDF later
+  so the signature is not a separate object that could simply be deleted from the PDF later.
+  This is not a cryptographic protection: the picture itself can still be edited, and changes are not detected
 - This saves you the usual routine of printing the document, signing it by hand, scanning it back and then
   sending the scanned copy, for example by e-mail: with the app you sign or stamp the document and send it
   right away

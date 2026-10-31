@@ -8,9 +8,11 @@ import com.itextpdf.kernel.pdf.canvas.PdfCanvas
 import com.itextpdf.kernel.pdf.canvas.parser.PdfTextExtractor
 import java.io.ByteArrayOutputStream
 import java.io.File
+import kotlin.coroutines.cancellation.CancellationException
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -56,6 +58,25 @@ class PdfRevisionRecoveryTest {
         }
         assertTrue(recovered)
         assertEquals(1, pages)
+    }
+
+    @Test
+    fun aCancelledSearchStopsBeforeTryingARevisionAndLeavesNoRevisionFile() {
+        val valid = makePdf("VALID REVISION")
+        val input = temporary.newFile("cancelled.pdf").apply {
+            writeBytes(valid + "\n9 0 obj\n<</Garbage true>>\nendobj\n%%EOF\n".toByteArray(Charsets.ISO_8859_1))
+        }
+        var checks = 0
+        var tried = false
+
+        assertThrows(CancellationException::class.java) {
+            PdfRevisionRecovery.withEarlierRevision(
+                input, temporary.root, { if (++checks == 4) throw CancellationException("cancelled") }, { tried = true; true }
+            ) { }
+        }
+
+        assertFalse(tried)
+        assertTrue(temporary.root.listFiles().orEmpty().none { it.name.startsWith("revision_") })
     }
 
     private fun hasPages(file: File): Boolean = try {

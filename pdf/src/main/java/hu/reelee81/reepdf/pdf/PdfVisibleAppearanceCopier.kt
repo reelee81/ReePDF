@@ -24,7 +24,10 @@ import com.itextpdf.kernel.pdf.xobject.PdfFormXObject
 import java.io.File
 import java.io.IOException
 
-class PdfVisibleAppearanceCopier(private val cacheDir: File) : IPdfPageExtraCopier {
+class PdfVisibleAppearanceCopier(
+    private val cacheDir: File,
+    private val onMissingAppearance: () -> Unit = {}
+) : IPdfPageExtraCopier {
     override fun copy(fromPage: PdfPage, toPage: PdfPage) {
         val visible = PdfCopySupport.repairInvalidBoxes(toPage)
         PdfCopySupport.repairContents(toPage)
@@ -67,6 +70,7 @@ class PdfVisibleAppearanceCopier(private val cacheDir: File) : IPdfPageExtraCopi
                         try {
                             drawGeneratedWidget(annotation, fromPage.document, rect, contentCanvas(), toPage.document)
                         } catch (_: Exception) {
+                            onMissingAppearance()
                         }
                     }
                 }

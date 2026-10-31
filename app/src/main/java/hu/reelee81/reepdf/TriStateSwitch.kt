@@ -13,12 +13,14 @@ import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
+import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.Button
 import androidx.core.content.ContextCompat
 import androidx.core.content.withStyledAttributes
 import androidx.core.graphics.createBitmap
 import androidx.core.graphics.withClip
 import androidx.core.os.BundleCompat
+import androidx.core.view.ViewCompat
 import com.google.android.material.switchmaterial.SwitchMaterial
 import hu.reelee81.reepdf.core.SwitchStep
 import kotlin.math.abs
@@ -47,6 +49,7 @@ class TriStateSwitch @JvmOverloads constructor(
     private val probe = SwitchMaterial(context)
     private val scratch = Canvas(createBitmap(1, 1))
     private var text: CharSequence = ""
+    private var stateTexts: List<CharSequence> = emptyList()
     private val textPaint: TextPaint
     private val thumb: Drawable
     private val track: Drawable
@@ -78,6 +81,7 @@ class TriStateSwitch @JvmOverloads constructor(
     init {
         context.withStyledAttributes(attrs, R.styleable.TriStateSwitch) {
             text = getText(R.styleable.TriStateSwitch_android_text) ?: ""
+            stateTexts = getTextArray(R.styleable.TriStateSwitch_android_entries)?.toList().orEmpty()
             probe.switchPadding = getDimensionPixelSize(R.styleable.TriStateSwitch_switchPadding, probe.switchPadding)
         }
         probe.text = text
@@ -86,6 +90,7 @@ class TriStateSwitch @JvmOverloads constructor(
         track = requireNotNull(probe.trackDrawable)
         isClickable = true
         isFocusable = true
+        ViewCompat.setStateDescription(this, stateTexts.getOrNull(committed))
     }
 
     private fun syncGeometry(probeWidth: Int, height: Int) {
@@ -222,6 +227,7 @@ class TriStateSwitch @JvmOverloads constructor(
         animator = null
         val changed = target != committed
         committed = target
+        if (changed) ViewCompat.setStateDescription(this, stateTexts.getOrNull(target))
         if (animate && offset != target.toFloat()) {
             animator = ValueAnimator.ofFloat(offset, target.toFloat()).apply {
                 duration = ANIMATION_MS
@@ -246,6 +252,11 @@ class TriStateSwitch @JvmOverloads constructor(
     }
 
     override fun getAccessibilityClassName(): CharSequence = Button::class.java.name
+
+    override fun onInitializeAccessibilityNodeInfo(info: AccessibilityNodeInfo) {
+        super.onInitializeAccessibilityNodeInfo(info)
+        info.text = text
+    }
 
     override fun onSaveInstanceState(): Parcelable = Bundle().apply {
         putParcelable(STATE_SUPER, super.onSaveInstanceState())
