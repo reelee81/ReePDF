@@ -25,6 +25,7 @@ import com.itextpdf.kernel.pdf.xobject.PdfFormXObject
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.io.IOException
 import java.nio.file.Files
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -318,24 +319,97 @@ class PdfVisibleAppearanceCopierTest {
     }
 
     @Test
-    fun markupWithoutAppearanceIsNotGenerated() {
-        val original = makePdf { pdf ->
-            for (subtype in listOf(PdfName.Highlight, PdfName.Underline, PdfName.Squiggly, PdfName.StrikeOut)) {
-                val annotation = baseWidget(40f).apply {
-                    put(PdfName.Subtype, subtype)
-                    put(PdfName.F, PdfNumber(FLAG_PRINT))
-                    put(PdfName.QuadPoints, PdfArray(floatArrayOf(20f, 80f, 120f, 80f, 20f, 60f, 120f, 60f)))
-                }
-                pdf.getPage(1).addAnnotation(PdfAnnotation.makeAnnotation(annotation))
-            }
+    fun printableMarkupWithoutAppearanceIsDrawnFromTheGeneratedAppearance() {
+        val original = markupPdf(withNonPrintable = true)
+        val seenKeys = ArrayList<Set<String>>()
+        var missing = 0
+        val copier = PdfVisibleAppearanceCopier(temporary.root, { missing++ }, drawingGenerator(seenKeys = seenKeys))
+
+        PdfDocument(PdfReader(ByteArrayInputStream(import(original, copier = copier)))).use { result ->
+            val text = PdfTextExtractor.getTextFromPage(result.getPage(1))
+            for (subtype in markupSubtypes) assertTrue(text.contains("GENERATED ${subtype.value}"))
+            assertTrue(result.getPage(1).annotations.isEmpty())
         }
+        assertEquals(0, missing)
+        assertEquals(markupSubtypes.size, seenKeys.size)
+        for (keys in seenKeys) {
+            assertTrue("P" in keys && "QuadPoints" in keys && "C" in keys)
+            assertFalse("A" in keys || "Popup" in keys || "AP" in keys)
+        }
+        assertTrue(temporary.root.listFiles().orEmpty().none { it.name.startsWith("pdf_annotation_appearance_") })
+    }
+
+    @Test
+    fun markupWhoseAppearanceCannotBeGeneratedIsReportedAndLeavesThePageAlone() {
+        val original = markupPdf(withNonPrintable = true)
+        var missing = 0
+        val copier = PdfVisibleAppearanceCopier(temporary.root, { missing++ }, noMuPdf)
+
         PdfDocument(PdfReader(ByteArrayInputStream(original))).use { source ->
-            PdfDocument(PdfReader(ByteArrayInputStream(import(original)))).use { result ->
+            PdfDocument(PdfReader(ByteArrayInputStream(import(original, copier = copier)))).use { result ->
                 assertArrayEquals(source.getPage(1).contentBytes, result.getPage(1).contentBytes)
                 assertTrue(result.getPage(1).annotations.isEmpty())
             }
         }
+        assertEquals(markupSubtypes.size, missing)
+        assertTrue(temporary.root.listFiles().orEmpty().none { it.name.startsWith("pdf_annotation_appearance_") })
     }
+
+    @Test
+    fun onlyTheMarkupLeftWithoutAGeneratedAppearanceIsReported() {
+        val original = markupPdf(withNonPrintable = false)
+        var missing = 0
+        val copier = PdfVisibleAppearanceCopier(temporary.root, { missing++ }, drawingGenerator(skip = setOf("Squiggly")))
+
+        PdfDocument(PdfReader(ByteArrayInputStream(import(original, copier = copier)))).use { result ->
+            val text = PdfTextExtractor.getTextFromPage(result.getPage(1))
+            assertTrue(text.contains("GENERATED Highlight"))
+            assertTrue(text.contains("GENERATED Underline"))
+            assertTrue(text.contains("GENERATED StrikeOut"))
+            assertFalse(text.contains("GENERATED Squiggly"))
+        }
+        assertEquals(1, missing)
+    }
+
+    private val markupSubtypes = listOf(PdfName.Highlight, PdfName.Underline, PdfName.Squiggly, PdfName.StrikeOut)
+
+    private fun markupPdf(withNonPrintable: Boolean): ByteArray = makePdf { pdf ->
+        val flags = if (withNonPrintable) listOf(FLAG_PRINT, 0) else listOf(FLAG_PRINT)
+        for (flag in flags) {
+            for ((index, subtype) in markupSubtypes.withIndex()) {
+                val y = 40f + index * 40f + if (flag == 0) 200f else 0f
+                val annotation = baseWidget(y).apply {
+                    put(PdfName.Subtype, subtype)
+                    put(PdfName.F, PdfNumber(flag))
+                    put(PdfName.C, PdfArray(floatArrayOf(1f, 1f, 0f)))
+                    put(PdfName.QuadPoints, PdfArray(floatArrayOf(30f, y + 30f, 230f, y + 30f, 30f, y, 230f, y)))
+                    put(PdfName.A, PdfDictionary().apply {
+                        put(PdfName.S, PdfName.GoTo)
+                        put(PdfName.D, PdfArray(listOf(pdf.getPage(1).pdfObject, PdfName.Fit)))
+                    })
+                }
+                pdf.getPage(1).addAnnotation(PdfAnnotation.makeAnnotation(annotation))
+            }
+        }
+    }
+
+    private fun drawingGenerator(
+        skip: Set<String> = emptySet(),
+        seenKeys: MutableList<Set<String>>? = null
+    ): (File, File) -> Unit = { input, output ->
+        PdfDocument(PdfReader(input.absolutePath), PdfWriter(output.absolutePath)).use { pdf ->
+            val annotations = pdf.getPage(1).pdfObject.getAsArray(PdfName.Annots)
+            for (index in 0 until annotations.size()) {
+                val annotation = annotations.getAsDictionary(index)
+                seenKeys?.add(annotation.keySet().map { it.value }.toSet())
+                val subtype = annotation.getAsName(PdfName.Subtype).value
+                if (subtype in skip) continue
+                annotation.put(PdfName.AP, PdfDictionary().apply { put(PdfName.N, appearance(pdf, "GENERATED $subtype")) })
+            }
+        }
+    }
+
+    private val noMuPdf: (File, File) -> Unit = { _, _ -> throw IOException("MuPDF is not available in JVM tests") }
 
     @Test
     fun missingFieldAppearanceIsGeneratedOnlyWhenPrintableAndNotHidden() {
@@ -585,8 +659,8 @@ class PdfVisibleAppearanceCopierTest {
                     document.setFlushUnusedObjects(true)
                     for (page in 1..pageCount) {
                         PdfDocument(PdfReader(file.absolutePath).setMemorySavingMode(true)).use { source ->
-                            source.copyPagesTo(page, page, destination, PdfVisibleAppearanceCopier(temporary.root))
-                            source.copyPagesTo(page, page, document, PdfVisibleAppearanceCopier(temporary.root))
+                            source.copyPagesTo(page, page, destination, PdfVisibleAppearanceCopier(temporary.root, generateAppearances = noMuPdf))
+                            source.copyPagesTo(page, page, document, PdfVisibleAppearanceCopier(temporary.root, generateAppearances = noMuPdf))
                             destination.flushCopiedObjects(source)
                             document.flushCopiedObjects(source)
                         }
@@ -606,11 +680,15 @@ class PdfVisibleAppearanceCopierTest {
         }
     }
 
-    private fun import(original: ByteArray, asXObject: Boolean = false): ByteArray {
+    private fun import(
+        original: ByteArray,
+        asXObject: Boolean = false,
+        copier: PdfVisibleAppearanceCopier = PdfVisibleAppearanceCopier(temporary.root, generateAppearances = noMuPdf)
+    ): ByteArray {
         val bytes = ByteArrayOutputStream()
         PdfDocument(PdfReader(ByteArrayInputStream(original)).setMemorySavingMode(true)).use { source ->
             PdfDocument(PdfWriter(bytes)).use { destination ->
-                source.copyPagesTo(1, source.numberOfPages, destination, PdfVisibleAppearanceCopier(temporary.root))
+                source.copyPagesTo(1, source.numberOfPages, destination, copier)
                 PdfCopySupport.flushCopiedObjects(destination, source)
             }
         }

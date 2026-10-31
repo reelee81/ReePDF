@@ -124,6 +124,67 @@ class WorkFileBackupTest {
     }
 
     @Test
+    fun aSourceFolderThatCannotBeListedFailsTheBackupAndLeavesNoCopies() {
+        val dir = temp.newFolder()
+        val source = File(dir, "source").apply { mkdirs() }
+        File(source, "0001.pdf").writeText("first")
+        File(dir, "nup.pdf").writeText("nup")
+        assumeTrue(source.setReadable(false) && source.listFiles() == null)
+        val backup = WorkFileBackup(dir, "source", "nup.pdf", "source_copy", "nup_copy.pdf")
+
+        try {
+            assertTrue(runCatching { backup.backup() }.exceptionOrNull() is IOException)
+        } finally {
+            source.setReadable(true)
+        }
+
+        assertEquals(setOf("source", "nup.pdf"), dir.list()!!.toSet())
+        assertEquals(setOf("0001.pdf"), source.list()!!.toSet())
+        assertEquals("first", File(source, "0001.pdf").readText())
+        assertEquals("nup", File(dir, "nup.pdf").readText())
+    }
+
+    @Test
+    fun aSubfolderThatCannotBeListedFailsTheBackupAndLeavesNoCopies() {
+        val dir = temp.newFolder()
+        val source = File(dir, "source").apply { mkdirs() }
+        File(source, "0001.pdf").writeText("first")
+        val inner = File(source, "inner").apply { mkdirs() }
+        File(inner, "part.pdf").writeText("inner")
+        File(dir, "nup.pdf").writeText("nup")
+        assumeTrue(inner.setReadable(false) && inner.listFiles() == null)
+        val backup = WorkFileBackup(dir, "source", "nup.pdf", "source_copy", "nup_copy.pdf")
+
+        try {
+            assertTrue(runCatching { backup.backup() }.exceptionOrNull() is IOException)
+        } finally {
+            inner.setReadable(true)
+        }
+
+        assertEquals(setOf("source", "nup.pdf"), dir.list()!!.toSet())
+        assertEquals(setOf("0001.pdf", "inner"), source.list()!!.toSet())
+        assertEquals("inner", File(inner, "part.pdf").readText())
+        assertEquals("nup", File(dir, "nup.pdf").readText())
+    }
+
+    @Test
+    fun aRestoreLeavesTheFilesItIsToldToKeep() {
+        val dir = temp.newFolder()
+        File(dir, "source.pdf").writeText("source")
+        File(dir, "nup.pdf").writeText("nup")
+        val backup = WorkFileBackup(dir, "source.pdf", "nup.pdf", "source_copy.pdf", "nup_copy.pdf") { it.name == "123_in_2" }
+        backup.backup()
+        File(dir, "123_in_2").writeText("next import")
+        File(dir, "source.pdf.work").writeText("work")
+
+        assertTrue(backup.restore())
+
+        assertEquals(setOf("source.pdf", "nup.pdf", "123_in_2"), dir.list()!!.toSet())
+        assertEquals("next import", File(dir, "123_in_2").readText())
+        assertEquals("source", File(dir, "source.pdf").readText())
+    }
+
+    @Test
     fun aCancelledBackupStopsLeavesNoCopiesAndKeepsTheWorkFiles() {
         val dir = temp.newFolder()
         val source = File(dir, "source").apply { mkdirs() }

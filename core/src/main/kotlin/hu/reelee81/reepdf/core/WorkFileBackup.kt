@@ -8,7 +8,8 @@ class WorkFileBackup(
     sourceName: String,
     nupName: String,
     sourceCopyName: String,
-    nupCopyName: String
+    nupCopyName: String,
+    private val isKept: (File) -> Boolean = { false }
 ) {
     private val source = File(dir, sourceName)
     private val nup = File(dir, nupName)
@@ -28,7 +29,7 @@ class WorkFileBackup(
 
     fun restore(): Boolean {
         dir.listFiles()?.forEach { f ->
-            if (f != sourceCopy && f != nupCopy && f != source && f != nup) {
+            if (f != sourceCopy && f != nupCopy && f != source && f != nup && !isKept(f)) {
                 runCatching { f.delete() }
             }
         }
@@ -60,7 +61,7 @@ class WorkFileBackup(
             WorkFiles.copy(from, to, ensureActive)
             return
         }
-        for (file in from.walkTopDown()) {
+        for (file in from.walkTopDown().onFail { _, error -> throw error }) {
             val target = File(to, file.relativeTo(from).path)
             if (file.isDirectory) {
                 if (!target.isDirectory && !target.mkdirs()) throw IOException("Could not copy ${from.name}")

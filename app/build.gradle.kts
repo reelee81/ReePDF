@@ -1,5 +1,3 @@
-@file:Suppress("UnstableApiUsage")
-
 import java.io.File
 
 plugins {
@@ -29,8 +27,8 @@ android {
         applicationId = "hu.reelee81.reepdf"
         minSdk = 24
         targetSdk = 37
-        versionCode = 5
-        versionName = "0.05"
+        versionCode = 6
+        versionName = "0.06"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -65,11 +63,13 @@ android {
 
     androidResources {
         val locales = parseLocalesConfig(file("src/main/res/xml/locales_config.xml"))
+        @Suppress("UnstableApiUsage")
         localeFilters += locales
     }
 
     bundle {
         language {
+            @Suppress("UnstableApiUsage")
             enableSplit = false
         }
     }

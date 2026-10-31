@@ -271,6 +271,9 @@ class MainActivity : AppCompatActivity() {
         private const val OPEN_WITH_ROWS = 2
         private const val OPEN_WITH_ANIMATION_MS = 200L
         private const val OPEN_WITH_TABLET_MIN_DP = 600
+
+        private val pendingIncomingFiles = HashSet<String>()
+        private var incomingSequence = 0L
     }
 
     private class ThumbRestore(val targetIndex: Int?, val offsetPx: Int, val selected: Set<Int>?)
@@ -279,8 +282,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var viewModel: PageItemsViewModel
     private lateinit var adapter: ThumbnailAdapter
     private lateinit var timeStamp: String
-    private val pendingIncomingFiles = HashSet<String>()
-    private var incomingSequence = 0L
     private lateinit var pdfPickerLauncher: ActivityResultLauncher<Intent>
     private lateinit var pdfViewerLauncher: ActivityResultLauncher<Intent>
     private lateinit var signaturesDir: File
@@ -1163,7 +1164,9 @@ class MainActivity : AppCompatActivity() {
     private fun nupTempFile(): File = File(cacheDir, NUP_TEMP_NAME)
 
     private fun workFileBackup(): WorkFileBackup =
-        WorkFileBackup(cacheDir, SOURCE_TEMP_NAME, NUP_TEMP_NAME, SOURCE_TEMP_COPY_NAME, NUP_TEMP_COPY_NAME)
+        WorkFileBackup(cacheDir, SOURCE_TEMP_NAME, NUP_TEMP_NAME, SOURCE_TEMP_COPY_NAME, NUP_TEMP_COPY_NAME) { f ->
+            synchronized(pendingIncomingFiles) { f.name in pendingIncomingFiles }
+        }
 
     private fun scheduleUiModeRecreate() {
         if (isFinishing || isDestroyed) return

@@ -5,6 +5,7 @@ import com.itextpdf.io.font.PdfEncodings
 import com.itextpdf.io.source.PdfTokenizer
 import com.itextpdf.io.source.RandomAccessFileOrArray
 import com.itextpdf.io.source.RandomAccessSourceFactory
+import com.itextpdf.kernel.geom.PageSize
 import com.itextpdf.kernel.geom.Rectangle
 import com.itextpdf.kernel.pdf.IPdfPageExtraCopier
 import com.itextpdf.kernel.pdf.PdfArray
@@ -26,7 +27,8 @@ import java.io.IOException
 
 class PdfVisibleAppearanceCopier(
     private val cacheDir: File,
-    private val onMissingAppearance: () -> Unit = {}
+    private val onMissingAppearance: () -> Unit = {},
+    private val generateAppearances: (input: File, output: File) -> Unit = PdfMuPdfAnnotationAppearances::generate
 ) : IPdfPageExtraCopier {
     override fun copy(fromPage: PdfPage, toPage: PdfPage) {
         val visible = PdfCopySupport.repairInvalidBoxes(toPage)
@@ -41,26 +43,31 @@ class PdfVisibleAppearanceCopier(
         }
         var canvas: PdfCanvas? = null
         fun contentCanvas(): PdfCanvas = canvas ?: PdfCanvas(toPage, true).also { canvas = it }
+        val generated = generateMissingAppearances(annotations, optionalContent, toPage)
 
         try {
             for (index in 0 until annotations.size()) {
                 val annotation = annotations.getAsDictionary(index) ?: continue
+                val rect = paintedRect(annotation, optionalContent) ?: continue
                 val subtype = annotation.getAsName(PdfName.Subtype)
-                if (subtype == PdfName.Popup || subtype == PdfName.Link) continue
-                if (optionalContent?.isHidden(annotation.getAsDictionary(PdfName.OC)) == true) continue
                 val flags = annotation.getAsNumber(PdfName.F)?.intValue() ?: 0
-                if (flags and FLAG_INVISIBLE != 0 && subtype !in standardSubtypes) continue
                 val printable = flags and FLAG_PRINT != 0
                 val hidden = flags and FLAG_HIDDEN != 0
-                if (hidden && !printable) continue
-                if (subtype != PdfName.Widget && !printable) continue
-                val rect = annotation.getAsArray(PdfName.Rect)?.toRectangle() ?: continue
-                if (!validRectangle(rect)) continue
 
                 val appearance = normalAppearance(annotation)
                 if (appearance != null) {
                     drawAppearance(appearance, rect, contentCanvas(), toPage.document, subtype == PdfName.Widget)
-                } else if (subtype == PdfName.Widget && printable && !hidden) {
+                } else if (subtype != PdfName.Widget) {
+                    if (!hasNoNormalAppearance(annotation)) continue
+                    val made = generated?.annotations?.get(index)
+                    val madeAppearance = made?.let(::normalAppearance)
+                    val madeRect = made?.getAsArray(PdfName.Rect)?.toRectangle()?.takeIf(::validRectangle)
+                    if (madeAppearance != null && madeRect != null) {
+                        drawAppearance(madeAppearance, madeRect, contentCanvas(), toPage.document)
+                    } else {
+                        onMissingAppearance()
+                    }
+                } else if (printable && !hidden) {
                     val normal = annotation.getAsDictionary(PdfName.AP)?.getAsDictionary(PdfName.N)
                     if (normal?.get(appearanceState(annotation, normal)) is PdfName) continue
                     val fieldType = inherited(annotation, PdfName.FT)
@@ -76,10 +83,96 @@ class PdfVisibleAppearanceCopier(
                 }
             }
         } finally {
-            canvas?.release()
+            try {
+                canvas?.release()
+            } finally {
+                generated?.close(toPage.document)
+            }
         }
 
         toPage.pdfObject.remove(PdfName.Annots)
+    }
+
+    private fun paintedRect(annotation: PdfDictionary, optionalContent: PdfOptionalContentFilter?): Rectangle? {
+        val subtype = annotation.getAsName(PdfName.Subtype)
+        if (subtype == PdfName.Popup || subtype == PdfName.Link) return null
+        if (optionalContent?.isHidden(annotation.getAsDictionary(PdfName.OC)) == true) return null
+        val flags = annotation.getAsNumber(PdfName.F)?.intValue() ?: 0
+        if (flags and FLAG_INVISIBLE != 0 && subtype !in standardSubtypes) return null
+        val printable = flags and FLAG_PRINT != 0
+        val hidden = flags and FLAG_HIDDEN != 0
+        if (hidden && !printable) return null
+        if (subtype != PdfName.Widget && !printable) return null
+        return annotation.getAsArray(PdfName.Rect)?.toRectangle()?.takeIf(::validRectangle)
+    }
+
+    private fun hasNoNormalAppearance(annotation: PdfDictionary): Boolean =
+        annotation.getAsDictionary(PdfName.AP)?.get(PdfName.N) == null
+
+    private class GeneratedAppearances(
+        val document: PdfDocument,
+        val annotations: Map<Int, PdfDictionary>,
+        private val files: List<File>
+    ) {
+        fun close(destination: PdfDocument) {
+            try {
+                destination.flushCopiedObjects(document)
+            } finally {
+                try {
+                    document.close()
+                } finally {
+                    files.forEach { it.delete() }
+                }
+            }
+        }
+    }
+
+    private fun generateMissingAppearances(
+        annotations: PdfArray,
+        optionalContent: PdfOptionalContentFilter?,
+        toPage: PdfPage
+    ): GeneratedAppearances? {
+        val missing = (0 until annotations.size()).filter { index ->
+            val annotation = annotations.getAsDictionary(index) ?: return@filter false
+            annotation.getAsName(PdfName.Subtype) != PdfName.Widget &&
+                hasNoNormalAppearance(annotation) &&
+                paintedRect(annotation, optionalContent) != null
+        }
+        if (missing.isEmpty()) return null
+        val files = ArrayList<File>()
+        var document: PdfDocument? = null
+        try {
+            val input = File.createTempFile("pdf_annotation_appearance_", ".pdf", cacheDir).also { files += it }
+            val output = File.createTempFile("pdf_annotation_appearance_", ".pdf", cacheDir).also { files += it }
+            PdfDocument(PdfWriter(input.absolutePath)).use { scratch ->
+                val page = scratch.addNewPage(PageSize(toPage.mediaBox))
+                page.setRotation(toPage.rotation)
+                val copied = PdfArray()
+                for (index in missing) {
+                    val source = annotations.getAsDictionary(index)
+                    val annotation = PdfDictionary()
+                    for (key in appearanceKeys) {
+                        source.get(key)?.let { annotation.put(key, it.copyTo(scratch, true)) }
+                    }
+                    annotation.put(PdfName.P, page.pdfObject)
+                    copied.add(annotation.makeIndirect(scratch))
+                }
+                page.pdfObject.put(PdfName.Annots, copied)
+            }
+            generateAppearances(input, output)
+            val opened = PdfDocument(PdfReader(output.absolutePath).setMemorySavingMode(true))
+            document = opened
+            val made = opened.getPage(1).pdfObject.getAsArray(PdfName.Annots)
+            val byIndex = HashMap<Int, PdfDictionary>()
+            missing.forEachIndexed { position, index ->
+                if (made != null && position < made.size()) made.getAsDictionary(position)?.let { byIndex[index] = it }
+            }
+            return GeneratedAppearances(opened, byIndex, files)
+        } catch (_: Exception) {
+            runCatching { document?.close() }
+            files.forEach { it.delete() }
+            return null
+        }
     }
 
     private var optionalContentSource: PdfDocument? = null
@@ -246,6 +339,11 @@ class PdfVisibleAppearanceCopier(
             "Sound", "Movie", "Screen", "Widget", "PrinterMark", "TrapNet", "Watermark", "3D", "Redact",
             "Projection", "RichMedia"
         ).map(::PdfName).toSet()
+        val appearanceKeys = listOf(
+            "Type", "Subtype", "Rect", "Contents", "F", "BS", "Border", "BE", "C", "IC", "CA", "ca",
+            "QuadPoints", "InkList", "L", "LE", "LL", "LLE", "LLO", "Cap", "CP", "CO", "IT", "Vertices",
+            "Path", "RD", "DA", "DS", "Q", "RC", "Name", "Open", "State", "StateModel", "Rotate"
+        ).map(::PdfName)
         val inheritedFieldKeys = arrayOf(
             PdfName.FT, PdfName.Ff, PdfName.V, PdfName.DV, PdfName.DA, PdfName.Q,
             PdfName.MaxLen, PdfName.Opt, PdfName.I, PdfName.TI, PdfName.DS, PdfName.RV
