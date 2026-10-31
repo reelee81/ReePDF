@@ -4,6 +4,7 @@ import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -95,6 +96,63 @@ class WorkFileBackupTest {
         assertEquals("first", File(source, "0001.pdf").readText())
         assertEquals("second", File(source, "0002.pdf").readText())
         assertEquals("nup", File(dir, "nup.pdf").readText())
+    }
+
+    @Test
+    fun aFailedBackupThrowsLeavesNoCopiesAndKeepsTheWorkFiles() {
+        val dir = temp.newFolder()
+        val source = File(dir, "source").apply { mkdirs() }
+        File(source, "0001.pdf").writeText("first")
+        val unreadable = File(source, "0002.pdf").apply { writeText("second") }
+        File(dir, "nup.pdf").writeText("nup")
+        File(dir, "nup_copy.pdf").writeText("an older layout copy")
+        assumeTrue(unreadable.setReadable(false) && !unreadable.canRead())
+        val backup = WorkFileBackup(dir, "source", "nup.pdf", "source_copy", "nup_copy.pdf")
+
+        try {
+            assertTrue(runCatching { backup.backup() }.isFailure)
+        } finally {
+            unreadable.setReadable(true)
+        }
+
+        assertEquals(setOf("source", "nup.pdf"), dir.list()!!.toSet())
+        assertEquals(setOf("0001.pdf", "0002.pdf"), source.list()!!.toSet())
+        assertEquals("nup", File(dir, "nup.pdf").readText())
+    }
+
+    @Test
+    fun aBackupWithoutALayoutDropsAnOlderLayoutCopy() {
+        val dir = temp.newFolder()
+        File(dir, "source.pdf").writeText("source")
+        File(dir, "nup_copy.pdf").writeText("an older layout copy")
+        val backup = backupIn(dir)
+
+        backup.backup()
+        File(dir, "nup.pdf").writeText("new layout")
+
+        assertFalse(backup.restore())
+        assertEquals(setOf("source.pdf"), dir.list()!!.toSet())
+    }
+
+    @Test
+    fun aRestoreKeepsTheCopyWhenTheWorkFileCannotBeReplaced() {
+        val dir = temp.newFolder()
+        File(dir, "source.pdf").writeText("source")
+        File(dir, "nup.pdf").writeText("nup")
+        val backup = backupIn(dir)
+        backup.backup()
+        File(dir, "nup.pdf").delete()
+        val blocked = File(dir, "nup.pdf").apply { mkdirs() }
+        val locked = File(blocked, "inner").apply { mkdirs() }.resolve("part.pdf").apply { writeText("x") }
+        assumeTrue(locked.parentFile!!.setWritable(false))
+
+        try {
+            assertFalse(backup.restore())
+            assertEquals("nup", File(dir, "nup_copy.pdf").readText())
+        } finally {
+            locked.parentFile!!.setWritable(true)
+        }
+        assertEquals("source", File(dir, "source.pdf").readText())
     }
 
     @Test

@@ -9,7 +9,7 @@ fun interface SignedPageRenderer {
     interface Pages : Closeable {
         val pageCount: Int
 
-        fun render(pageIndex: Int, signature: Signature): RgbImage?
+        fun render(pageIndex: Int, signature: Signature): RgbImage
     }
 
     class Signature(

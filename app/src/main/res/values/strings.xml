@@ -130,6 +130,7 @@
     <string name="msg_prefs_loaded_success">Profile settings loaded successfully.</string>
     <string name="msg_prefs_load_failed">Load failed: %1$s</string>
     <string name="error_invalid_prefs_file">Invalid file: missing &quot;%1$s&quot; settings map.</string>
+    <string name="error_invalid_prefs_value">Invalid file: wrong value for &quot;%1$s&quot;.</string>
     <string name="output_stream_is_null">OutputStream is null</string>
     <string name="bitmap_region_decoder_init_failed">BitmapRegionDecoder init failed</string>
     <string name="decode_region_returned_null_at">decodeRegion returned null at y=%1$d</string>

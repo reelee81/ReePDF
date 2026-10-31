@@ -75,18 +75,35 @@ class PdfSignOperationTest {
     }
 
     @Test
-    fun anUndecodableSignatureAndAMissingPageLeaveTheSourceAlone() {
+    fun aMissingPageLeavesTheSourceAlone() {
         writeMarkedSource(5)
-        val renderer = FakeRenderer(pageCount = 3, undecodable = setOf(1))
+        val renderer = FakeRenderer(pageCount = 3)
 
         val result = runBlocking {
-            operation(renderer, nupIndices = listOf(1, 7), rotation = intArrayOf(1, 2, 3, 0, 1)).execute {}
+            operation(renderer, nupIndices = listOf(7), rotation = intArrayOf(1, 2, 3, 0, 1)).execute {}
         }
 
         assertEquals(listOf(200f, 201f, 202f, 203f, 204f), pageWidths(source()))
         assertArrayEquals(intArrayOf(1, 2, 3, 0, 1), result.rotation)
-        assertEquals(listOf(1), renderer.rendered)
+        assertEquals(emptyList<Int>(), renderer.rendered)
         assertEquals(3, pageCount(nup()))
+    }
+
+    @Test
+    fun anUndecodableSignatureFailsTheSigningAndRestoresTheWorkFiles() {
+        writeMarkedSource(5)
+        nup().writeText("old layout")
+        val renderer = FakeRenderer(pageCount = 3, undecodable = setOf(1))
+
+        val failure = runCatching { runBlocking { operation(renderer, nupIndices = listOf(0, 1)).execute {} } }.exceptionOrNull()
+
+        assertNotNull(failure)
+        assertEquals(listOf(0, 1), renderer.rendered)
+        assertEquals(listOf(200f, 201f, 202f, 203f, 204f), pageWidths(source()))
+        assertEquals("old layout", nup().readText())
+        assertFalse(File(dir, "source_temp_copy").exists())
+        assertFalse(File(dir, "nup_temp_copy.pdf").exists())
+        assertTrue(dir.listFiles().orEmpty().none { it.name.startsWith("signed_") })
     }
 
     @Test
@@ -194,10 +211,10 @@ class PdfSignOperationTest {
             override val pageCount: Int
                 get() = this@FakeRenderer.pageCount
 
-            override fun render(pageIndex: Int, signature: SignedPageRenderer.Signature): SignedPageRenderer.RgbImage? {
+            override fun render(pageIndex: Int, signature: SignedPageRenderer.Signature): SignedPageRenderer.RgbImage {
                 rendered += pageIndex
                 signatures += signature
-                if (pageIndex in undecodable) return null
+                check(pageIndex !in undecodable) { "Undecodable signature" }
                 val width = if (signature.isLandscape) 42 else 30
                 val height = if (signature.isLandscape) 30 else 42
                 return SignedPageRenderer.RgbImage(width, height, ByteArray(width * height * 3) { -1 })

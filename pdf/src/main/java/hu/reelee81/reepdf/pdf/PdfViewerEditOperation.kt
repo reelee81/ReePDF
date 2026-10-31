@@ -7,6 +7,7 @@ import hu.reelee81.reepdf.core.ProgressMath
 import hu.reelee81.reepdf.core.ProgressNotifyPacing
 import hu.reelee81.reepdf.core.ProgressTicker
 import hu.reelee81.reepdf.core.SourcePageArrays
+import hu.reelee81.reepdf.core.WorkFiles
 import java.io.File
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Duration.Companion.milliseconds
@@ -136,8 +137,7 @@ class PdfViewerEditOperation(
             progressStage = tracker::stage,
             warn = warn
         )
-        if (files.nup.exists()) files.nup.delete()
-        work.renameTo(files.nup)
+        WorkFiles.replace(work, files.nup)
 
         return PdfLayoutChangeOperation.Result(
             input.crops, rotation, position, input.defaultPosition, input.config,

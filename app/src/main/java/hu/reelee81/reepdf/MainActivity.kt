@@ -31,6 +31,7 @@ import android.os.StrictMode
 import android.os.SystemClock
 import android.print.PrintAttributes
 import android.print.PrintManager
+import android.provider.DocumentsContract
 import android.provider.OpenableColumns
 import android.provider.Settings
 import android.text.Editable
@@ -172,6 +173,7 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -6292,22 +6294,33 @@ class MainActivity : AppCompatActivity() {
         val notFound = getString(R.string.temporary_pdf_not_found)
         val streamNull = getString(R.string.input_stream_is_null)
         val saveSelection = selectionSaver(selectedNupIndices())
+        val discardTarget: suspend () -> Unit = {
+            withContext(Dispatchers.IO) { runCatching { DocumentsContract.deleteDocument(resolver, uri) } }
+        }
 
-        startOperation(PdfOperationKind.SAVE_WRITE, getString(R.string.in_progress_save), onCancelled = {}) {
+        startOperation(PdfOperationKind.SAVE_WRITE, getString(R.string.in_progress_save), onCancelled = discardTarget) {
             withContext(Dispatchers.IO) {
-                saveSelection()
-                if (source == null || !source.exists()) throw IllegalStateException(notFound)
+                try {
+                    saveSelection()
+                    if (source == null || !source.exists()) throw IllegalStateException(notFound)
 
-                resolver.openOutputStream(uri)?.use { out ->
-                    FileInputStream(source).use { inp ->
-                        val buffer = ByteArray(16 * 1024)
-                        var read: Int
-                        while (inp.read(buffer).also { read = it } > 0) {
-                            out.write(buffer, 0, read)
+                    resolver.openOutputStream(uri)?.use { out ->
+                        FileInputStream(source).use { inp ->
+                            val buffer = ByteArray(16 * 1024)
+                            var read: Int
+                            while (inp.read(buffer).also { read = it } > 0) {
+                                ensureActive()
+                                out.write(buffer, 0, read)
+                            }
+                            out.flush()
                         }
-                        out.flush()
-                    }
-                } ?: throw IOException(streamNull)
+                    } ?: throw IOException(streamNull)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    discardTarget()
+                    throw e
+                }
                 null
             }
         }
@@ -7023,6 +7036,7 @@ class MainActivity : AppCompatActivity() {
         val sw = StringWriter()
 
         serializer.setOutput(sw)
+        serializer.setFeature("http://xmlpull.org/v1/doc/features.html#indent-output", true)
         serializer.startDocument("UTF-8", true)
         serializer.startTag(null, "preferences")
 
@@ -7104,28 +7118,34 @@ class MainActivity : AppCompatActivity() {
 
         var foundTargetMap = false
 
-        val allowedKeys = setOf(
+        val stringKeys = setOf(
             KEY_REEPROFILE1_ROWS, KEY_REEPROFILE2_ROWS,
             KEY_REEPROFILE1_COLUMNS, KEY_REEPROFILE2_COLUMNS,
-            KEY_REEPROFILE1_SCALE, KEY_REEPROFILE2_SCALE,
-            KEY_REEPROFILE1_FIT, KEY_REEPROFILE2_FIT, KEY_REEPROFILE1_POSITION, KEY_REEPROFILE2_POSITION,
-            KEY_REEPROFILE1_CROP, KEY_REEPROFILE2_CROP,
             KEY_REEPROFILE1_MARGIN, KEY_REEPROFILE2_MARGIN,
-            KEY_REEPROFILE1_ORIENTATION, KEY_REEPROFILE2_ORIENTATION,
-            KEY_REEPROFILE1_DRAW_FRAME, KEY_REEPROFILE2_DRAW_FRAME,
             KEY_REEPROFILE1_SIG_POS_PORTRAIT_X, KEY_REEPROFILE2_SIG_POS_PORTRAIT_X,
             KEY_REEPROFILE1_SIG_POS_PORTRAIT_Y, KEY_REEPROFILE2_SIG_POS_PORTRAIT_Y,
             KEY_REEPROFILE1_SIG_POS_LANDSCAPE_X, KEY_REEPROFILE2_SIG_POS_LANDSCAPE_X,
             KEY_REEPROFILE1_SIG_POS_LANDSCAPE_Y, KEY_REEPROFILE2_SIG_POS_LANDSCAPE_Y,
-            KEY_REEPROFILE1_PASSWORD_OUT, KEY_REEPROFILE2_PASSWORD_OUT,
             KEY_REEPROFILE1_FILE_NAME_TEMPLATE, KEY_REEPROFILE2_FILE_NAME_TEMPLATE,
-            KEY_REEPROFILE1_SIG_DPI_INDEX, KEY_REEPROFILE2_SIG_DPI_INDEX,
+            KEY_LAST_LOADED_PROFILE
+        )
+        val booleanKeys = setOf(
+            KEY_REEPROFILE1_SCALE, KEY_REEPROFILE2_SCALE,
+            KEY_REEPROFILE1_FIT, KEY_REEPROFILE2_FIT,
+            KEY_REEPROFILE1_CROP, KEY_REEPROFILE2_CROP,
+            KEY_REEPROFILE1_ORIENTATION, KEY_REEPROFILE2_ORIENTATION,
+            KEY_REEPROFILE1_DRAW_FRAME, KEY_REEPROFILE2_DRAW_FRAME,
+            KEY_REEPROFILE1_PASSWORD_OUT, KEY_REEPROFILE2_PASSWORD_OUT,
             KEY_REEPROFILE1_SCAN_EFFECT, KEY_REEPROFILE2_SCAN_EFFECT,
             KEY_REEPROFILE1_GRAYSCALE, KEY_REEPROFILE2_GRAYSCALE,
-            KEY_LAST_SIG_DPI_INDEX, KEY_LAST_SCAN_EFFECT, KEY_LAST_GRAYSCALE,
-            KEY_LAST_INNER_PDF_READER, KEY_LAST_LOADED_PROFILE,
-            KEY_RESTORE_LOCK_UNTIL_RELOAD, KEY_FIRST_RUN_INITIALIZED
+            KEY_LAST_SCAN_EFFECT, KEY_LAST_GRAYSCALE,
+            KEY_LAST_INNER_PDF_READER, KEY_RESTORE_LOCK_UNTIL_RELOAD, KEY_FIRST_RUN_INITIALIZED
         )
+        val positionKeys = setOf(KEY_REEPROFILE1_POSITION, KEY_REEPROFILE2_POSITION)
+        val dpiIndexKeys = setOf(KEY_REEPROFILE1_SIG_DPI_INDEX, KEY_REEPROFILE2_SIG_DPI_INDEX, KEY_LAST_SIG_DPI_INDEX)
+
+        fun invalid(key: String): Nothing =
+            throw IllegalArgumentException(getString(R.string.error_invalid_prefs_value, key))
 
         var event = parser.eventType
         while (event != XmlPullParser.END_DOCUMENT) {
@@ -7171,17 +7191,25 @@ class MainActivity : AppCompatActivity() {
                                 val valueText = textBuf.toString()
 
                                 if (key != null && type != null && editor != null) {
-                                    if (allowedKeys.contains(key)) {
-                                        when (type) {
-                                            "string"     -> editor.putString(key, valueText)
-                                            "int"        -> editor.putInt(key, valueText.toIntOrNull() ?: 0)
-                                            "long"       -> editor.putLong(key, valueText.toLongOrNull() ?: 0L)
-                                            "float"      -> editor.putFloat(key, valueText.toFloatOrNull() ?: 0f)
-                                            "boolean"    -> editor.putBoolean(key, valueText.equals("true", ignoreCase = true))
-                                            "string_set" -> {
-                                                val set = if (valueText.isEmpty()) emptySet() else valueText.split('\u0001').toSet()
-                                                editor.putStringSet(key, set)
-                                            }
+                                    when (key) {
+                                        in stringKeys -> {
+                                            if (type != "string") invalid(key)
+                                            editor.putString(key, valueText)
+                                        }
+                                        in booleanKeys -> {
+                                            val value = valueText.lowercase(Locale.ROOT).toBooleanStrictOrNull()
+                                            if (type != "boolean" || value == null) invalid(key)
+                                            editor.putBoolean(key, value)
+                                        }
+                                        in positionKeys -> {
+                                            val value = valueText.toIntOrNull()
+                                            if (type != "int" || value == null || validPosition(value) != value) invalid(key)
+                                            editor.putInt(key, value)
+                                        }
+                                        in dpiIndexKeys -> {
+                                            val value = valueText.toIntOrNull()
+                                            if (type != "int" || value == null || value !in 0..1) invalid(key)
+                                            editor.putInt(key, value)
                                         }
                                     }
                                 }

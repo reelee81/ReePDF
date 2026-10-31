@@ -129,6 +129,7 @@
     <string name="msg_prefs_loaded_success">Profilbeállítások sikeresen betöltve.</string>
     <string name="msg_prefs_load_failed">Betöltés sikertelen: %1$s</string>
     <string name="error_invalid_prefs_file">Érvénytelen fájl: hiányzik a &quot;%1$s&quot; beállítások térképe.</string>
+    <string name="error_invalid_prefs_value">Érvénytelen fájl: hibás érték a(z) &quot;%1$s&quot; kulcsnál.</string>
     <string name="output_stream_is_null">OutputStream null-t adott</string>
     <string name="bitmap_region_decoder_init_failed">A BitmapRegionDecoder inicializálása sikertelen</string>
     <string name="decode_region_returned_null_at">A decodeRegion null-t adott vissza, y=%1$d</string>

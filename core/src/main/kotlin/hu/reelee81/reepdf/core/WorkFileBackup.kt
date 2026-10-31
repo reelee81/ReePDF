@@ -3,6 +3,7 @@ package hu.reelee81.reepdf.core
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
+import java.io.IOException
 
 class WorkFileBackup(
     private val dir: File,
@@ -17,44 +18,43 @@ class WorkFileBackup(
     private val nupCopy = File(dir, nupCopyName)
 
     fun backup() {
-        if (source.exists()) {
-            runCatching { copy(source, sourceCopy) }
-        }
-
-        if (nup.exists()) {
-            runCatching { copy(nup, nupCopy) }
+        discardCopies()
+        try {
+            if (source.exists()) copy(source, sourceCopy)
+            if (nup.exists()) copy(nup, nupCopy)
+        } catch (e: Exception) {
+            runCatching { discardCopies() }
+            throw e
         }
     }
 
     fun restore(): Boolean {
-        var restoredNupBackup = false
-
         dir.listFiles()?.forEach { f ->
-            if (f != sourceCopy && f != nupCopy) {
-                runCatching { if (f == source || f == nup) f.deleteRecursively() else f.delete() }
+            if (f != sourceCopy && f != nupCopy && f != source && f != nup) {
+                runCatching { f.delete() }
             }
         }
 
-        if (sourceCopy.exists()) {
-            runCatching { copy(sourceCopy, source) }
+        putBack(sourceCopy, source)
+        return putBack(nupCopy, nup)
+    }
 
-            runCatching { sourceCopy.deleteRecursively() }
+    private fun putBack(copy: File, target: File): Boolean {
+        if (!copy.exists()) {
+            runCatching { target.deleteRecursively() }
+            return false
         }
+        if (target.exists() && !target.deleteRecursively()) return false
+        return copy.renameTo(target)
+    }
 
-        if (nupCopy.exists()) {
-            runCatching { copy(nupCopy, nup) }.onSuccess {
-                restoredNupBackup = true
-            }
-
-            runCatching { nupCopy.deleteRecursively() }
-        }
-
-        return restoredNupBackup
+    private fun discardCopies() {
+        if (sourceCopy.exists() && !sourceCopy.deleteRecursively()) throw IOException("Could not delete ${sourceCopy.name}")
+        if (nupCopy.exists() && !nupCopy.deleteRecursively()) throw IOException("Could not delete ${nupCopy.name}")
     }
 
     private fun copy(from: File, to: File) {
         if (from.isDirectory) {
-            to.deleteRecursively()
             check(from.copyRecursively(to)) { "Could not copy ${from.name}" }
             return
         }

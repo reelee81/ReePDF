@@ -25,7 +25,7 @@ class MuPdfSignedPageRenderer(
         private val layout: File,
         override val pageCount: Int
     ) : SignedPageRenderer.Pages {
-        override fun render(pageIndex: Int, signature: SignedPageRenderer.Signature): SignedPageRenderer.RgbImage? {
+        override fun render(pageIndex: Int, signature: SignedPageRenderer.Signature): SignedPageRenderer.RgbImage {
             val single = File(layout.absoluteFile.parentFile, "${layout.name}.page.pdf")
             try {
                 PdfPageExtract.write(layout, pageIndex + 1, single)
@@ -45,7 +45,7 @@ class MuPdfSignedPageRenderer(
         override fun close() {}
     }
 
-    private fun renderPage(page: Page, idx: Int, signature: SignedPageRenderer.Signature): SignedPageRenderer.RgbImage? {
+    private fun renderPage(page: Page, idx: Int, signature: SignedPageRenderer.Signature): SignedPageRenderer.RgbImage {
         val bounds = page.bounds
         val raster = SignatureGeometry.pageRaster(
             (bounds.x1 - bounds.x0).toInt(),
@@ -70,7 +70,7 @@ class MuPdfSignedPageRenderer(
             signature.yMm,
             signature.isLandscape
         )
-        if (!drawSignature(rgb, width, height, signature.file, placement, idx)) return null
+        drawSignature(rgb, width, height, signature.file, placement, idx)
 
         if (signature.scanEffect) SignedPageEffects.scanEffect(rgb, width, height)
 
@@ -106,19 +106,18 @@ class MuPdfSignedPageRenderer(
         file: File,
         placement: SignatureGeometry.Placement,
         idx: Int
-    ): Boolean {
+    ) {
         val decoded = try {
             MuPdfSignatureImage.read(file)
         } catch (e: Exception) {
             warn("Signature decode failed at page $idx", e)
-            return false
+            throw e
         }
         SignedPageEffects.drawNearest(
             rgb, width, height,
             SignedPageEffects.subsample(decoded, placement.sampleSize),
             placement.left, placement.top, placement.width, placement.height
         )
-        return true
     }
 
     private fun packed(pixmap: Pixmap, width: Int, height: Int): ByteArray {

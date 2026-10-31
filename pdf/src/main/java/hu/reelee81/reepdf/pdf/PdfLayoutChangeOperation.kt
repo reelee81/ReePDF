@@ -14,6 +14,7 @@ import hu.reelee81.reepdf.core.SourcePageArrays
 import hu.reelee81.reepdf.core.SourcePageRuns
 import hu.reelee81.reepdf.core.SourcePartPlan
 import hu.reelee81.reepdf.core.WorkFileBackup
+import hu.reelee81.reepdf.core.WorkFiles
 import java.io.File
 import java.io.FileNotFoundException
 import kotlin.coroutines.cancellation.CancellationException
@@ -121,8 +122,7 @@ class PdfLayoutChangeOperation(
                     progressStage = tracker::stage,
                     warn = warn
                 )
-                if (files.nup.exists()) files.nup.delete()
-                work.renameTo(files.nup)
+                WorkFiles.replace(work, files.nup)
 
                 Built(crops, rotation, position, pageSizes, selectedAfter(total))
             } catch (e: CancellationException) {
