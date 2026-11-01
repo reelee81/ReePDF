@@ -142,7 +142,7 @@ The app does not collect, store or transmit any personal data to a server. Detai
 
 - Minimum SDK: 24
 - Target / Compile SDK: 37
-- Android Gradle Plugin: 9.4.x
+- Android Gradle Plugin: 9.5.x
 - Java / Kotlin toolchain: 21
 
 Typical build commands:

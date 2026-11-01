@@ -162,13 +162,10 @@
     <string name="erase_all_pdf_edits_confirm">Törlöd a mentett szerkesztéseket minden lapról?</string>
     <string name="pdf_edits_erasing">Szerkesztések törlése</string>
     <string name="pdf_edits_erase_failed">A szerkesztések törlése sikertelen: %1$s</string>
-    <string name="about_app">Alkalmazás névjegye</string>
-    <string name="about_readme">Leírás:</string>
-    <string name="about_privacy">Adatvédelem:</string>
-    <string name="about_license">Licenc:</string>
-    <string name="about_third_party">Harmadik féltől származó licencek:</string>
-    <string name="about_source">Az AGPL előírása szerint az app forráskódja:</string>
-    <string name="about_contact">Kapcsolat:</string>
     <string name="no_app_can_open_link">Nincs olyan alkalmazás, ami meg tudja nyitni a linket</string>
-    <string name="no_email_app">Nincs e-mail-küldő alkalmazás</string>
+    <string name="copy_text">MÁSOLÁS</string>
+    <string name="farewell_title">Értesítés</string>
+    <string name="farewell_text">Kedves Felhasználók!\n\nEzúton értesítelek benneteket, hogy a PDF Címkenyomtatás közzététele 2026. november 10-éig megszűnik a Google Play áruházban és a GitHubon (így több frissítés már nem érkezik hozzá). ReePDF néven, új alkalmazásazonosítóval azonban továbbra is ingyenesen és reklámmentesen elérhető lesz az áruházban.\n\nOkok:\n• Az alkalmazás túlnőtt a neve által sugallt elvárásokon.\n• Multiplatformos fejlesztés kialakítása.\n\nHátrány:\n• A PDF Címkenyomtatással létrehozott felhasználói beállítások sajnos nem importálhatók a ReePDF-be.\n\nA ReePDF előnyei:\n• A PDF Címkenyomtatásban bevezetett és megismert összes funkció megmarad, csak jobban optimalizálva.\n• Egyszerűbb, átláthatóbb, gyorsabban kezelhető felület.\n• Automatikus kötegfeldolgozás (már nem kell kézzel beállítani) alacsony memóriahasználat mellett, akár 10 000 oldal fölött is.\n• Feldolgozás közben sokkal kisebb hardverterhelés.\n• Gyorsabb és stabilabb működés.\n• Hatékonyabb javítás a hibás PDF-dokumentumok importálásakor.\n• Rengeteg hibajavítás.\n\nRemélem, a ReePDF-et is ugyanolyan hasznosnak találjátok majd, mint a mostanit. Azonnal közzéteszem, amint a PDF Címkenyomtatás lekerül az áruházból.\n\nA ReePDF itt lesz elérhető:</string>
+    <string name="farewell_thanks">Megértéseteket köszönöm.</string>
+    <string name="farewell_copied">A szöveg a vágólapra került</string>
 </resources>

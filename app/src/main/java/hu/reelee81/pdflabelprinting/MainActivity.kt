@@ -2,6 +2,8 @@ package hu.reelee81.pdflabelprinting
 
 import android.annotation.SuppressLint
 import android.app.UiModeManager
+import android.content.ClipboardManager
+import android.content.ClipData
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -1087,6 +1089,11 @@ class MainActivity : AppCompatActivity() {
             override fun handleOnBackPressed() {
 
                 if (::binding.isInitialized) {
+                    if (binding.overlayDialogFarewell.isVisible) {
+                        binding.overlayDialogFarewell.performClick()
+                        return
+                    }
+
                     if (binding.overlayProgressDialog.isVisible || binding.overlayProgressDialogUpdateUi.isVisible) {
                         return
                     }
@@ -1116,11 +1123,6 @@ class MainActivity : AppCompatActivity() {
                         return
                     }
 
-                    if (binding.overlayDialogAbout.isVisible) {
-                        binding.overlayDialogAbout.performClick()
-                        return
-                    }
-
                     if (binding.overlayDialogOpenWith.isVisible) {
                         binding.overlayDialogOpenWith.performClick()
                         return
@@ -1145,6 +1147,10 @@ class MainActivity : AppCompatActivity() {
                 finishAndRemoveTask()
             }
         })
+
+        if (isFirstCreate || savedInstanceState?.getBoolean("state_farewell_visible") == true) {
+            showFarewellDialog()
+        }
     }
 
     private fun clearCacheDir() {
@@ -1207,13 +1213,13 @@ class MainActivity : AppCompatActivity() {
             binding.overlayDialogSignatureChooserPanel,
             binding.overlayDialogTimestampPanel,
             binding.overlayDialogBatteryOptimizationPanel,
-            binding.overlayDialogAboutPanel,
             binding.overlayDialogOpenWithPanel,
             binding.overlayDialogPositionOnPagePanel,
             binding.overlayDialogPdfCropPanel,
             binding.overlayDialogMaxCoordinatesPanel,
             binding.overlayProgressDialogPanel,
-            binding.overlayProgressDialogUpdateUiPanel
+            binding.overlayProgressDialogUpdateUiPanel,
+            binding.overlayDialogFarewellPanel
         ).forEach { updateMatchConstraintMaxWidth(it, maxPxOverlay) }
     }
 
@@ -1399,6 +1405,7 @@ class MainActivity : AppCompatActivity() {
         lastNamedExport?.let { outState.putString("state_last_named_export", it.absolutePath) }
         pendingSaveNamedPath?.let { outState.putString("state_pending_save_path", it) }
         pendingSaveNamedDisplayName?.let { outState.putString("state_pending_save_name", it) }
+        if (binding.overlayDialogFarewell.isVisible) outState.putBoolean("state_farewell_visible", true)
 
         runCatching {
             val lm = binding.rvThumbnails.layoutManager as? LinearLayoutManager
@@ -6825,21 +6832,16 @@ class MainActivity : AppCompatActivity() {
                 true
             }
 
-            R.id.action_about -> {
-                showAboutDialog()
-                true
-            }
-
             else -> super.onOptionsItemSelected(item)
         }
     }
 
-    private fun showAboutDialog() {
-        val overlay = binding.overlayDialogAbout
-        val panel = binding.overlayDialogAboutPanel
+    private fun showFarewellDialog() {
+        val overlay = binding.overlayDialogFarewell
+        val panel = binding.overlayDialogFarewellPanel
 
         panel.removeAllViews()
-        val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_about, panel, false)
+        val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_farewell, panel, false)
         panel.addView(dialogView)
 
         overlay.visibility = View.VISIBLE
@@ -6851,34 +6853,28 @@ class MainActivity : AppCompatActivity() {
         panel.setOnClickListener {
         }
 
-        dialogView.findViewById<MaterialTextView>(R.id.about_title).text =
-            getString(R.string.about_title, getString(R.string.app_name), BuildConfig.VERSION_NAME)
-
-        listOf(
-            R.id.about_readme_link to R.string.about_readme_url,
-            R.id.about_privacy_link to R.string.about_privacy_url,
-            R.id.about_license_link to R.string.about_license_url,
-            R.id.about_third_party_link to R.string.about_third_party_url,
-            R.id.about_source_link to R.string.about_source_url
-        ).forEach { (viewId, urlId) ->
-            dialogView.findViewById<MaterialTextView>(viewId).setOnClickListener {
-                try {
-                    startActivity(Intent(Intent.ACTION_VIEW, getString(urlId).toUri()))
-                } catch (_: Exception) {
-                    Toast.makeText(this, getString(R.string.no_app_can_open_link), Toast.LENGTH_SHORT).show()
-                }
-            }
-        }
-
-        dialogView.findViewById<MaterialTextView>(R.id.about_contact_link).setOnClickListener {
+        dialogView.findViewById<MaterialTextView>(R.id.farewell_link).setOnClickListener {
             try {
-                startActivity(Intent(Intent.ACTION_SENDTO, ("mailto:" + getString(R.string.about_contact_email)).toUri()))
+                startActivity(Intent(Intent.ACTION_VIEW, getString(R.string.farewell_url).toUri()))
             } catch (_: Exception) {
-                Toast.makeText(this, getString(R.string.no_email_app), Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, getString(R.string.no_app_can_open_link), Toast.LENGTH_SHORT).show()
             }
         }
 
-        dialogView.findViewById<Button>(R.id.about_btn_ok)?.setOnClickListener {
+        dialogView.findViewById<Button>(R.id.farewell_btn_copy)?.setOnClickListener {
+            val title = getString(R.string.farewell_title)
+            val text = title + "\n\n" +
+                getString(R.string.farewell_text) + "\n" +
+                getString(R.string.farewell_url) + "\n\n" +
+                getString(R.string.farewell_thanks)
+            val clipboard = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
+            ClipData.newPlainText(title, text).let(clipboard::setPrimaryClip)
+            if (Build.VERSION.SDK_INT <= VERSION_CODES.S_V2) {
+                Toast.makeText(this, getString(R.string.farewell_copied), Toast.LENGTH_SHORT).show()
+            }
+        }
+
+        dialogView.findViewById<Button>(R.id.farewell_btn_ok)?.setOnClickListener {
             overlay.visibility = View.GONE
             overlay.setOnClickListener(null)
         }

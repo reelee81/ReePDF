@@ -835,36 +835,6 @@
     </androidx.constraintlayout.widget.ConstraintLayout>
 
     <androidx.constraintlayout.widget.ConstraintLayout
-        android:id="@+id/overlay_dialog_about"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:background="@color/dialog_overlay_background_color"
-        android:visibility="gone"
-        android:clickable="true"
-        android:focusable="true"
-        android:elevation="@dimen/dp_9999_overlay"
-        android:paddingTop="@dimen/dp_16"
-        android:paddingBottom="@dimen/dp_16"
-        android:paddingLeft="@dimen/dp_16"
-        android:paddingRight="@dimen/dp_16">
-
-        <LinearLayout
-            android:id="@+id/overlay_dialog_about_panel"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:background="@drawable/bg_overlay_dialog_panel"
-            app:layout_constraintLeft_toLeftOf="parent"
-            app:layout_constraintRight_toRightOf="parent"
-            app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintWidth_max="@dimen/dp_9999_overlay">
-
-            <include layout="@layout/dialog_about" />
-        </LinearLayout>
-    </androidx.constraintlayout.widget.ConstraintLayout>
-
-    <androidx.constraintlayout.widget.ConstraintLayout
         android:id="@+id/overlay_dialog_open_with"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
@@ -1010,6 +980,36 @@
             app:layout_constraintWidth_max="@dimen/dp_9999_overlay">
 
             <include layout="@layout/progress_dialog_update_ui" />
+        </LinearLayout>
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/overlay_dialog_farewell"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@color/dialog_overlay_background_color"
+        android:visibility="gone"
+        android:clickable="true"
+        android:focusable="true"
+        android:elevation="@dimen/dp_9999_overlay"
+        android:paddingTop="@dimen/dp_16"
+        android:paddingBottom="@dimen/dp_16"
+        android:paddingLeft="@dimen/dp_16"
+        android:paddingRight="@dimen/dp_16">
+
+        <LinearLayout
+            android:id="@+id/overlay_dialog_farewell_panel"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/bg_overlay_dialog_panel"
+            app:layout_constraintLeft_toLeftOf="parent"
+            app:layout_constraintRight_toRightOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintWidth_max="@dimen/dp_9999_overlay">
+
+            <include layout="@layout/dialog_farewell" />
         </LinearLayout>
     </androidx.constraintlayout.widget.ConstraintLayout>
 

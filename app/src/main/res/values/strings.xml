@@ -163,21 +163,11 @@
     <string name="erase_all_pdf_edits_confirm">Remove saved edits from all pages?</string>
     <string name="pdf_edits_erasing">Removing edits</string>
     <string name="pdf_edits_erase_failed">Removing edits failed: %1$s</string>
-    <string name="about_app">About the app</string>
-    <string name="about_title" translatable="false">%1$s %2$s</string>
-    <string name="about_author" translatable="false">by reelee81</string>
-    <string name="about_readme">Readme:</string>
-    <string name="about_privacy">Privacy:</string>
-    <string name="about_license">License:</string>
-    <string name="about_third_party">Third-party licenses:</string>
-    <string name="about_source">App source code (as required by the AGPL):</string>
-    <string name="about_contact">Contact:</string>
-    <string name="about_readme_url" translatable="false"><u>https://github.com/reelee81/PdfLabelPrinting/blob/main/README.md</u></string>
-    <string name="about_privacy_url" translatable="false"><u>https://github.com/reelee81/PdfLabelPrinting/blob/main/PRIVACY_POLICY.md</u></string>
-    <string name="about_license_url" translatable="false"><u>https://github.com/reelee81/PdfLabelPrinting/blob/main/LICENSE</u></string>
-    <string name="about_third_party_url" translatable="false"><u>https://github.com/reelee81/PdfLabelPrinting/blob/main/THIRD_PARTY_LICENSES.md</u></string>
-    <string name="about_source_url" translatable="false"><u>https://github.com/reelee81/PdfLabelPrinting</u></string>
-    <string name="about_contact_email" translatable="false"><u>reelee81@gmail.com</u></string>
     <string name="no_app_can_open_link">No app can open the link</string>
-    <string name="no_email_app">No email app found</string>
+    <string name="copy_text">COPY</string>
+    <string name="farewell_title">Notice</string>
+    <string name="farewell_text">Dear Users,\n\nI would like to let you know that PDF Label Printing will be withdrawn from the Google Play Store and from GitHub by November 10, 2026 (so it will not receive any more updates). However, it will remain available in the store under the name ReePDF, with a new app ID, still free and ad-free.\n\nReasons:\n• The app has outgrown the expectations suggested by its name.\n• Moving to multi-platform development.\n\nDrawback:\n• Unfortunately, user settings created with PDF Label Printing cannot be imported into ReePDF.\n\nAdvantages of ReePDF:\n• All the features you know from PDF Label Printing remain, just better optimized.\n• A simpler, clearer interface that is quicker to use.\n• Automatic batch processing (no more manual setting) with low memory usage, even beyond 10,000 pages.\n• Much lower hardware load during processing.\n• Faster and more stable operation.\n• More effective repair of damaged PDF documents on import.\n• Lots of bug fixes.\n\nI hope you will find ReePDF just as useful as this app. I will publish it right away as soon as PDF Label Printing has been withdrawn.\n\nReePDF will be available here:</string>
+    <string name="farewell_url" translatable="false"><u>https://play.google.com/store/apps/developer?id=reelee81</u></string>
+    <string name="farewell_thanks">Thank you for your understanding.</string>
+    <string name="farewell_copied">Text copied to clipboard</string>
 </resources>
