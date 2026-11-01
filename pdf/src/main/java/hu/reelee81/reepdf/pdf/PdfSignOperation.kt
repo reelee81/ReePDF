@@ -9,7 +9,6 @@ import com.itextpdf.kernel.pdf.PdfWriter
 import com.itextpdf.kernel.pdf.WriterProperties
 import com.itextpdf.kernel.pdf.canvas.PdfCanvas
 import hu.reelee81.reepdf.core.NupConfig
-import hu.reelee81.reepdf.core.NupGeometry.DEFAULT_POSITION
 import hu.reelee81.reepdf.core.PdfCropRect
 import hu.reelee81.reepdf.core.PdfCrops
 import hu.reelee81.reepdf.core.PdfSignedGroups
@@ -113,10 +112,7 @@ class PdfSignOperation(
                         newTotal
                     )
                     val position = SourcePageArrays.positionsSized(
-                        PdfSignedGroups.afterMerge(
-                            input.position, total, signedStarts, merged,
-                            signedValue = DEFAULT_POSITION, missingValue = input.defaultPosition
-                        ),
+                        SourcePageArrays.afterRemoval(input.position, merged),
                         newTotal,
                         input.defaultPosition
                     )

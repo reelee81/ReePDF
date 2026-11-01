@@ -6,7 +6,6 @@ import com.itextpdf.kernel.pdf.PdfReader
 import com.itextpdf.kernel.pdf.PdfWriter
 import com.itextpdf.kernel.pdf.canvas.PdfCanvas
 import hu.reelee81.reepdf.core.NupConfig
-import hu.reelee81.reepdf.core.NupGeometry.DEFAULT_POSITION
 import hu.reelee81.reepdf.core.PdfCropRect
 import hu.reelee81.reepdf.core.WorkFileBackup
 import java.io.File
@@ -52,7 +51,7 @@ class PdfSignOperationTest {
 
         assertEquals(listOf(PageSize.A4.height, 202f, 203f, PageSize.A4.height), pageWidths(source()))
         assertArrayEquals(intArrayOf(0, 3, 0, 0), result.rotation)
-        assertArrayEquals(intArrayOf(DEFAULT_POSITION, 2, 3, DEFAULT_POSITION), result.position)
+        assertArrayEquals(intArrayOf(9, 2, 3, 4), result.position)
         assertEquals(mapOf(2 to crop), result.crops)
         assertEquals(emptyList<Int>(), result.selected)
         assertEquals(config, result.config)
@@ -62,6 +61,41 @@ class PdfSignOperationTest {
         assertEquals(listOf("selection saved"), events)
         assertEquals(5, pageCount(File(dir, "source_temp_copy/0001.pdf")))
         assertTrue(dir.listFiles().orEmpty().none { it.name.startsWith("signed_") })
+    }
+
+    @Test
+    fun aOneUpSignedPageKeepsItsOwnPosition() {
+        writeMarkedSource(3)
+
+        val result = runBlocking {
+            operation(
+                FakeRenderer(pageCount = 3),
+                nupIndices = listOf(0, 2),
+                position = intArrayOf(2, 9, 4),
+                perGroup = 1,
+                config = config.copy(cols = 1)
+            ).execute {}
+        }
+
+        assertEquals(listOf(PageSize.A4.height, 201f, PageSize.A4.height), pageWidths(source()))
+        assertArrayEquals(intArrayOf(2, 9, 4), result.position)
+    }
+
+    @Test
+    fun aSignedGroupKeepsItsPositionAndAMissingOneGetsTheProfilePosition() {
+        writeMarkedSource(5)
+
+        val result = runBlocking {
+            operation(
+                FakeRenderer(pageCount = 3),
+                nupIndices = listOf(0, 2),
+                position = intArrayOf(2, 2, 7),
+                defaultPosition = 8
+            ).execute {}
+        }
+
+        assertArrayEquals(intArrayOf(2, 7, 8, 8), result.position)
+        assertEquals(8, result.defaultPosition)
     }
 
     @Test
@@ -256,7 +290,10 @@ class PdfSignOperationTest {
         crops: Map<Int, PdfCropRect> = emptyMap(),
         rotation: IntArray = IntArray(0),
         position: IntArray = IntArray(0),
-        isLandscape: Boolean = true
+        isLandscape: Boolean = true,
+        perGroup: Int = 2,
+        config: NupConfig = this.config,
+        defaultPosition: Int = 5
     ) = PdfSignOperation(
         files = PdfLayoutChangeOperation.Files(
             dir,
@@ -279,12 +316,12 @@ class PdfSignOperationTest {
             ),
             highDpi = true,
             nupIndices = nupIndices,
-            perGroup = 2,
+            perGroup = perGroup,
             config = config,
             crops = crops,
             rotation = rotation,
             position = position,
-            defaultPosition = 5,
+            defaultPosition = defaultPosition,
             batchSize = 2
         ),
         progress = PdfLayoutChangeOperation.Progress({ 0L }, tickMs = 500L, idleMs = 1_000L),
