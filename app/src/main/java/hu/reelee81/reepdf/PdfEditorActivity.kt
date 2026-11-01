@@ -31,19 +31,15 @@ import androidx.pdf.PdfWriteHandle
 import com.itextpdf.io.source.RandomAccessSourceFactory
 import com.itextpdf.kernel.pdf.PdfDocument as ITextPdfDocument
 import com.itextpdf.kernel.pdf.ReaderProperties
-import com.itextpdf.kernel.pdf.PdfName
 import com.itextpdf.kernel.pdf.PdfReader
-import com.itextpdf.kernel.pdf.PdfWriter
-import com.itextpdf.kernel.utils.PdfAnnotationFlattener
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.button.MaterialButton
 import hu.reelee81.reepdf.core.PageBatch
 import hu.reelee81.reepdf.pdf.PdfEditProjection
-import hu.reelee81.reepdf.pdf.PdfIo
+import hu.reelee81.reepdf.pdf.PdfEditorFlattening
 import java.io.File
 import java.io.IOException
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -559,7 +555,7 @@ class PdfEditorActivity : PdfActivity() {
                         appliedFile = raw
                     }
                 }
-                withContext(Dispatchers.IO) { flattenAnnotationsInto(raw, outFile) }
+                withContext(Dispatchers.IO) { PdfEditorFlattening.flatten(raw, outFile, ::progressStage) { ensureActive() } }
 
                 val outUri = uriFor(outFile)
                 appliedFile?.delete()
@@ -600,37 +596,6 @@ class PdfEditorActivity : PdfActivity() {
         } else {
             getString(R.string.pdf_edits_save_failed, error.message)
         }
-
-    private fun CoroutineScope.flattenAnnotationsInto(file: File, flatFile: File) {
-        ITextPdfDocument(
-            PdfReader(file.absolutePath),
-            PdfWriter(flatFile.absolutePath, PdfIo.writerProperties())
-        ).use { pdf ->
-            val flattener = PdfAnnotationFlattener()
-            val progress = progressStage(pdf.numberOfPages.toLong())
-            for (pageNumber in 1..pdf.numberOfPages) {
-                ensureActive()
-                val page = pdf.getPage(pageNumber)
-                val annotations = page.annotations
-                    .filter { annotation ->
-                        when (annotation.subtype) {
-                            PdfName.Stamp,
-                            PdfName.Ink,
-                            PdfName.Highlight,
-                            PdfName.FreeText -> true
-                            else -> false
-                        }
-                    }
-                    .toList()
-
-                if (annotations.isNotEmpty()) {
-                    flattener.flatten(annotations)
-                }
-                progress.advance(1)
-            }
-            progress.idle()
-        }
-    }
 
     private fun finishOrConfirmDiscard() {
         if (cancelablePdfOperationCaption() != null) {

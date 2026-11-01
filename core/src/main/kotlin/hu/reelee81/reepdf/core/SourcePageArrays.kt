@@ -11,6 +11,18 @@ object SourcePageArrays {
     fun rotationsGrown(rotation: IntArray, total: Int): IntArray =
         if (rotation.size < total) rotation.copyOf(total) else rotation
 
+    fun quarterTurnsOfPageRotate(degrees: Int): Int? =
+        if (degrees % 90 != 0) null else (-(degrees / 90)).mod(4)
+
+    fun withOwnRotations(rotation: IntArray, first: Int, quarterTurns: IntArray): IntArray {
+        val result = rotation.copyOf()
+        for ((index, turns) in quarterTurns.withIndex()) {
+            val page = first + index
+            if (turns != 0 && page in result.indices) result[page] = turns
+        }
+        return result
+    }
+
     fun positionsSized(positions: IntArray, total: Int, defaultPosition: Int): IntArray {
         if (positions.size == total) return positions
         return IntArray(total) { index -> validPosition(positions.getOrElse(index) { defaultPosition }) }

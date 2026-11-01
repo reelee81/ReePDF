@@ -74,6 +74,8 @@ class PdfImportOperation(
             } else null
     }
 
+    private class OwnRotations(val first: Int, val quarterTurns: IntArray)
+
     @Volatile private var backedUp = false
 
     suspend fun execute(report: (Int?) -> Unit): PdfLayoutChangeOperation.Result = withContext(Dispatchers.IO) {
@@ -107,17 +109,18 @@ class PdfImportOperation(
                     var rotation = input.rotation
                     var position = input.position
                     val warnings = ArrayList<PdfImportWarning>()
+                    val ownRotations = ArrayList<OwnRotations>()
                     for (source in input.sources) {
                         val loss = Loss()
                         if (source.isImage) {
                             val imagePdf = imageToPdf(source.file)
                             try {
-                                append(listOf(imagePdf), null, tracker, loss)
+                                append(listOf(imagePdf), null, tracker, loss, ownRotations)
                             } finally {
                                 runCatching { imagePdf.delete() }
                             }
                         } else {
-                            appendOrRepair(source, tracker, ensureActive, loss)
+                            appendOrRepair(source, tracker, ensureActive, loss, ownRotations)
                         }
                         loss.warningFor(source.name)?.let(warnings::add)
                         runCatching { source.file.delete() }
@@ -130,6 +133,7 @@ class PdfImportOperation(
                     val source = PdfSourceParts.open(files.sourceDir)
                     val total = source.total
                     rotation = SourcePageArrays.rotationsSized(rotation, total)
+                    for (own in ownRotations) rotation = SourcePageArrays.withOwnRotations(rotation, own.first, own.quarterTurns)
                     position = SourcePageArrays.positionsSized(position, total, input.defaultPosition)
 
                     val work = File(files.workDir, "${files.nup.name}.part")
@@ -171,10 +175,16 @@ class PdfImportOperation(
         }
     }
 
-    private fun appendOrRepair(source: Source, tracker: ProgressTracker, ensureActive: () -> Unit, loss: Loss) {
+    private fun appendOrRepair(
+        source: Source,
+        tracker: ProgressTracker,
+        ensureActive: () -> Unit,
+        loss: Loss,
+        ownRotations: MutableList<OwnRotations>
+    ) {
         val doneBefore = tracker.doneUnits()
         val failure = source.openFailure ?: try {
-            append(listOf(source.file), source.password, tracker, loss)
+            append(listOf(source.file), source.password, tracker, loss, ownRotations)
             return
         } catch (e: CancellationException) {
             throw e
@@ -191,7 +201,7 @@ class PdfImportOperation(
             workDir = files.workDir,
             batchSize = input.batchSize,
             ensureActive = ensureActive
-        ) { parts -> append(parts, null, tracker, loss) }
+        ) { parts -> append(parts, null, tracker, loss, ownRotations) }
         if (repaired != null) {
             loss.skippedPages = repaired.skippedPages
             if (repaired.annotationsLost) loss.missingContent = true
@@ -212,28 +222,47 @@ class PdfImportOperation(
                     false
                 }
             }
-        ) { revision -> append(listOf(revision), source.password, tracker, loss) }
+        ) { revision -> append(listOf(revision), source.password, tracker, loss, ownRotations) }
         if (!recovered) throw failure
         loss.earlierRevision = true
     }
 
-    private fun append(srcPdfs: List<File>, password: ByteArray?, tracker: ProgressTracker, loss: Loss) {
+    private fun append(
+        srcPdfs: List<File>,
+        password: ByteArray?,
+        tracker: ProgressTracker,
+        loss: Loss,
+        ownRotations: MutableList<OwnRotations>
+    ) {
         val source = if (PdfSourceParts.exists(files.sourceDir)) PdfSourceParts.open(files.sourceDir) else PdfSourceParts.empty(files.sourceDir)
         val pages = srcPdfs.map { file -> PdfDocument(PdfIo.reader(file.absolutePath, password)).use { it.numberOfPages } }
         val pieces = pages.mapIndexedNotNull { index, count -> if (count > 0) SourcePartPlan.Piece.Incoming(index, 0, count - 1) else null }
         val plan = SourcePartPlan.append(source.layout, pieces)
         val per = (input.config.rows * input.config.cols).coerceAtLeast(1)
         val stage = tracker.stage(plan.writtenPages + ProgressMath.layoutUnits(source.total + pages.sum(), per))
+        val firstPages = pages.runningFold(0, Int::plus)
+        var turned: IntArray? = null
 
         source.write(
             plan,
             input.batchSize,
             stage,
             PdfSourceParts.Inputs(
-                incoming = srcPdfs.map { PdfSourceParts.Incoming(it, password) { loss.missingContent = true } },
+                incoming = srcPdfs.mapIndexed { index, file ->
+                    PdfSourceParts.Incoming(
+                        file,
+                        password,
+                        onMissingAppearance = { loss.missingContent = true },
+                        onOwnRotation = { page, quarterTurns ->
+                            val collected = turned ?: IntArray(pages.sum()).also { turned = it }
+                            collected[firstPages[index] + page] = quarterTurns
+                        }
+                    )
+                },
                 copierDir = files.workDir
             )
         )
+        turned?.let { ownRotations += OwnRotations(source.total, it) }
     }
 
     suspend fun restoreIfBackedUp() {

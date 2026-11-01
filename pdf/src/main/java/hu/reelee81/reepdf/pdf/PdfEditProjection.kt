@@ -278,12 +278,12 @@ object PdfEditProjection {
         page.pdfObject.setModified()
     }
 
-    private fun privateData(dictionary: PdfDictionary): PdfDictionary? =
+    internal fun privateData(dictionary: PdfDictionary): PdfDictionary? =
         dictionary.getAsDictionary(PdfName.PieceInfo)
             ?.getAsDictionary(PIECE_NAME)
             ?.getAsDictionary(PdfName.Private)
 
-    private fun writablePrivateData(dictionary: PdfDictionary): PdfDictionary {
+    internal fun writablePrivateData(dictionary: PdfDictionary): PdfDictionary {
         val modified = PdfDate().pdfObject
         val pieceInfo = dictionary.getAsDictionary(PdfName.PieceInfo)
             ?: PdfDictionary().also { dictionary.put(PdfName.PieceInfo, it) }
@@ -297,7 +297,27 @@ object PdfEditProjection {
 
     private fun pageBase(page: PdfPage): PdfDictionary? = privateData(page.pdfObject)?.getAsDictionary(BASE)
 
-    private fun sourceLayer(page: PdfPage): PdfStream? = privateData(page.pdfObject)?.getAsStream(LAYER_FORM)
+    private fun sourceLayer(page: PdfPage): PdfStream? =
+        privateData(page.pdfObject)?.getAsStream(LAYER_FORM)?.takeIf { ownsLayer(page, it) }
+
+    private fun ownsLayer(page: PdfPage, layer: PdfStream): Boolean {
+        val reference = layer.indirectReference
+        val xObjects = page.pdfObject.getAsDictionary(PdfName.Resources)?.getAsDictionary(PdfName.XObject) ?: return false
+        return xObjects.keySet().any { name ->
+            val stream = xObjects.getAsStream(name)
+            stream === layer || (reference != null && stream?.indirectReference == reference)
+        }
+    }
+
+    internal fun unsharePrivateData(dictionary: PdfDictionary) {
+        var parent = dictionary
+        for (key in arrayOf(PdfName.PieceInfo, PIECE_NAME, PdfName.Private)) {
+            val child = parent.getAsDictionary(key) ?: return
+            val copy = PdfDictionary(child)
+            parent.put(key, copy)
+            parent = copy
+        }
+    }
 
     private fun layersOf(page: PdfPage): List<PdfStream> {
         val generation = pageBase(page)?.getAsString(GENERATION)?.value ?: return emptyList()
@@ -393,6 +413,8 @@ object PdfEditProjection {
         } else {
             form.setData(chunk.toByteArray())
             form.makeIndirect(destination)
+            unsharePrivateData(target.pdfObject)
+            privateData(target.pdfObject)?.remove(WRAP)
             val unclosed = unclosedSaves(target)
             if (unclosed != null) {
                 val wrap = target.newContentStreamBefore()

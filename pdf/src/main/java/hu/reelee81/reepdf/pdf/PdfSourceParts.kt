@@ -15,13 +15,19 @@ import java.util.Locale
 class PdfSourceParts private constructor(val dir: File, private val files: List<File>, val layout: SourcePartLayout) {
     class Location(val file: File, val page: Int)
 
-    class Incoming(val file: File, val password: ByteArray?, val onMissingAppearance: () -> Unit = {})
+    class Incoming(
+        val file: File,
+        val password: ByteArray?,
+        val onMissingAppearance: () -> Unit = {},
+        val onOwnRotation: (page: Int, quarterTurns: Int) -> Unit = { _, _ -> }
+    )
 
     class Inputs(
         val incoming: List<Incoming> = emptyList(),
         val replacements: Map<Int, File> = emptyMap(),
         val emptyPage: PageSize? = null,
-        val copierDir: File? = null
+        val copierDir: File? = null,
+        val generateAppearances: (input: File, output: File) -> Unit = PdfMuPdfAnnotationAppearances::generate
     )
 
     val total: Int get() = layout.total
@@ -196,7 +202,15 @@ class PdfSourceParts private constructor(val dir: File, private val files: List<
         while (from <= to1) {
             val to = PdfDocument(PdfIo.reader(input.file.absolutePath, input.password)).use { src ->
                 val end = PdfPageCost.batchEnd(src, from, to1, batch, budget)
-                src.copyPagesTo(from, end, dest, PdfVisibleAppearanceCopier(copierDir, input.onMissingAppearance))
+                src.copyPagesTo(
+                    from, end, dest,
+                    PdfVisibleAppearanceCopier(copierDir, input.onMissingAppearance, inputs.generateAppearances)
+                )
+                val firstCopied = dest.numberOfPages - (end - from)
+                for (number in firstCopied..dest.numberOfPages) {
+                    val quarterTurns = runCatching { PdfOwnRotation.take(dest.getPage(number)) }.getOrDefault(0)
+                    if (quarterTurns != 0) input.onOwnRotation(from - 1 + number - firstCopied, quarterTurns)
+                }
                 runCatching { PdfCopySupport.flushCopiedObjects(dest, src) }
                 end
             }

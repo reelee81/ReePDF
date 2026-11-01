@@ -66,9 +66,7 @@ object PdfPageSizes {
                         runCatching {
                             val page = pdfDoc.getPage(local + 1)
 
-                            val box = page.cropBox ?: page.mediaBox
-                            val w = box.width
-                            val h = box.height
+                            val (w, h) = PdfOwnRotation.shownSize(page)
 
                             widths[pageZeroBased] = w
                             heights[pageZeroBased] = h

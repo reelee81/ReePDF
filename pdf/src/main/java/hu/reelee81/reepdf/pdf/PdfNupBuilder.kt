@@ -102,9 +102,9 @@ object PdfNupBuilder {
                             val sp = src.page(globalIdx)
                             if (pageSizes != null) {
                                 runCatching {
-                                    val box = sp.cropBox ?: sp.mediaBox
-                                    pageSizes.widths[globalIdx] = box.width
-                                    pageSizes.heights[globalIdx] = box.height
+                                    val (width, height) = PdfOwnRotation.shownSize(sp)
+                                    pageSizes.widths[globalIdx] = width
+                                    pageSizes.heights[globalIdx] = height
                                 }
                             }
                             val pageBox = PdfCopySupport.visibleBox(sp)

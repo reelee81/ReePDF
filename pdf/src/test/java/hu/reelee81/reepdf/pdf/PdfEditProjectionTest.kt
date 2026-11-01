@@ -7,7 +7,9 @@ import com.itextpdf.kernel.geom.Rectangle
 import com.itextpdf.kernel.pdf.PdfArray
 import com.itextpdf.kernel.pdf.PdfDictionary
 import com.itextpdf.kernel.pdf.PdfDocument
+import com.itextpdf.kernel.pdf.PdfIndirectReference
 import com.itextpdf.kernel.pdf.PdfName
+import com.itextpdf.kernel.pdf.PdfNumber
 import com.itextpdf.kernel.pdf.PdfPage
 import com.itextpdf.kernel.pdf.PdfReader
 import com.itextpdf.kernel.pdf.PdfStream
@@ -273,6 +275,165 @@ class PdfEditProjectionTest {
             assertNull(layerForm(pdf.getPage(2)))
         }
     }
+
+    @Test
+    fun editsOnPagesSharingTheirPieceInfoStayOnTheirOwnPageAcrossTwoSaves() {
+        val source = makeSharedPieceInfoSource()
+        assertTrue(sharesPieceInfoWithFirstPage(source, 2))
+
+        val withFirst = projectTogether(source, edit(buildNup(source), "FIRST PAGE EDIT", 150f, 200f, 1))
+        val withBoth = projectTogether(withFirst, edit(buildNup(withFirst), "SECOND PAGE EDIT", 150f, 200f, 2))
+
+        assertOwnLayerRecords(withBoth)
+        val nup = buildNup(withBoth)
+        assertEquals(setOf("FIRST PAGE EDIT"), edits(nup, 1))
+        assertEquals(setOf("SECOND PAGE EDIT"), edits(nup, 2))
+    }
+
+    @Test
+    fun editsOnPagesSharingTheirPieceInfoInOneSaveStayOnTheirOwnPage() {
+        val source = makeSharedPieceInfoSource()
+        val edited = edit(edit(buildNup(source), "FIRST PAGE EDIT", 150f, 200f, 1), "SECOND PAGE EDIT", 150f, 200f, 2)
+
+        val projected = projectTogether(source, edited)
+
+        assertOwnLayerRecords(projected)
+        val nup = buildNup(projected)
+        assertEquals(setOf("FIRST PAGE EDIT"), edits(nup, 1))
+        assertEquals(setOf("SECOND PAGE EDIT"), edits(nup, 2))
+    }
+
+    @Test
+    fun clearingOnePageSharingItsPieceInfoKeepsTheOtherPagesEdit() {
+        val source = makeSharedPieceInfoSource()
+        val projected = projectTogether(
+            source,
+            edit(edit(buildNup(source), "FIRST PAGE EDIT", 150f, 200f, 1), "SECOND PAGE EDIT", 150f, 200f, 2)
+        )
+
+        val withoutFirst = buildNup(projectTogether(projected, cleared(buildNup(projected), 1)))
+        assertEquals(emptySet<String>(), edits(withoutFirst, 1))
+        assertEquals(setOf("SECOND PAGE EDIT"), edits(withoutFirst, 2))
+        assertTrue(textPositions(withoutFirst, 1).containsKey("SOURCE 1"))
+
+        val withoutSecond = buildNup(projectTogether(projected, cleared(buildNup(projected), 2)))
+        assertEquals(setOf("FIRST PAGE EDIT"), edits(withoutSecond, 1))
+        assertEquals(emptySet<String>(), edits(withoutSecond, 2))
+        assertTrue(textPositions(withoutSecond, 2).containsKey("SOURCE 2"))
+    }
+
+    @Test
+    fun pagesThatShareTheRecordOfAnEditedPageGetTheirOwnLayer() {
+        val plain = makeSourceEndingWithAnExtraRestore()
+        val withFirst = projectTogether(plain, edit(buildNup(plain), "FIRST PAGE EDIT", 150f, 200f, 1))
+        val shared = temporary.newFile()
+        PdfDocument(PdfReader(withFirst), PdfWriter(shared)).use { pdf ->
+            val pieceInfo = pdf.getPage(1).pdfObject.getAsDictionary(PdfName.PieceInfo).makeIndirect(pdf)
+            for (number in 1..3) pdf.getPage(number).pdfObject.put(PdfName.PieceInfo, pieceInfo)
+        }
+        assertTrue(sharesPieceInfoWithFirstPage(shared, 2))
+        assertTrue(sharesPieceInfoWithFirstPage(shared, 3))
+        val firstLayer = firstLayerBytes(shared)
+
+        val edited = edit(edit(buildNup(shared), "SECOND PAGE EDIT", 150f, 200f, 2), "THIRD PAGE EDIT", 150f, 200f, 3)
+        val projected = projectTogether(shared, edited)
+
+        assertOwnLayerRecords(projected)
+        assertArrayEquals(firstLayer, firstLayerBytes(projected))
+        PdfDocument(PdfReader(projected)).use { pdf -> assertNotNull(layerForm(pdf.getPage(3))) }
+        val nup = buildNup(projected)
+        assertEquals(setOf("FIRST PAGE EDIT"), edits(nup, 1))
+        assertEquals(setOf("SECOND PAGE EDIT"), edits(nup, 2))
+
+        val withoutFirst = projectTogether(projected, cleared(nup, 1))
+        assertOwnLayerRecords(withoutFirst)
+        val after = buildNup(withoutFirst)
+        assertEquals(emptySet<String>(), edits(after, 1))
+        assertEquals(setOf("SECOND PAGE EDIT"), edits(after, 2))
+        PdfDocument(PdfReader(withoutFirst)).use { pdf -> assertNotNull(layerForm(pdf.getPage(3))) }
+    }
+
+    private fun makeSharedPieceInfoSource(): File {
+        val file = temporary.newFile()
+        PdfDocument(PdfWriter(file)).use { pdf ->
+            val font = PdfFontFactory.createFont()
+            val pieceInfo = PdfDictionary().apply {
+                put(PdfName("Illustrator"), PdfDictionary().apply {
+                    put(PdfName.Private, PdfDictionary().apply { put(PdfName("Version"), PdfNumber(1)) })
+                })
+                makeIndirect(pdf)
+            }
+            repeat(2) { index ->
+                val page = pdf.addNewPage(PageSize.A4)
+                PdfCanvas(page).beginText().setFontAndSize(font, 12f)
+                    .moveText(40.0, 780.0).showText("SOURCE ${index + 1}").endText()
+                page.pdfObject.put(PdfName.PieceInfo, pieceInfo)
+            }
+        }
+        return file
+    }
+
+    private fun makeSourceEndingWithAnExtraRestore(): File {
+        val file = temporary.newFile()
+        PdfDocument(PdfWriter(file)).use { pdf ->
+            val font = PdfFontFactory.createFont()
+            for (number in 1..2) {
+                PdfCanvas(pdf.addNewPage(PageSize.A4)).beginText().setFontAndSize(font, 12f)
+                    .moveText(40.0, 780.0).showText("SOURCE $number").endText()
+            }
+            pdf.addNewPage(PageSize.A4).getContentStream(0).setData("0 0 m 100 100 l S\nQ\n".toByteArray(Charsets.ISO_8859_1))
+        }
+        return file
+    }
+
+    private fun sharesPieceInfoWithFirstPage(file: File, pageNumber: Int): Boolean = PdfDocument(PdfReader(file)).use { pdf ->
+        val first = pdf.getPage(1).pdfObject.get(PdfName.PieceInfo, false)
+        val other = pdf.getPage(pageNumber).pdfObject.get(PdfName.PieceInfo, false)
+        first is PdfIndirectReference && other is PdfIndirectReference && first.objNumber == other.objNumber
+    }
+
+    private fun projectTogether(source: File, edited: File): File {
+        val parts = temporary.newFolder()
+        source.copyTo(File(parts, "0001.pdf"))
+        val result = PdfEditProjection.project(PdfSourceParts.open(parts), edited, batchSize = 10, writeStage = { NoProgress }) {}
+        val output = temporary.newFile()
+        result.source.file(0).copyTo(output, overwrite = true)
+        return output
+    }
+
+    private fun cleared(nup: File, pageNumber: Int): File {
+        val file = temporary.newFile()
+        assertEquals(1, PdfEditProjection.clearLayers(nup, file, setOf(pageNumber), batchSize = 1) {})
+        return file
+    }
+
+    private fun edits(file: File, pageNumber: Int): Set<String> =
+        textPositions(file, pageNumber).keys.filter { it.endsWith("EDIT") }.toSet()
+
+    private fun firstLayerBytes(file: File): ByteArray =
+        PdfDocument(PdfReader(file)).use { pdf -> layerForm(pdf.getPage(1))!!.bytes }
+
+    private fun assertOwnLayerRecords(file: File) {
+        PdfDocument(PdfReader(file)).use { pdf ->
+            for (number in 1..pdf.numberOfPages) {
+                val page = pdf.getPage(number)
+                val data = privateData(page.pdfObject) ?: continue
+                data.getAsStream(PdfName("LayerForm"))?.let { layer ->
+                    val xObjects = page.pdfObject.getAsDictionary(PdfName.Resources)?.getAsDictionary(PdfName.XObject)
+                    val own = xObjects != null && xObjects.keySet().any { name -> sameStream(xObjects.getAsStream(name), layer) }
+                    assertTrue("page $number has the layer of another page", own)
+                }
+                data.getAsStream(PdfName("Wrap"))?.let { wrap ->
+                    val contents = page.pdfObject.getAsArray(PdfName.Contents)
+                    val own = contents != null && (0 until contents.size()).any { sameStream(contents.getAsStream(it), wrap) }
+                    assertTrue("page $number has the wrap of another page", own)
+                }
+            }
+        }
+    }
+
+    private fun sameStream(stream: PdfStream?, other: PdfStream): Boolean =
+        stream === other || (stream?.indirectReference != null && stream.indirectReference == other.indirectReference)
 
     private fun projectFile(source: File, edited: File, output: File): Int {
         val parts = temporary.newFolder()

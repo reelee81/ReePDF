@@ -1,6 +1,9 @@
 package hu.reelee81.reepdf.core
 
 import org.junit.Assert.assertArrayEquals
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotSame
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Test
 
@@ -19,6 +22,30 @@ class SourcePageArraysTest {
         assertArrayEquals(intArrayOf(1, 2, 3, 0, 0), SourcePageArrays.rotationsGrown(rotation, 5))
         assertSame(rotation, SourcePageArrays.rotationsGrown(rotation, 3))
         assertSame(rotation, SourcePageArrays.rotationsGrown(rotation, 2))
+    }
+
+    @Test
+    fun aPageRotateTurnsClockwiseSoItBecomesTheOppositeNumberOfQuarterTurns() {
+        assertEquals(0, SourcePageArrays.quarterTurnsOfPageRotate(0))
+        assertEquals(3, SourcePageArrays.quarterTurnsOfPageRotate(90))
+        assertEquals(2, SourcePageArrays.quarterTurnsOfPageRotate(180))
+        assertEquals(1, SourcePageArrays.quarterTurnsOfPageRotate(270))
+        assertEquals(0, SourcePageArrays.quarterTurnsOfPageRotate(360))
+        assertEquals(1, SourcePageArrays.quarterTurnsOfPageRotate(-90))
+        assertEquals(3, SourcePageArrays.quarterTurnsOfPageRotate(450))
+        assertNull(SourcePageArrays.quarterTurnsOfPageRotate(45))
+        assertNull(SourcePageArrays.quarterTurnsOfPageRotate(-135))
+    }
+
+    @Test
+    fun ownRotationsSetOnlyTheTurnedNewPagesOnACopy() {
+        val rotation = intArrayOf(1, 2, 3, 0, 0, 2)
+        val placed = SourcePageArrays.withOwnRotations(rotation, first = 3, quarterTurns = intArrayOf(3, 0, 1, 2))
+
+        assertArrayEquals(intArrayOf(1, 2, 3, 3, 0, 1), placed)
+        assertArrayEquals(intArrayOf(1, 2, 3, 0, 0, 2), rotation)
+        assertNotSame(rotation, placed)
+        assertArrayEquals(intArrayOf(1, 2), SourcePageArrays.withOwnRotations(intArrayOf(1, 2), first = 2, quarterTurns = intArrayOf(3)))
     }
 
     @Test
