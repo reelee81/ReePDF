@@ -33,6 +33,7 @@ object PdfProcessingNotifications {
             .setSmallIcon(R.drawable.ic_statusbar_icon_24)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
+            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
         when {
             progress >= 0 -> builder
                 .setProgress(100, progress, false)
