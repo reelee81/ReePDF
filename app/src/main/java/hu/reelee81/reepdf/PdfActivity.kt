@@ -144,10 +144,8 @@ abstract class PdfActivity : AppCompatActivity() {
         var resourceChanges = ActivityInfo.CONFIG_ORIENTATION or ActivityInfo.CONFIG_UI_MODE or
             ActivityInfo.CONFIG_LOCALE or ActivityInfo.CONFIG_LAYOUT_DIRECTION or ActivityInfo.CONFIG_FONT_SCALE or
             ActivityInfo.CONFIG_DENSITY or ActivityInfo.CONFIG_MCC or ActivityInfo.CONFIG_MNC or
-            ActivityInfo.CONFIG_KEYBOARD or ActivityInfo.CONFIG_NAVIGATION or ActivityInfo.CONFIG_TOUCHSCREEN
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            resourceChanges = resourceChanges or ActivityInfo.CONFIG_COLOR_MODE
-        }
+            ActivityInfo.CONFIG_KEYBOARD or ActivityInfo.CONFIG_NAVIGATION or ActivityInfo.CONFIG_TOUCHSCREEN or
+            ActivityInfo.CONFIG_COLOR_MODE
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             resourceChanges = resourceChanges or ActivityInfo.CONFIG_FONT_WEIGHT_ADJUSTMENT
         }

@@ -109,7 +109,7 @@ We publish the source code so that others can use it, modify it and learn from i
 - “Battery optimization” help in the menu, because some phones stop background work during long operations
 - Built for very large documents: pages are processed in batches whose size adapts to the page content,
   to keep memory usage low
-- Requires Android 7.0 or newer (API 24+)
+- Requires Android 8.0 or newer (API 26+)
 
 
 ## Screenshots
@@ -144,7 +144,7 @@ The app does not collect, store or transmit any personal data to a server. Detai
 
 ## Build / development
 
-- Minimum SDK: 24
+- Minimum SDK: 26
 - Target / Compile SDK: 37
 - Android Gradle Plugin: 9.5.x
 - Java / Kotlin toolchain: 21

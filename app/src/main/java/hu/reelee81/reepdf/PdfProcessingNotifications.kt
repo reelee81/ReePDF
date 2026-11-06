@@ -4,24 +4,26 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
-import android.os.Build
 import androidx.core.app.NotificationCompat
 
 object PdfProcessingNotifications {
     const val NOTIFICATION_ID = 1
 
-    private const val CHANNEL_ID = "PdfProcessingForegroundServiceChannel"
+    private const val CHANNEL_ID = "PdfProcessingProgressChannel"
+
+    private const val OLD_CHANNEL_ID = "PdfProcessingForegroundServiceChannel"
 
     fun createChannelIfNeeded(context: Context) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                context.getString(R.string.in_progress_my),
-                NotificationManager.IMPORTANCE_LOW
-            )
-            val manager = context.getSystemService(NotificationManager::class.java)
-            manager?.createNotificationChannel(channel)
-        }
+        val channel = NotificationChannel(
+            CHANNEL_ID,
+            context.getString(R.string.in_progress_my),
+            NotificationManager.IMPORTANCE_DEFAULT
+        )
+        channel.setSound(null, null)
+        channel.enableVibration(false)
+        val manager = context.getSystemService(NotificationManager::class.java)
+        manager?.createNotificationChannel(channel)
+        runCatching { manager?.deleteNotificationChannel(OLD_CHANNEL_ID) }
     }
 
     fun build(context: Context, message: String, progress: Int): Notification {

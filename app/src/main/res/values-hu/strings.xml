@@ -150,6 +150,8 @@
     <string name="output_name_reserved">Ezt a fájlnevet az app munkafájljai használják. Válassz másik nevet.</string>
     <string name="battery_optimization">Akkumulátor-optimalizálás</string>
     <string name="battery_optimization_text">A hosszú PDF-műveletek (1000+ oldal) idejére érdemes kikapcsolni az akkumulátor-optimalizálást ennél az alkalmazásnál, különben a rendszer megállíthatja a feldolgozást, ha háttérbe teszed az appot, vagy lezárod a kijelzőt.\n\nA beállítás helye gyártónként eltér, de általában:\nBeállítások\n→ Alkalmazások\n→ Alkalmazások kezelése\n→ ReePDF\n→ „Energiafogyasztás” vagy „Akkumulátor”\n\nHa biztosra akarsz menni:\n• Egyes gyártók túl agresszívan kezelik az akkumulátorvédelmet (például lezárt kijelzőnél), ezért a folyamat így is szüneteltetett állapotba kerülhet.\n• A hosszú műveletek idejére maradj az app felületén: ilyenkor az app a feldolgozás végéig ébren tartja a kijelzőt.</string>
+    <string name="allow_notifications">Értesítések engedélyezése</string>
+    <string name="allow_notifications_text">Hosszú PDF-műveleteknél az app értesítésben mutatja a feldolgozás haladását, hang nélkül. Ha az értesítések ki vannak kapcsolva, a feldolgozás így is fut, de a haladás csak az appban látszik.\n\nAz OK gomb megnyitja az app értesítési beállításait, ahol bekapcsolhatod őket.</string>
     <string name="position_on_page">Pozicionálás az oldal(ak)on</string>
     <string name="crop_title">Szabad vágás</string>
     <string name="crop_all_pages">Alkalmazás minden oldalon</string>

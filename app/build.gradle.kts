@@ -25,10 +25,10 @@ android {
 
     defaultConfig {
         applicationId = "hu.reelee81.reepdf"
-        minSdk = 24
+        minSdk = 26
         targetSdk = 37
-        versionCode = 200
-        versionName = "2.00"
+        versionCode = 300
+        versionName = "3.00"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

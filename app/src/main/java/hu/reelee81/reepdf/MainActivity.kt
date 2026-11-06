@@ -1,5 +1,6 @@
 package hu.reelee81.reepdf
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.app.UiModeManager
 import android.content.ComponentName
@@ -8,6 +9,7 @@ import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.ActivityInfo
 import android.content.pm.ApplicationInfo
+import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -304,7 +306,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var saveDocumentLauncher: ActivityResultLauncher<Intent>
     private lateinit var passwordOutCb: MaterialCheckBox
 
-    private val isFitMeasurable = Build.VERSION.SDK_INT >= VERSION_CODES.O
     private var pendingSaveNamedPath: String? = null
     private var pendingSaveNamedDisplayName: String? = null
     private var isLoadingSettingsProfile = false
@@ -321,8 +322,6 @@ class MainActivity : AppCompatActivity() {
     private var orderDirty = false
     private var lastGlobalAllSelected: Boolean? = null
     private var selectedDpiIndexForSignature = 0
-    private var didRunNScrollColdStartFix = false
-    private var isFirstCreate = true
     private var sourceRotation: IntArray = IntArray(0)
     private var sourcePosition: IntArray = IntArray(0)
     private var defaultPosition: Int = DEFAULT_POSITION
@@ -460,6 +459,8 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private val notificationPermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+
     override fun onCreate(savedInstanceState: Bundle?) {
 
         if (savedInstanceState == null) {
@@ -501,8 +502,6 @@ class MainActivity : AppCompatActivity() {
         }
 
         super.onCreate(savedInstanceState)
-
-        isFirstCreate = (savedInstanceState == null)
 
         // START Alternative DEBUG mode check
         val isDebug = try {
@@ -601,7 +600,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         scaleSwitch = findViewById(R.id.scale)
-        scaleSwitch.lastPosition = if (isFitMeasurable) ScaleMode.FIT.ordinal else ScaleMode.SCALE.ordinal
+        scaleSwitch.lastPosition = ScaleMode.FIT.ordinal
 
         signaturePosX = findViewById(R.id.signature_position_x)
         signaturePosY = findViewById(R.id.signature_position_y)
@@ -1085,6 +1084,10 @@ class MainActivity : AppCompatActivity() {
 
         updateButtonsState()
 
+        if (savedInstanceState == null) {
+            requestNotificationPermissionIfNeeded()
+        }
+
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
 
@@ -1115,6 +1118,11 @@ class MainActivity : AppCompatActivity() {
 
                     if (binding.overlayDialogBatteryOptimization.isVisible) {
                         binding.overlayDialogBatteryOptimization.performClick()
+                        return
+                    }
+
+                    if (binding.overlayDialogNotifications.isVisible) {
+                        binding.overlayDialogNotifications.performClick()
                         return
                     }
 
@@ -1152,6 +1160,14 @@ class MainActivity : AppCompatActivity() {
                 finishAndRemoveTask()
             }
         })
+    }
+
+    private fun requestNotificationPermissionIfNeeded() {
+        if (Build.VERSION.SDK_INT >= VERSION_CODES.TIRAMISU &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
     }
 
     private fun clearCacheDir() {
@@ -1216,6 +1232,7 @@ class MainActivity : AppCompatActivity() {
             binding.overlayDialogSignatureChooserPanel,
             binding.overlayDialogTimestampPanel,
             binding.overlayDialogBatteryOptimizationPanel,
+            binding.overlayDialogNotificationsPanel,
             binding.overlayDialogAboutPanel,
             binding.overlayDialogOpenWithPanel,
             binding.overlayDialogPositionOnPagePanel,
@@ -1265,9 +1282,7 @@ class MainActivity : AppCompatActivity() {
         val keyboardChanged = prevConfig.keyboard != newConfig.keyboard
         val navigationChanged = prevConfig.navigation != newConfig.navigation
         val touchscreenChanged = prevConfig.touchscreen != newConfig.touchscreen
-        val colorModeChanged =
-            Build.VERSION.SDK_INT >= VERSION_CODES.O &&
-                    prevConfig.colorMode != newConfig.colorMode
+        val colorModeChanged = prevConfig.colorMode != newConfig.colorMode
         val fontWeightAdjustmentChanged =
             Build.VERSION.SDK_INT >= VERSION_CODES.S &&
                     prevConfig.fontWeightAdjustment != newConfig.fontWeightAdjustment
@@ -4132,14 +4147,14 @@ class MainActivity : AppCompatActivity() {
         val marginMm = min(readIntOr(margin, min = 0, def = 0), maxMarginMm(rows, cols, isLand))
         val drawFrame = drawFrameSwitch.isChecked
         val scaleInd = scaleMode().scale
-        val fitInd = scaleMode().fit && isFitMeasurable
+        val fitInd = scaleMode().fit
         return NupConfig(rows, cols, marginMm, isLand, drawFrame, scaleInd, fitInd)
     }
 
     private fun scaleMode(): ScaleMode = ScaleMode.at(scaleSwitch.position)
 
     private fun setScaleMode(scale: Boolean, fit: Boolean) {
-        scaleSwitch.position = ScaleMode.of(scale, fit && isFitMeasurable).ordinal
+        scaleSwitch.position = ScaleMode.of(scale, fit).ordinal
     }
 
     private fun nupConfigChanged(): Boolean {
@@ -6889,38 +6904,6 @@ class MainActivity : AppCompatActivity() {
         }.onFailure {
         }
 
-        if (Build.VERSION.SDK_INT <= VERSION_CODES.N_MR1 && !didRunNScrollColdStartFix && isFirstCreate) {
-            val sv = binding.rootScroll
-
-            sv.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
-            sv.isFocusable = true
-            sv.isFocusableInTouchMode = true
-
-            sv.post {
-                sv.scrollTo(0, 0)
-                sv.fullScroll(View.FOCUS_UP)
-
-                sv.descendantFocusability = ViewGroup.FOCUS_BEFORE_DESCENDANTS
-                sv.requestFocusFromTouch()
-
-                didRunNScrollColdStartFix = true
-            }
-        }
-
-        if (Build.VERSION.SDK_INT <= VERSION_CODES.N_MR1 && !isFirstCreate) {
-            val sv = binding.rootScroll
-
-            sv.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
-
-            sv.post {
-                sv.descendantFocusability = ViewGroup.FOCUS_BEFORE_DESCENDANTS
-
-                sv.isFocusable = true
-                sv.isFocusableInTouchMode = true
-                sv.requestFocusFromTouch()
-            }
-        }
-
         if (pendingCacheCleanupAfterExternalReturn && didPauseForExternalAction) {
             pendingCacheCleanupAfterExternalReturn = false
             didPauseForExternalAction = false
@@ -6972,6 +6955,11 @@ class MainActivity : AppCompatActivity() {
 
             R.id.action_battery_optimization -> {
                 launchBatteryOptimizationSettings()
+                true
+            }
+
+            R.id.action_notifications -> {
+                launchNotificationSettings()
                 true
             }
 
@@ -7084,6 +7072,56 @@ class MainActivity : AppCompatActivity() {
                 startActivity(intent)
             } catch (_: Exception) {
 
+            }
+        }
+    }
+
+    private fun launchNotificationSettings() {
+
+        val overlay = binding.overlayDialogNotifications
+        val panel = binding.overlayDialogNotificationsPanel
+
+        panel.removeAllViews()
+        val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_notifications, panel, false)
+        panel.addView(dialogView)
+
+        overlay.visibility = View.VISIBLE
+
+        overlay.setOnClickListener {
+            overlay.visibility = View.GONE
+            overlay.setOnClickListener(null)
+        }
+        panel.setOnClickListener {
+        }
+
+        val btnOk     = dialogView.findViewById<Button>(R.id.nt_btn_ok)
+        val btnCancel = dialogView.findViewById<Button>(R.id.nt_btn_cancel)
+
+        btnCancel?.setOnClickListener {
+
+            overlay.visibility = View.GONE
+            overlay.setOnClickListener(null)
+        }
+
+        btnOk?.setOnClickListener {
+
+            overlay.visibility = View.GONE
+            overlay.setOnClickListener(null)
+
+            try {
+                val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                    .putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+                startActivity(intent)
+            } catch (_: Exception) {
+                try {
+                    val intent = Intent(
+                        Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                        Uri.fromParts("package", packageName, null)
+                    )
+                    startActivity(intent)
+                } catch (_: Exception) {
+
+                }
             }
         }
     }

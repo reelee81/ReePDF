@@ -31,6 +31,10 @@
             android:id="@+id/action_battery_optimization"
             android:title="@string/battery_optimization"
             app:showAsAction="never" />
+        <item
+            android:id="@+id/action_notifications"
+            android:title="@string/allow_notifications"
+            app:showAsAction="never" />
     </group>
 
     <group android:id="@+id/group_save_load">

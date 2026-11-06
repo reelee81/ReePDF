@@ -4,7 +4,6 @@ import android.app.Notification
 import android.app.Service
 import android.content.Context
 import android.content.Intent
-import android.os.Build
 import android.os.IBinder
 import android.os.SystemClock
 import androidx.core.content.ContextCompat
@@ -57,14 +56,10 @@ class PdfProcessingForegroundService : Service() {
         }
 
         private fun send(appCtx: Context, intent: Intent) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                try {
-                    appCtx.startService(intent)
-                } catch (_: IllegalStateException) {
-                    ContextCompat.startForegroundService(appCtx, intent)
-                }
-            } else {
+            try {
                 appCtx.startService(intent)
+            } catch (_: IllegalStateException) {
+                ContextCompat.startForegroundService(appCtx, intent)
             }
         }
     }
