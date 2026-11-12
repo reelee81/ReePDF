@@ -1,0 +1,66 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: reelee81 <reelee81@gmail.com>
+Date: Thu, 12 Nov 2026 21:02:18 +0100
+Subject: [PATCH 18/18] pdf: Draw the repeats of a very large pattern cell
+ directly.
+
+pdf_show_pattern() draws one cell of a tiling pattern into a tile of the
+size of the cell in device space and repeats that tile whenever the
+filled area needs more than one repeat. At a high zoom a cell can be very
+large: the pdf.js test issue8078.pdf drawn at 25 pixels per point has
+cells of 147 and 278 million pixels; the second is over the pixmap size
+limit, so the page fails with "Overly large image", and the first alone
+needs about 590 MB. When a cell is larger than 8 million pixels in
+device space (32 MB with alpha), its repeats are now drawn directly, as
+upstream already does when the area needs a single repeat. The drawn
+area is the same, but the repeats are placed exactly instead of on whole
+pixels, so their edges can be anti-aliased slightly differently. Shapes
+of two neighbouring repeats drawn directly can leave a faint seam where
+they meet, so the limit is not lower: no test file shows such a seam at
+8 million pixels.
+
+Modified for ReePDF on 2026-11-12.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ source/pdf/pdf-op-run.c | 13 ++++++++++++-
+ 1 file changed, 12 insertions(+), 1 deletion(-)
+
+diff --git a/source/pdf/pdf-op-run.c b/source/pdf/pdf-op-run.c
+index 6afca8e..5ef4ccf 100644
+--- a/source/pdf/pdf-op-run.c
++++ b/source/pdf/pdf-op-run.c
+@@ -29,6 +29,7 @@
+ #include "mupdf/ucdn.h"
+ 
+ #define TILE
++#define PATTERN_CELL_MAX_PIXELS (8.0f * 1024 * 1024)
+ 
+ /* Enable this to watch changes in the structure stack. */
+ #undef DEBUG_STRUCTURE
+@@ -697,6 +698,16 @@ pdf_grestore(fz_context *ctx, pdf_run_processor *pr)
+ 	}
+ }
+ 
++static int
++pattern_cell_too_large(fz_rect bbox, fz_matrix ptm)
++{
++	fz_rect cell = fz_transform_rect(bbox, ptm);
++	float w = cell.x1 - cell.x0;
++	float h = cell.y1 - cell.y0;
++
++	return !(w * h <= PATTERN_CELL_MAX_PIXELS);
++}
++
+ static pdf_gstate *
+ pdf_show_pattern(fz_context *ctx, pdf_run_processor *pr, pdf_pattern *pat, int pat_gstate_num, fz_rect area, int what)
+ {
+@@ -788,7 +799,7 @@ pdf_show_pattern(fz_context *ctx, pdf_run_processor *pr, pdf_pattern *pat, int p
+ 	 * required in at least one direction. Note, that this allows for
+ 	 * 'sections' of 4 tiles to be show, but all non-overlapping. */
+ 	/* If the pattern uses blending, we never use the tile cache. */
+-	if ((fx1-fx0 > 1 || fy1-fy0 > 1) && !pat->uses_blending && !(pr->dev->hints & FZ_NO_TILING))
++	if ((fx1-fx0 > 1 || fy1-fy0 > 1) && !pat->uses_blending && !(pr->dev->hints & FZ_NO_TILING) && !pattern_cell_too_large(pat->bbox, ptm))
+ #else
+ 	if (0)
+ #endif

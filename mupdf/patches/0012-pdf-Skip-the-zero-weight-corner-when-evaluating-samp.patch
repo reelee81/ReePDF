@@ -1,0 +1,43 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: reelee81 <reelee81@gmail.com>
+Date: Thu, 12 Nov 2026 12:11:27 +0100
+Subject: [PATCH 12/18] pdf: Skip the zero-weight corner when evaluating
+ sampled functions.
+
+interpolate_sample() reads both neighbouring samples in every input
+dimension, so a sampled function with m inputs reads 2^m samples for
+each evaluation, even where an input lies exactly on a sample or the
+dimension has a single sample, and the second corner gets the weight
+zero. A page with sixteen shadings using an 18-input function (pdf.js
+test axial_shading_many_inputs.pdf) took about 1.8 s to draw on a
+desktop computer. When the fractional part of an input is exactly zero,
+the second corner is now skipped. The result is the same value bit for
+bit; a NaN fraction still takes both corners.
+
+Modified for ReePDF on 2026-11-12.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ source/pdf/pdf-function.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/source/pdf/pdf-function.c b/source/pdf/pdf-function.c
+index 02f06d1..5765cfe 100644
+--- a/source/pdf/pdf-function.c
++++ b/source/pdf/pdf-function.c
+@@ -1088,11 +1088,15 @@ interpolate_sample(pdf_function_sa *func, int *scale, int *e0, int *e1, float *e
+ 	if (dim == 0)
+ 	{
+ 		a = func->samples[idx0];
++		if (efrac[dim] == 0)
++			return a;
+ 		b = func->samples[idx1];
+ 	}
+ 	else
+ 	{
+ 		a = interpolate_sample(func, scale, e0, e1, efrac, dim - 1, idx0);
++		if (efrac[dim] == 0)
++			return a;
+ 		b = interpolate_sample(func, scale, e0, e1, efrac, dim - 1, idx1);
+ 	}
+ 

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="cancel_text">MÉGSE</string>
+    <string name="pdf_wait_reading_pages">Oldal(ak) olvasása…</string>
+    <string name="pdf_wait_reading_edited_pages">Szerkesztett oldal(ak) olvasása…</string>
+    <string name="edit_pdf">Szerkesztés</string>
+    <string name="back_to_main_screen">VISSZA A FŐKÉPERNYŐRE</string>
+    <string name="viewer_back">Vissza</string>
+    <string name="fast_scroller_thumb">Görgetősáv</string>
+    <string name="page_indicator_single">%2$d/%1$d</string>
+    <string name="page_indicator_range">%3$d/%1$d–%2$d</string>
+    <string name="page_render_failed">Ez az oldal nem jeleníthető meg.</string>
+    <string name="viewer_search">Keresés</string>
+    <string name="search_match_count">%2$d/%1$d</string>
+    <string name="search_no_match">Nincs találat</string>
+    <string name="search_previous">Előző</string>
+    <string name="search_next">Következő</string>
+    <string name="selection_copy">Másolás</string>
+    <string name="selection_select_all">Mind kijelöl</string>
+    <string name="selection_too_large">A kijelölés túl nagy a másoláshoz.</string>
+    <string name="page_description_text">%1$d. oldal: %2$s</string>
+    <string name="page_description">%1$d. oldal</string>
+</resources>

@@ -285,7 +285,7 @@ abstract class PdfActivity : AppCompatActivity() {
         val now = SystemClock.uptimeMillis()
         if (now - waitStartedAt < PROGRESS_REVEAL_MS) return true
 
-        val percent = progressTracker.percent(now, PROGRESS_IDLE_MS)
+        val percent = progressTracker.percent(now, PROGRESS_IDLE_MS)?.takeIf { it < 100 }
             ?: PdfProcessingForegroundService.PROGRESS_INDETERMINATE
 
         val indicator = overlay.findViewById<LinearProgressIndicator>(R.id.progress_bar_indicator)
@@ -333,7 +333,7 @@ abstract class PdfActivity : AppCompatActivity() {
         const val FINISH_DEFER_LIMIT_MS = 10_000L
         const val PROGRESS_TICK_MS = 500L
         const val PROGRESS_REVEAL_MS = 5_000L
-        const val PROGRESS_IDLE_MS = 1_000L
+        const val PROGRESS_IDLE_MS = 5_000L
         const val PROGRESS_NOTIFY_MS = 1_000L
     }
 }

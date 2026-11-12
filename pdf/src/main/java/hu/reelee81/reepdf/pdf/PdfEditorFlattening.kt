@@ -3,7 +3,6 @@ package hu.reelee81.reepdf.pdf
 import com.itextpdf.kernel.pdf.PdfDocument
 import com.itextpdf.kernel.pdf.PdfName
 import com.itextpdf.kernel.pdf.PdfReader
-import com.itextpdf.kernel.pdf.PdfWriter
 import com.itextpdf.kernel.utils.PdfAnnotationFlattener
 import java.io.File
 
@@ -11,7 +10,7 @@ object PdfEditorFlattening {
     fun flatten(file: File, flatFile: File, progressStage: (Long) -> PdfProgress, ensureActive: () -> Unit) {
         PdfDocument(
             PdfReader(file.absolutePath),
-            PdfWriter(flatFile.absolutePath, PdfIo.writerProperties())
+            PdfIo.workFileWriter(flatFile.absolutePath)
         ).use { pdf ->
             val flattener = PdfAnnotationFlattener()
             val progress = progressStage(pdf.numberOfPages.toLong())

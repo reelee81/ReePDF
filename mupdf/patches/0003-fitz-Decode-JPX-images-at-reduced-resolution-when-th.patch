@@ -1,0 +1,265 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: reelee81 <reelee81@gmail.com>
+Date: Sun, 8 Nov 2026 19:41:21 +0100
+Subject: [PATCH 3/18] fitz: Decode JPX images at reduced resolution when they
+ will be scaled down.
+
+compressed_image_get_pixmap() always decoded JPX images at full resolution
+and only subsampled the result afterwards, so a thumbnail of a page with a
+10200x14031 JPX image needed about 2 GB of memory. The JPX branch now passes
+the requested l2factor to OpenJPEG (opj_set_decoded_resolution_factor),
+limited to the number of resolution levels in the codestream, and reports
+the applied factor back like the JPEG branch does.
+
+The reduction is not used for indexed images, for JP2 files with a palette
+box (the palette is applied to the decoded indices), or for images with a
+colour key. If decoding at the reduced resolution fails, the image is
+decoded again at full resolution.
+
+Modified for ReePDF on 2026-11-08.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ source/fitz/image-imp.h |   2 +
+ source/fitz/image.c     |   9 ++-
+ source/fitz/load-jpx.c  | 146 +++++++++++++++++++++++++++++++++++++++-
+ 3 files changed, 153 insertions(+), 4 deletions(-)
+
+diff --git a/source/fitz/image-imp.h b/source/fitz/image-imp.h
+index 960ab9b..8cc18f2 100644
+--- a/source/fitz/image-imp.h
++++ b/source/fitz/image-imp.h
+@@ -55,4 +55,6 @@ void fz_load_jbig2_info(fz_context *ctx, const unsigned char *data, size_t size,
+  */
+ void fz_load_jpx_info(fz_context *ctx, const unsigned char *data, size_t size, int *wp, int *hp, int *xresp, int *yresp, fz_colorspace **cspacep, fz_colorspace *defcs);
+ 
++fz_pixmap *fz_load_jpx_reduced(fz_context *ctx, const unsigned char *data, size_t size, fz_colorspace *defcs, int reduce, int *applied);
++
+ #endif
+diff --git a/source/fitz/image.c b/source/fitz/image.c
+index 3862475..0ff6856 100644
+--- a/source/fitz/image.c
++++ b/source/fitz/image.c
+@@ -840,7 +840,14 @@ compressed_image_get_pixmap(fz_context *ctx, fz_image *image_, fz_irect *subarea
+ 		tile = fz_load_jxr(ctx, image->buffer->buffer->data, image->buffer->buffer->len);
+ 		break;
+ 	case FZ_IMAGE_JPX:
+-		tile = fz_load_jpx(ctx, image->buffer->buffer->data, image->buffer->buffer->len, image->super.colorspace);
++		if (l2factor && *l2factor > 0 && !image->super.use_colorkey)
++		{
++			int applied = 0;
++			tile = fz_load_jpx_reduced(ctx, image->buffer->buffer->data, image->buffer->buffer->len, image->super.colorspace, *l2factor, &applied);
++			*l2factor -= applied;
++		}
++		else
++			tile = fz_load_jpx(ctx, image->buffer->buffer->data, image->buffer->buffer->len, image->super.colorspace);
+ 		if (image->super.use_colorkey)
+ 		{
+ 			size_t len;
+diff --git a/source/fitz/load-jpx.c b/source/fitz/load-jpx.c
+index 2219481..26fd190 100644
+--- a/source/fitz/load-jpx.c
++++ b/source/fitz/load-jpx.c
+@@ -410,8 +410,97 @@ copy_jpx_to_pixmap(fz_context *ctx, fz_pixmap *img, opj_image_t *jpx)
+ 	}
+ }
+ 
++static int
++jp2_find_box(const unsigned char *data, size_t size, const char *type, const unsigned char **body, size_t *body_size)
++{
++	size_t pos = 0;
++
++	while (size - pos >= 8)
++	{
++		uint64_t len = ((uint64_t)data[pos] << 24) | ((uint64_t)data[pos + 1] << 16) | ((uint64_t)data[pos + 2] << 8) | data[pos + 3];
++		size_t hdr = 8;
++		int i;
++
++		if (len == 1)
++		{
++			if (size - pos < 16)
++				return -1;
++			len = 0;
++			for (i = 0; i < 8; i++)
++				len = (len << 8) | data[pos + 8 + i];
++			hdr = 16;
++		}
++		else if (len == 0)
++			len = size - pos;
++		if (len < hdr || len > size - pos)
++			return -1;
++		if (!memcmp(data + pos + 4, type, 4))
++		{
++			*body = data + pos + hdr;
++			*body_size = (size_t)len - hdr;
++			return 1;
++		}
++		pos += (size_t)len;
++	}
++	return 0;
++}
++
++static int
++jp2_may_have_palette(const unsigned char *data, size_t size)
++{
++	const unsigned char *header, *palette;
++	size_t header_size, palette_size;
++
++	if (jp2_find_box(data, size, "jp2h", &header, &header_size) != 1)
++		return 1;
++	return jp2_find_box(header, header_size, "pclr", &palette, &palette_size) != 0;
++}
++
++static int
++jpx_set_reduction(fz_context *ctx, opj_codec_t *codec, OPJ_CODEC_FORMAT format, const unsigned char *data, size_t size, fz_colorspace *defcs, int reduce)
++{
++	opj_codestream_info_v2_t *info;
++	int levels = -1;
++	OPJ_UINT32 k;
++
++	if (reduce <= 0 || fz_colorspace_is_indexed(ctx, defcs))
++		return 0;
++	if (format == OPJ_CODEC_JP2 && jp2_may_have_palette(data, size))
++		return 0;
++
++	info = opj_get_cstr_info(codec);
++	if (!info)
++		return 0;
++	if (info->m_default_tile_info.tccp_info)
++	{
++		for (k = 0; k < info->nbcomps; k++)
++		{
++			int n = (int)info->m_default_tile_info.tccp_info[k].numresolutions - 1;
++			if (levels < 0 || n < levels)
++				levels = n;
++		}
++	}
++	opj_destroy_cstr_info(&info);
++
++	reduce = fz_mini(reduce, levels);
++	if (reduce <= 0)
++		return 0;
++	if (!opj_set_decoded_resolution_factor(codec, (OPJ_UINT32)reduce))
++	{
++		opj_set_decoded_resolution_factor(codec, 0);
++		return 0;
++	}
++	return reduce;
++}
++
++static OPJ_UINT32
++jpx_reduce_coord(OPJ_UINT32 v, int reduce)
++{
++	return (OPJ_UINT32)(((uint64_t)v + (((uint64_t)1 << reduce) - 1)) >> reduce);
++}
++
+ static fz_pixmap *
+-jpx_read_image(fz_context *ctx, fz_jpxd *state, const unsigned char *data, size_t size, fz_colorspace *defcs, int onlymeta)
++jpx_read_image(fz_context *ctx, fz_jpxd *state, const unsigned char *data, size_t size, fz_colorspace *defcs, int onlymeta, int reduce, int *applied)
+ {
+ 	fz_pixmap *img = NULL;
+ 	opj_dparameters_t params;
+@@ -467,8 +556,10 @@ jpx_read_image(fz_context *ctx, fz_jpxd *state, const unsigned char *data, size_
+ 		fz_throw(ctx, FZ_ERROR_LIBRARY, "Failed to read JPX header");
+ 	}
+ 
++	*applied = 0;
+ 	if (!onlymeta)
+ 	{
++		*applied = jpx_set_reduction(ctx, codec, format, data, size, defcs, reduce);
+ 		if (!opj_decode(codec, stream, jpx))
+ 		{
+ 			opj_stream_destroy(stream);
+@@ -485,6 +576,19 @@ jpx_read_image(fz_context *ctx, fz_jpxd *state, const unsigned char *data, size_
+ 	if (!jpx)
+ 		fz_throw(ctx, FZ_ERROR_LIBRARY, "opj_decode failed");
+ 
++	if (*applied > 0)
++	{
++		jpx->x0 = jpx_reduce_coord(jpx->x0, *applied);
++		jpx->y0 = jpx_reduce_coord(jpx->y0, *applied);
++		jpx->x1 = jpx_reduce_coord(jpx->x1, *applied);
++		jpx->y1 = jpx_reduce_coord(jpx->y1, *applied);
++		for (k = 0; k < (int)jpx->numcomps; k++)
++		{
++			jpx->comps[k].x0 = jpx_reduce_coord(jpx->comps[k].x0, *applied);
++			jpx->comps[k].y0 = jpx_reduce_coord(jpx->comps[k].y0, *applied);
++		}
++	}
++
+ 	numcomps = (int)jpx->numcomps;
+ 
+ 	/* Count number of alpha and color channels */
+@@ -646,11 +750,12 @@ fz_load_jpx(fz_context *ctx, const unsigned char *data, size_t size, fz_colorspa
+ {
+ 	fz_jpxd state = { 0 };
+ 	fz_pixmap *pix = NULL;
++	int applied;
+ 
+ 	fz_try(ctx)
+ 	{
+ 		fz_opj_lock(ctx);
+-		pix = jpx_read_image(ctx, &state, data, size, defcs, 0);
++		pix = jpx_read_image(ctx, &state, data, size, defcs, 0, 0, &applied);
+ 	}
+ 	fz_always(ctx)
+ 		fz_opj_unlock(ctx);
+@@ -660,15 +765,44 @@ fz_load_jpx(fz_context *ctx, const unsigned char *data, size_t size, fz_colorspa
+ 	return pix;
+ }
+ 
++fz_pixmap *
++fz_load_jpx_reduced(fz_context *ctx, const unsigned char *data, size_t size, fz_colorspace *defcs, int reduce, int *applied)
++{
++	fz_jpxd state = { 0 };
++	fz_pixmap *pix = NULL;
++
++	*applied = 0;
++	fz_try(ctx)
++	{
++		fz_opj_lock(ctx);
++		pix = jpx_read_image(ctx, &state, data, size, defcs, 0, reduce, applied);
++	}
++	fz_always(ctx)
++		fz_opj_unlock(ctx);
++	fz_catch(ctx)
++	{
++		if (*applied == 0)
++			fz_rethrow(ctx);
++		fz_rethrow_if(ctx, FZ_ERROR_SYSTEM);
++		fz_report_error(ctx);
++		fz_warn(ctx, "JPX decode at reduced resolution failed; retrying at full resolution");
++		*applied = 0;
++		pix = fz_load_jpx(ctx, data, size, defcs);
++	}
++
++	return pix;
++}
++
+ void
+ fz_load_jpx_info(fz_context *ctx, const unsigned char *data, size_t size, int *wp, int *hp, int *xresp, int *yresp, fz_colorspace **cspacep, fz_colorspace *defcs)
+ {
+ 	fz_jpxd state = { 0 };
++	int applied;
+ 
+ 	fz_try(ctx)
+ 	{
+ 		fz_opj_lock(ctx);
+-		jpx_read_image(ctx, &state, data, size, defcs, 1);
++		jpx_read_image(ctx, &state, data, size, defcs, 1, 0, &applied);
+ 	}
+ 	fz_always(ctx)
+ 		fz_opj_unlock(ctx);
+@@ -690,6 +824,12 @@ fz_load_jpx(fz_context *ctx, const unsigned char *data, size_t size, fz_colorspa
+ 	fz_throw(ctx, FZ_ERROR_UNSUPPORTED, "JPX support disabled");
+ }
+ 
++fz_pixmap *
++fz_load_jpx_reduced(fz_context *ctx, const unsigned char *data, size_t size, fz_colorspace *defcs, int reduce, int *applied)
++{
++	fz_throw(ctx, FZ_ERROR_UNSUPPORTED, "JPX support disabled");
++}
++
+ void
+ fz_load_jpx_info(fz_context *ctx, const unsigned char *data, size_t size, int *wp, int *hp, int *xresp, int *yresp, fz_colorspace **cspacep)
+ {

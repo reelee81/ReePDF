@@ -17,9 +17,31 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
-        maven("https://maven.ghostscript.com") {
-            content {
-                includeGroup("com.artifex.mupdf")
+        exclusiveContent {
+            forRepositories(
+                ivy {
+                    name = "mupdfLocal"
+                    url = settingsDir.resolve("mupdf/dist").toURI()
+                    patternLayout {
+                        artifact("[artifact]-[revision].aar")
+                    }
+                    metadataSources {
+                        artifact()
+                    }
+                },
+                ivy {
+                    name = "mupdfRelease"
+                    url = uri("https://github.com/reelee81/ReePDF/releases/download/mupdf")
+                    patternLayout {
+                        artifact("[artifact]-[revision].aar")
+                    }
+                    metadataSources {
+                        artifact()
+                    }
+                },
+            )
+            filter {
+                includeModule("hu.reelee81.reepdf", "mupdf-fitz")
             }
         }
     }
@@ -32,3 +54,4 @@ rootProject.name = "ReePDF"
 include(":app")
 include(":core")
 include(":pdf")
+include(":viewer")

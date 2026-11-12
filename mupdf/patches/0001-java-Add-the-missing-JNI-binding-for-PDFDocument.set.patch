@@ -1,0 +1,42 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: reelee81 <reelee81@gmail.com>
+Date: Sun, 8 Nov 2026 19:37:17 +0100
+Subject: [PATCH 1/18] java: Add the missing JNI binding for
+ PDFDocument.setPageTreeCache.
+
+PDFDocument.java declares setPageTreeCache(boolean) and the C function
+pdf_set_page_tree_cache() exists, but the JNI implementation was missing,
+so calling it threw UnsatisfiedLinkError.
+
+Modified for ReePDF on 2026-11-08.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ platform/java/jni/pdfdocument.c | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
+
+diff --git a/platform/java/jni/pdfdocument.c b/platform/java/jni/pdfdocument.c
+index ce4b2e9..7c4728d 100644
+--- a/platform/java/jni/pdfdocument.c
++++ b/platform/java/jni/pdfdocument.c
+@@ -385,6 +385,20 @@ FUN(PDFDocument_newDictionary)(JNIEnv *env, jobject self)
+ 	return jobj;
+ }
+ 
++JNIEXPORT void JNICALL
++FUN(PDFDocument_setPageTreeCache)(JNIEnv *env, jobject self, jboolean enabled)
++{
++	fz_context *ctx = get_context(env);
++	pdf_document *pdf = from_PDFDocument(env, self);
++
++	if (!ctx || !pdf) return;
++
++	fz_try(ctx)
++		pdf_set_page_tree_cache(ctx, pdf, enabled);
++	fz_catch(ctx)
++		jni_rethrow_void(env, ctx);
++}
++
+ JNIEXPORT jobject JNICALL
+ FUN(PDFDocument_findPage)(JNIEnv *env, jobject self, jint jat)
+ {

@@ -1,0 +1,37 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: reelee81 <reelee81@gmail.com>
+Date: Thu, 12 Nov 2026 13:36:14 +0100
+Subject: [PATCH 14/18] fitz: Reset the rasterizer to an empty clip without
+ overflow.
+
+fz_reset_rasterizer() multiplied the clip by the antialiasing scale even
+when the clip was empty. An empty clip is stored with FZ_MAX_INF_RECT and
+FZ_MIN_INF_RECT, so the multiplication overflowed (undefined behaviour,
+on 394 of 1367 test files); the clip only stayed empty because the
+result wrapped. An empty clip is now reset to an empty clip of zero size
+at BBOX_MAX, without multiplying. Nothing is drawn either way, so the
+output is unchanged.
+
+Modified for ReePDF on 2026-11-12.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ source/fitz/draw-rasterize.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/source/fitz/draw-rasterize.c b/source/fitz/draw-rasterize.c
+index af5ee6b..d0d6301 100644
+--- a/source/fitz/draw-rasterize.c
++++ b/source/fitz/draw-rasterize.c
+@@ -247,6 +247,11 @@ int fz_reset_rasterizer(fz_context *ctx, fz_rasterizer *rast, fz_irect clip)
+ 		rast->clip.x0 = rast->clip.y0 = BBOX_MIN;
+ 		rast->clip.x1 = rast->clip.y1 = BBOX_MAX;
+ 	}
++	else if (fz_is_empty_irect(clip))
++	{
++		rast->clip.x0 = rast->clip.x1 = BBOX_MAX;
++		rast->clip.y0 = rast->clip.y1 = BBOX_MAX;
++	}
+ 	else {
+ 		rast->clip.x0 = clip.x0 * hscale;
+ 		rast->clip.x1 = clip.x1 * hscale;

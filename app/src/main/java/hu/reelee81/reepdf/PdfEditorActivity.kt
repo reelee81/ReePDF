@@ -99,7 +99,9 @@ class PdfEditorActivity : PdfActivity() {
         val night = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
                 Configuration.UI_MODE_NIGHT_YES
         WindowCompat.getInsetsController(window, window.decorView).isAppearanceLightStatusBars = !night
-        SystemBarsCompat.applyNavBarColor(this, ContextCompat.getColor(this, R.color.pdf_viewer_sb_bg_color))
+        val barColor = ContextCompat.getColor(this, R.color.pdf_viewer_sb_bg_color)
+        SystemBarsCompat.applyStatusBarColor(this, barColor)
+        SystemBarsCompat.applyNavBarColor(this, barColor)
 
         val toolbar = findViewById<MaterialToolbar>(R.id.toolbar)
         setSupportActionBar(toolbar)

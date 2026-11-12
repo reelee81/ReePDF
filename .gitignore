@@ -2,14 +2,9 @@
 .gradle/
 .kotlin/
 build/
-app/build/
 .externalNativeBuild/
 .cxx/
 app/release/
-.checkpoints/
-.agents/
-.claude/
-.codex/
 docs/
 
 # Local work folder: only the descriptions of the test PDF folders are tracked
@@ -20,6 +15,9 @@ docs/
 !/work/00_test_PDFs_work/
 /work/00_test_PDFs_work/*
 !/work/00_test_PDFs_work/README.md
+
+# Own MuPDF build output: published as a GitHub release asset, not tracked
+/mupdf/dist/
 
 # Local config
 local.properties

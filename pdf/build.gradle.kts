@@ -28,7 +28,12 @@ dependencies {
     api(libs.itextpdf.forms)
     api(libs.itextpdf.bc.adapter)
     api(libs.itextpdf.bc.connector)
-    api(libs.mupdf.fitz)
+    api(libs.mupdf.fitz) {
+        artifact {
+            type = "aar"
+            extension = "aar"
+        }
+    }
     coreLibraryDesugaring(libs.desugar.jdk.libs.nio)
     testImplementation(libs.junit)
 }

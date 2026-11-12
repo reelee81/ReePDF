@@ -13,7 +13,6 @@ import hu.reelee81.reepdf.core.PdfCropRect
 import hu.reelee81.reepdf.core.PdfCrops
 import hu.reelee81.reepdf.core.PdfSignedGroups
 import hu.reelee81.reepdf.core.ProgressMath
-import hu.reelee81.reepdf.core.ProgressNotifyPacing
 import hu.reelee81.reepdf.core.ProgressTicker
 import hu.reelee81.reepdf.core.SignatureGeometry
 import hu.reelee81.reepdf.core.SourcePageArrays
@@ -62,11 +61,7 @@ class PdfSignOperation(
         try {
             ProgressTicker.run(
                 tick = progress.tickMs.milliseconds,
-                percent = {
-                    val now = progress.clock()
-                    if (now - tracker.startedAt < ProgressNotifyPacing.REVEAL_MS) null
-                    else tracker.percent(now, progress.idleMs)
-                },
+                percent = { progress.percentOf(tracker) },
                 report = report,
                 onCancel = tracker::cancel
             ) {

@@ -31,6 +31,53 @@ class ProgressMathTest {
     }
 
     @Test
+    fun withoutLaterFilesTheImportUnitsAreTheWrittenPagesAndTheLayout() {
+        assertEquals(4_000L, ProgressMath.importUnits(1_000, 0, 1_000, 1))
+        assertEquals(2_250L, ProgressMath.importUnits(1_000, 0, 1_000, 4))
+    }
+
+    @Test
+    fun countingTheLaterFilesGivesEveryFileOfAnImportTheSameTotal() {
+        val files = listOf(1_000, 2_000, 9_000, 9_000, 9_000)
+        var copied = 0
+        val totals = files.mapIndexed { index, pages ->
+            val total = copied + ProgressMath.importUnits(pages, files.drop(index + 1).sum(), copied + pages, 1)
+            copied += pages
+            total
+        }
+
+        assertEquals(List(5) { 120_000L }, totals)
+        assertEquals(0L, 1_000L * 100 / totals.first())
+    }
+
+    @Test
+    fun anOperationFollowedByThumbnailsFillsOnlyItsShareOfTheBar() {
+        assertEquals(90, ProgressMath.sharedPercent(100, ProgressMath.THUMBNAIL_PHASE_START))
+        assertEquals(45, ProgressMath.sharedPercent(50, ProgressMath.THUMBNAIL_PHASE_START))
+        assertEquals(37, ProgressMath.sharedPercent(37, 100))
+        assertNull(ProgressMath.sharedPercent(null, ProgressMath.THUMBNAIL_PHASE_START))
+    }
+
+    @Test
+    fun theThumbnailPhaseAfterAnOperationRunsFromNinetyToAHundredPercent() {
+        val from = ProgressMath.THUMBNAIL_PHASE_START
+        assertEquals(90, ProgressMath.thumbnailPercent(from, 10, 0))
+        assertEquals(93, ProgressMath.thumbnailPercent(from, 10, 3))
+        assertEquals(96, ProgressMath.thumbnailPercent(from, 3, 2))
+        assertEquals(100, ProgressMath.thumbnailPercent(from, 10, 10))
+        assertEquals(100, ProgressMath.thumbnailPercent(from, 10, 12))
+        assertEquals(90, ProgressMath.thumbnailPercent(from, 10, -1))
+        assertEquals(100, ProgressMath.thumbnailPercent(from, 0, 0))
+    }
+
+    @Test
+    fun aThumbnailWaitOnItsOwnRunsFromZeroToAHundredPercent() {
+        assertEquals(0, ProgressMath.thumbnailPercent(0, 6, 0))
+        assertEquals(33, ProgressMath.thumbnailPercent(0, 6, 2))
+        assertEquals(100, ProgressMath.thumbnailPercent(0, 6, 6))
+    }
+
+    @Test
     fun withoutWorkOrDoneUnitsThePercentIsIndeterminate() {
         assertNull(ProgressMath.measuredPercent(0, 0, 0, 5_000, -1, 1_000))
         assertNull(ProgressMath.measuredPercent(100, 0, 0, 5_000, -1, 1_000))

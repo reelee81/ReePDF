@@ -1,0 +1,90 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: reelee81 <reelee81@gmail.com>
+Date: Sun, 8 Nov 2026 19:37:46 +0100
+Subject: [PATCH 2/18] java: Add Context.releaseFreeMemory() to return freed
+ heap memory to the OS.
+
+After a large document is closed, the Android allocator keeps most of the
+freed native memory mapped, so the process stays large although MuPDF holds
+almost nothing. releaseFreeMemory() asks the allocator to give free pages
+back: mallopt(M_PURGE_ALL) from Android 14, otherwise mallopt(M_PURGE) from
+Android 9. It returns false where the platform has no such call (Android 8
+and the non-Android builds). It does not touch the store; call emptyStore()
+first if the cached resources should go too.
+
+Modified for ReePDF on 2026-11-08.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ platform/java/jni/context.c                          | 12 ++++++++++++
+ platform/java/mupdf_native.c                         |  1 +
+ platform/java/mupdf_native.h                         |  8 ++++++++
+ .../java/src/com/artifex/mupdf/fitz/Context.java     |  1 +
+ 4 files changed, 22 insertions(+)
+
+diff --git a/platform/java/jni/context.c b/platform/java/jni/context.c
+index ef09dd5..68ea2d9 100644
+--- a/platform/java/jni/context.c
++++ b/platform/java/jni/context.c
+@@ -342,6 +342,18 @@ FUN(Context_shrinkStore)(JNIEnv *env, jclass cls, jint percent)
+ 	return success != 0;
+ }
+ 
++JNIEXPORT jboolean JNICALL
++FUN(Context_releaseFreeMemory)(JNIEnv *env, jclass cls)
++{
++#ifdef HAVE_ANDROID
++	if (mallopt(M_PURGE_ALL, 0))
++		return JNI_TRUE;
++	return mallopt(M_PURGE, 0) ? JNI_TRUE : JNI_FALSE;
++#else
++	return JNI_FALSE;
++#endif
++}
++
+ static fz_font *load_java_font_file(fz_context *ctx, const char *name, const char *script, int bold, int italic)
+ {
+ 	jboolean detach = JNI_FALSE;
+diff --git a/platform/java/mupdf_native.c b/platform/java/mupdf_native.c
+index beff47c..97cdd9c 100644
+--- a/platform/java/mupdf_native.c
++++ b/platform/java/mupdf_native.c
+@@ -52,6 +52,7 @@ NOTE!
+ #ifdef HAVE_ANDROID
+ #include <android/log.h>
+ #include <android/bitmap.h>
++#include <malloc.h>
+ #define LOG_TAG "libmupdf"
+ #define LOGI(...) __android_log_print(ANDROID_LOG_INFO,LOG_TAG,__VA_ARGS__)
+ #define LOGT(...) __android_log_print(ANDROID_LOG_INFO,"alert",__VA_ARGS__)
+diff --git a/platform/java/mupdf_native.h b/platform/java/mupdf_native.h
+index fbd46f9..a5a2382 100644
+--- a/platform/java/mupdf_native.h
++++ b/platform/java/mupdf_native.h
+@@ -469,6 +469,14 @@ JNIEXPORT void JNICALL Java_com_artifex_mupdf_fitz_Context_emptyStore
+ JNIEXPORT jboolean JNICALL Java_com_artifex_mupdf_fitz_Context_shrinkStore
+   (JNIEnv *, jclass, jint);
+ 
++/*
++ * Class:     com_artifex_mupdf_fitz_Context
++ * Method:    releaseFreeMemory
++ * Signature: ()Z
++ */
++JNIEXPORT jboolean JNICALL Java_com_artifex_mupdf_fitz_Context_releaseFreeMemory
++  (JNIEnv *, jclass);
++
+ /*
+  * Class:     com_artifex_mupdf_fitz_Context
+  * Method:    enableICC
+diff --git a/platform/java/src/com/artifex/mupdf/fitz/Context.java b/platform/java/src/com/artifex/mupdf/fitz/Context.java
+index 7cd7d1e..cb0d45a 100644
+--- a/platform/java/src/com/artifex/mupdf/fitz/Context.java
++++ b/platform/java/src/com/artifex/mupdf/fitz/Context.java
+@@ -78,6 +78,7 @@ public class Context
+ 	// empty and shrink the store
+ 	public native static void emptyStore();
+ 	public native static boolean shrinkStore(int percent);
++	public native static boolean releaseFreeMemory();
+ 
+ 	public native static void enableICC();
+ 	public native static void disableICC();

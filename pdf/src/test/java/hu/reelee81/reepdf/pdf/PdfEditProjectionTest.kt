@@ -159,6 +159,7 @@ class PdfEditProjectionTest {
         assertTrue(hasLayers(nup, setOf(1)))
         val cleared = temporary.newFile()
         assertEquals(1, PdfEditProjection.clearLayers(nup, cleared, setOf(1), batchSize = 1) {})
+        TestPdfs.assertWorkFile(cleared)
         assertFalse(hasLayers(cleared, setOf(1)))
         assertTrue(hasLayers(cleared, setOf(2)))
         assertTrue(hasLayers(cleared, null))

@@ -1,0 +1,1332 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: reelee81 <reelee81@gmail.com>
+Date: Wed, 11 Nov 2026 12:30:14 +0100
+Subject: [PATCH 5/18] fitz: Stop the long steps of an aborted page run early.
+
+A cookie abort was only noticed by the PDF interpreter between two
+operators, so one long operator (decoding or scaling a large image,
+rasterizing a huge path, converting an image through a tint transform,
+building an ICC transform) ran to its end after the abort. For a
+10200x14031 JPEG 2000 image drawn at full size that took seconds.
+
+While a page is run with a cookie, the context points to cookie->abort
+(fz_set_abort_flag, set and restored by fz_run_page_contents, annots,
+widgets and document structure); the flag is also recorded for the
+calling thread (fz_thread_abort_requested) for code that gets no
+context.
+
+Steps whose result may be stored throw FZ_ERROR_ABORT (fz_check_abort):
+images are read from their decode chain in bands, the subarea,
+subsample and unpack readers check on every call, JPEG 2000, JBIG2
+(also the shared globals) and progressive JPEG stop inside the decoder
+through the abort hooks of the OpenJPEG and jbig2dec patches and the
+libjpeg progress monitor, decode arrays, colour keys and shading
+functions are evaluated with checks, and an ICC transform built during
+an abort is not stored (the lcms2 patch stops its slow building steps).
+
+Steps that only draw stop early (fz_abort_requested): image scaling and
+painting, pixmap painting and blending, glyph drawing, path flattening
+and scan conversion, shading triangles and pixmap colour conversion
+(ICC, separations, Lab). Pattern tiles and glyphs drawn during an abort
+are not cached, and a run without a cookie (patterns, type3 glyphs)
+throws instead of ending normally.
+
+An abort never ends in an incomplete or more expensive result that
+could be stored: fz_available, fz_read_byte, fz_peek_byte, fz_read_best,
+the font and type3 glyph loaders let FZ_ERROR_ABORT through, and the
+reduced resolution JPEG 2000 decode is not retried at full resolution.
+When the colour key step of a JPEG 2000 image fails, the decoded image
+is dropped too (it was leaked). Without an abort the output is
+unchanged.
+
+This patch uses the abort hooks added by the OpenJPEG, jbig2dec and
+lcms2 patches (0006, 0007, 0008).
+
+Modified for ReePDF on 2026-11-11 and 2026-11-12.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ include/mupdf/fitz/context.h    | 28 +++++++++++++++++++++
+ include/mupdf/fitz/stream.h     |  3 +++
+ source/fitz/color-lcms.c        | 24 +++++++++++++++++-
+ source/fitz/colorspace.c        | 10 ++++++++
+ source/fitz/context.c           | 36 +++++++++++++++++++++++++++
+ source/fitz/document.c          | 12 +++++++++
+ source/fitz/draw-affine.c       |  2 ++
+ source/fitz/draw-blend.c        |  8 ++++++
+ source/fitz/draw-device.c       |  9 +++++--
+ source/fitz/draw-edge.c         |  5 ++++
+ source/fitz/draw-glyph.c        |  3 ++-
+ source/fitz/draw-mesh.c         |  4 +++
+ source/fitz/draw-paint.c        | 14 +++++++++++
+ source/fitz/draw-path.c         | 40 ++++++++++++++++++++++++++++++
+ source/fitz/draw-scale-simple.c |  5 ++++
+ source/fitz/draw-unpack.c       |  5 ++++
+ source/fitz/filter-dct.c        | 12 +++++++++
+ source/fitz/filter-jbig2.c      | 22 ++++++++++++++++-
+ source/fitz/image.c             | 34 ++++++++++++++++++++++---
+ source/fitz/load-jpx.c          | 35 +++++++++++++++++++++-----
+ source/fitz/pixmap.c            |  8 ++++++
+ source/fitz/separation.c        | 44 +++++++++++++++++++++++++++++++++
+ source/fitz/stream-read.c       |  2 +-
+ source/pdf/pdf-interpret.c      |  8 ++++++
+ source/pdf/pdf-shade.c          |  4 +++
+ source/pdf/pdf-type3.c          |  1 +
+ 26 files changed, 363 insertions(+), 15 deletions(-)
+
+diff --git a/include/mupdf/fitz/context.h b/include/mupdf/fitz/context.h
+index e2553b7..6f3217a 100644
+--- a/include/mupdf/fitz/context.h
++++ b/include/mupdf/fitz/context.h
+@@ -909,6 +909,7 @@ struct fz_context
+ 	/* unshared contexts */
+ 	fz_aa_context aa;
+ 	fz_chacha20 seed;
++	int *abort_flag;
+ #if FZ_ENABLE_ICC
+ 	int icc_enabled;
+ #endif
+@@ -930,6 +931,33 @@ struct fz_context
+ 
+ fz_context *fz_new_context_imp(const fz_alloc_context *alloc, const fz_locks_context *locks, size_t max_store, const char *version);
+ 
++/**
++	Abort support for long steps inside a page run.
++
++	While a page is run with a cookie, ctx->abort_flag points to
++	cookie->abort, so long loops deep inside the run (image
++	decoding, scaling, painting, rasterizing) can stop early once
++	the cookie is aborted. Code whose result may be stored throws
++	FZ_ERROR_ABORT (fz_check_abort); code that only draws into the
++	page being aborted may simply stop (fz_abort_requested).
++
++	fz_set_abort_flag returns the previous flag, so that a run can
++	restore it when it ends. It also records the flag for the calling
++	thread, so that code that gets no context (painting helpers, the
++	lcms2 abort check) can ask fz_thread_abort_requested.
++*/
++static inline int
++fz_abort_requested(fz_context *ctx)
++{
++	return ctx->abort_flag && *(volatile int *)ctx->abort_flag;
++}
++
++int *fz_set_abort_flag(fz_context *ctx, int *flag);
++
++void fz_check_abort(fz_context *ctx);
++
++int fz_thread_abort_requested(void);
++
+ /**
+ 	Lock one of the user supplied mutexes.
+ */
+diff --git a/include/mupdf/fitz/stream.h b/include/mupdf/fitz/stream.h
+index 73268b9..fd40f7c 100644
+--- a/include/mupdf/fitz/stream.h
++++ b/include/mupdf/fitz/stream.h
+@@ -418,6 +418,7 @@ static inline size_t fz_available(fz_context *ctx, fz_stream *stm, size_t max)
+ 	fz_catch(ctx)
+ 	{
+ 		fz_rethrow_if(ctx, FZ_ERROR_TRYLATER);
++		fz_rethrow_if(ctx, FZ_ERROR_ABORT);
+ 		fz_report_error(ctx);
+ 		fz_warn(ctx, "read error; treating as end of file");
+ 		stm->error = 1;
+@@ -453,6 +454,7 @@ static inline int fz_read_byte(fz_context *ctx, fz_stream *stm)
+ 	fz_catch(ctx)
+ 	{
+ 		fz_rethrow_if(ctx, FZ_ERROR_TRYLATER);
++		fz_rethrow_if(ctx, FZ_ERROR_ABORT);
+ 		fz_report_error(ctx);
+ 		fz_warn(ctx, "read error; treating as end of file");
+ 		stm->error = 1;
+@@ -488,6 +490,7 @@ static inline int fz_peek_byte(fz_context *ctx, fz_stream *stm)
+ 	fz_catch(ctx)
+ 	{
+ 		fz_rethrow_if(ctx, FZ_ERROR_TRYLATER);
++		fz_rethrow_if(ctx, FZ_ERROR_ABORT);
+ 		fz_report_error(ctx);
+ 		fz_warn(ctx, "read error; treating as end of file");
+ 		stm->error = 1;
+diff --git a/source/fitz/color-lcms.c b/source/fitz/color-lcms.c
+index e87323a..cb056b6 100644
+--- a/source/fitz/color-lcms.c
++++ b/source/fitz/color-lcms.c
+@@ -188,6 +188,12 @@ static cmsPluginMemHandler fz_lcms_memhandler =
+ 	NULL,
+ };
+ 
++static cmsBool fz_lcms_abort_check(cmsContext id)
++{
++	(void)id;
++	return fz_thread_abort_requested();
++}
++
+ void fz_new_icc_context(fz_context *ctx)
+ {
+ 	cmsContext glo = cmsCreateContext(&fz_lcms_memhandler, ctx);
+@@ -195,6 +201,7 @@ void fz_new_icc_context(fz_context *ctx)
+ 		fz_throw(ctx, FZ_ERROR_LIBRARY, "cmsCreateContext failed");
+ 	ctx->colorspace->icc_instance = glo;
+ 	cmsSetLogErrorHandler(glo, fz_lcms_log_error);
++	cmsSetAbortCheck(fz_lcms_abort_check);
+ }
+ 
+ void fz_drop_icc_context(fz_context *ctx)
+@@ -401,6 +408,14 @@ fz_new_icc_link(fz_context *ctx,
+ 			fz_throw(ctx, FZ_ERROR_LIBRARY, "cmsCreateMultiprofileTransform(src,proof,dst) failed");
+ 	}
+ 
++	/* A transform made while the page run is being aborted may have been
++	 * left unfinished by lcms2, so it must not be stored. */
++	if (fz_abort_requested(ctx))
++	{
++		cmsDeleteTransform(GLO transform);
++		fz_throw(ctx, FZ_ERROR_ABORT, "aborted");
++	}
++
+ 	fz_try(ctx)
+ 	{
+ 		link = fz_malloc_struct(ctx, fz_icc_link);
+@@ -489,7 +504,12 @@ fz_icc_transform_pixmap(fz_context *ctx, fz_icc_link *link, const fz_pixmap *src
+ 		buffer = fz_malloc(ctx, ss);
+ 		for (; h > 0; h--)
+ 		{
+-			int mult = fz_unmultiply_row(ctx, sn, sc, sw, buffer, inputpos);
++			int mult;
++			/* The result is only drawn, never stored, so an aborted page
++			 * run may leave the rest of it unconverted. */
++			if ((h & 15) == 0 && fz_abort_requested(ctx))
++				break;
++			mult = fz_unmultiply_row(ctx, sn, sc, sw, buffer, inputpos);
+ 			if (mult == 0)
+ 			{
+ 				/* Solid transparent row. No point in doing the transform
+@@ -526,6 +546,8 @@ fz_icc_transform_pixmap(fz_context *ctx, fz_icc_link *link, const fz_pixmap *src
+ 	else
+ 		for (; h > 0; h--)
+ 		{
++			if ((h & 15) == 0 && fz_abort_requested(ctx))
++				break;
+ 			cmsDoTransform(GLO link->handle, inputpos, outputpos, sw);
+ 			inputpos += ss;
+ 			outputpos += ds;
+diff --git a/source/fitz/colorspace.c b/source/fitz/colorspace.c
+index 8b5bfdf..2981ce9 100644
+--- a/source/fitz/colorspace.c
++++ b/source/fitz/colorspace.c
+@@ -1241,6 +1241,8 @@ template_convert_lab(fz_context *ctx, const fz_pixmap *src, fz_pixmap *dst, fz_c
+ 	while (h--)
+ 	{
+ 		size_t ww = w;
++		if ((h & 15) == 0 && fz_abort_requested(ctx))
++			break;
+ 		while (ww--)
+ 		{
+ 			if (sa)
+@@ -1354,6 +1356,8 @@ template_brute_force(fz_context *ctx, const fz_pixmap *src, fz_pixmap *dst, fz_c
+ 	while (h--)
+ 	{
+ 		size_t ww = w;
++		if ((h & 15) == 0 && fz_abort_requested(ctx))
++			break;
+ 		while (ww--)
+ 		{
+ 			if (sa)
+@@ -1476,6 +1480,8 @@ lookup_1d(fz_context *ctx, const fz_pixmap *src, fz_pixmap *dst, fz_colorspace *
+ 	while (h--)
+ 	{
+ 		size_t ww = w;
++		if ((h & 15) == 0 && fz_abort_requested(ctx))
++			break;
+ 		while (ww--)
+ 		{
+ 			if (sa)
+@@ -1553,6 +1559,8 @@ memoize_nospots(fz_context *ctx, const fz_pixmap *src, fz_pixmap *dst, fz_colors
+ 		while (h--)
+ 		{
+ 			size_t ww = w;
++			if ((h & 15) == 0 && fz_abort_requested(ctx))
++				break;
+ 			while (ww--)
+ 			{
+ 				if (*s == *sold && memcmp(sold, s, src_n) == 0)
+@@ -1661,6 +1669,8 @@ memoize_spots(fz_context *ctx, const fz_pixmap *src, fz_pixmap *dst, fz_colorspa
+ 		while (h--)
+ 		{
+ 			size_t ww = w;
++			if ((h & 15) == 0 && fz_abort_requested(ctx))
++				break;
+ 			while (ww--)
+ 			{
+ 				if (*s == *sold && memcmp(sold, s, src_m) == 0)
+diff --git a/source/fitz/context.c b/source/fitz/context.c
+index 9549b55..5f8bba1 100644
+--- a/source/fitz/context.c
++++ b/source/fitz/context.c
+@@ -323,6 +323,9 @@ fz_clone_context(fz_context *ctx)
+ 	/* Reset error context to initial state. */
+ 	fz_init_error_context(new_ctx);
+ 
++	/* A clone does not take part in the page run of its parent. */
++	new_ctx->abort_flag = NULL;
++
+ 	/* Then keep lock checking happy by keeping shared contexts with new context */
+ 	fz_keep_document_handler_context(new_ctx);
+ 	fz_keep_archive_handler_context(new_ctx);
+@@ -380,3 +383,36 @@ int fz_new_document_id(fz_context *ctx)
+ 
+ 	return id;
+ }
++
++#if defined(__GNUC__) || defined(__clang__)
++static __thread int *thread_abort_flag;
++#define HAVE_THREAD_ABORT_FLAG
++#endif
++
++int *
++fz_set_abort_flag(fz_context *ctx, int *flag)
++{
++	int *previous = ctx->abort_flag;
++	ctx->abort_flag = flag;
++#ifdef HAVE_THREAD_ABORT_FLAG
++	thread_abort_flag = flag;
++#endif
++	return previous;
++}
++
++int
++fz_thread_abort_requested(void)
++{
++#ifdef HAVE_THREAD_ABORT_FLAG
++	return thread_abort_flag && *(volatile int *)thread_abort_flag;
++#else
++	return 0;
++#endif
++}
++
++void
++fz_check_abort(fz_context *ctx)
++{
++	if (fz_abort_requested(ctx))
++		fz_throw(ctx, FZ_ERROR_ABORT, "aborted");
++}
+diff --git a/source/fitz/document.c b/source/fitz/document.c
+index 200016f..e2d4e19 100644
+--- a/source/fitz/document.c
++++ b/source/fitz/document.c
+@@ -1081,10 +1081,13 @@ fz_run_document_structure(fz_context *ctx, fz_document *doc, fz_device *dev, fz_
+ {
+ 	if (doc && doc->run_structure)
+ 	{
++		int *outer = cookie ? fz_set_abort_flag(ctx, &cookie->abort) : ctx->abort_flag;
+ 		fz_try(ctx)
+ 		{
+ 			doc->run_structure(ctx, doc, dev, cookie);
+ 		}
++		fz_always(ctx)
++			fz_set_abort_flag(ctx, outer);
+ 		fz_catch(ctx)
+ 		{
+ 			dev->close_device = NULL; /* aborted run, don't warn about unclosed device */
+@@ -1099,10 +1102,13 @@ fz_run_page_contents(fz_context *ctx, fz_page *page, fz_device *dev, fz_matrix t
+ {
+ 	if (page && page->run_page_contents)
+ 	{
++		int *outer = cookie ? fz_set_abort_flag(ctx, &cookie->abort) : ctx->abort_flag;
+ 		fz_try(ctx)
+ 		{
+ 			page->run_page_contents(ctx, page, dev, transform, cookie);
+ 		}
++		fz_always(ctx)
++			fz_set_abort_flag(ctx, outer);
+ 		fz_catch(ctx)
+ 		{
+ 			dev->close_device = NULL; /* aborted run, don't warn about unclosed device */
+@@ -1117,10 +1123,13 @@ fz_run_page_annots(fz_context *ctx, fz_page *page, fz_device *dev, fz_matrix tra
+ {
+ 	if (page && page->run_page_annots)
+ 	{
++		int *outer = cookie ? fz_set_abort_flag(ctx, &cookie->abort) : ctx->abort_flag;
+ 		fz_try(ctx)
+ 		{
+ 			page->run_page_annots(ctx, page, dev, transform, cookie);
+ 		}
++		fz_always(ctx)
++			fz_set_abort_flag(ctx, outer);
+ 		fz_catch(ctx)
+ 		{
+ 			dev->close_device = NULL; /* aborted run, don't warn about unclosed device */
+@@ -1135,10 +1144,13 @@ fz_run_page_widgets(fz_context *ctx, fz_page *page, fz_device *dev, fz_matrix tr
+ {
+ 	if (page && page->run_page_widgets)
+ 	{
++		int *outer = cookie ? fz_set_abort_flag(ctx, &cookie->abort) : ctx->abort_flag;
+ 		fz_try(ctx)
+ 		{
+ 			page->run_page_widgets(ctx, page, dev, transform, cookie);
+ 		}
++		fz_always(ctx)
++			fz_set_abort_flag(ctx, outer);
+ 		fz_catch(ctx)
+ 		{
+ 			dev->close_device = NULL; /* aborted run, don't warn about unclosed device */
+diff --git a/source/fitz/draw-affine.c b/source/fitz/draw-affine.c
+index 6a9c6e5..06682a7 100644
+--- a/source/fitz/draw-affine.c
++++ b/source/fitz/draw-affine.c
+@@ -4101,6 +4101,8 @@ fz_paint_image_imp(fz_context *ctx,
+ 
+ 	while (h--)
+ 	{
++		if ((h & 15) == 0 && fz_abort_requested(ctx))
++			break;
+ 		paintfn(dp, da, sp, sw, sh, ss, sa, u, v, fa, fb, w, dn, sn, alpha, color, hp, gp, eop);
+ 		dp += dst->stride;
+ 		hp += hs;
+diff --git a/source/fitz/draw-blend.c b/source/fitz/draw-blend.c
+index c726d99..4b8a989 100644
+--- a/source/fitz/draw-blend.c
++++ b/source/fitz/draw-blend.c
+@@ -1111,6 +1111,8 @@ fz_blend_pixmap(fz_context *ctx, fz_pixmap * FZ_RESTRICT dst, fz_pixmap * FZ_RES
+ 		nn = src->w * src->n;
+ 		while (h--)
+ 		{
++			if ((h & 15) == 0 && fz_thread_abort_requested())
++				break;
+ 			n = nn;
+ 			while (n--)
+ 			{
+@@ -1156,6 +1158,8 @@ fz_blend_pixmap(fz_context *ctx, fz_pixmap * FZ_RESTRICT dst, fz_pixmap * FZ_RES
+ 
+ 		while (h--)
+ 		{
++			if ((h & 15) == 0 && fz_thread_abort_requested())
++				break;
+ 			if (blendmode >= FZ_BLEND_HUE)
+ 			{
+ 				if (complement || src->s > 0)
+@@ -1212,6 +1216,8 @@ fz_blend_pixmap(fz_context *ctx, fz_pixmap * FZ_RESTRICT dst, fz_pixmap * FZ_RES
+ 	{
+ 		while (h--)
+ 		{
++			if ((h & 15) == 0 && fz_thread_abort_requested())
++				break;
+ 			if (blendmode >= FZ_BLEND_HUE)
+ 			{
+ 				if (complement || src->s > 0)
+@@ -1356,6 +1362,8 @@ fz_blend_pixmap_knockout(fz_context *ctx, fz_pixmap * FZ_RESTRICT dst, fz_pixmap
+ 
+ 	while (h--)
+ 	{
++		if ((h & 15) == 0 && fz_thread_abort_requested())
++			break;
+ 		fz_blend_knockout(dp, da, sp, sa, n, w, hp);
+ 		sp += src->stride;
+ 		dp += dst->stride;
+diff --git a/source/fitz/draw-device.c b/source/fitz/draw-device.c
+index edb3c68..d8d3546 100644
+--- a/source/fitz/draw-device.c
++++ b/source/fitz/draw-device.c
+@@ -1046,6 +1046,8 @@ draw_glyph(unsigned char *colorbv, fz_pixmap *dst, fz_glyph *glyph,
+ 				return;
+ 			while (h--)
+ 			{
++				if ((h & 15) == 0 && fz_thread_abort_requested())
++					break;
+ 				(*fn)(dp, mp, dst->n, w, colorbv, da, eop);
+ 				dp += dst->stride;
+ 				mp += msk->stride;
+@@ -1061,6 +1063,8 @@ draw_glyph(unsigned char *colorbv, fz_pixmap *dst, fz_glyph *glyph,
+ 				return;
+ 			while (h--)
+ 			{
++				if ((h & 15) == 0 && fz_thread_abort_requested())
++					break;
+ 				(*fn)(dp, da, mp, 1, 0, w, col, eop);
+ 				dp += dst->stride;
+ 				mp += msk->stride;
+@@ -3052,8 +3056,9 @@ fz_draw_end_tile(fz_context *ctx, fz_device *devp)
+ 			}
+ 		}
+ 
+-		/* Now we try to cache the tiles. Any failure here will just result in us not caching. */
+-		if (state[1].encache && state[1].id != 0)
++		/* Now we try to cache the tiles. Any failure here will just result in us not caching.
++		 * A tile drawn while the run is being aborted may be incomplete, so it is not cached. */
++		if (state[1].encache && state[1].id != 0 && !fz_abort_requested(ctx))
+ 		{
+ 			tile_record *tile = NULL;
+ 			tile_key *key = NULL;
+diff --git a/source/fitz/draw-edge.c b/source/fitz/draw-edge.c
+index 4681598..31bedc3 100644
+--- a/source/fitz/draw-edge.c
++++ b/source/fitz/draw-edge.c
+@@ -666,6 +666,9 @@ fz_scan_convert_aa(fz_context *ctx, fz_gel *gel, int eofill, const fz_irect *cli
+ 	/* Now do the active lines */
+ 	while (gel->alen > 0 || e < gel->len)
+ 	{
++		/* The result is only drawn, so an aborted page run may stop here. */
++		if (fz_abort_requested(ctx))
++			break;
+ 		yc = fz_idiv(y, vscale);	/* yc = current scanline */
+ 		/* rh = remaining height = number of subscanlines left to be
+ 		 * inserted into the current scanline, which will be plotted
+@@ -835,6 +838,8 @@ fz_scan_convert_sharp(fz_context *ctx,
+ 	/* Now process as lines within the clip region */
+ 	while (gel->alen > 0 || e < gel->len)
+ 	{
++		if (fz_abort_requested(ctx))
++			break;
+ 		height = insert_active(ctx, gel, y, &e);
+ 
+ 		if (gel->alen == 0)
+diff --git a/source/fitz/draw-glyph.c b/source/fitz/draw-glyph.c
+index 8dbd8d5..13c1c49 100644
+--- a/source/fitz/draw-glyph.c
++++ b/source/fitz/draw-glyph.c
+@@ -379,7 +379,8 @@ fz_render_glyph(fz_context *ctx, fz_font *font, int gid, fz_matrix *ctm, fz_colo
+ 		{
+ 			fz_warn(ctx, "assert: uninitialized font structure");
+ 		}
+-		if (val && do_cache)
++		/* A type3 glyph drawn while the run is being aborted may be incomplete. */
++		if (val && do_cache && !fz_abort_requested(ctx))
+ 		{
+ 			if (val->w < MAX_GLYPH_SIZE && val->h < MAX_GLYPH_SIZE)
+ 			{
+diff --git a/source/fitz/draw-mesh.c b/source/fitz/draw-mesh.c
+index 908c17c..941e6c7 100644
+--- a/source/fitz/draw-mesh.c
++++ b/source/fitz/draw-mesh.c
+@@ -231,6 +231,10 @@ do_paint_tri(fz_context *ctx, void *arg, fz_vertex *av, fz_vertex *bv, fz_vertex
+ 	float *vertices[3];
+ 	fz_pixmap *dest;
+ 
++	/* The result is only drawn, so an aborted page run may skip the rest. */
++	if (fz_abort_requested(ctx))
++		return;
++
+ 	vertices[0] = (float *)av;
+ 	vertices[1] = (float *)bv;
+ 	vertices[2] = (float *)cv;
+diff --git a/source/fitz/draw-paint.c b/source/fitz/draw-paint.c
+index dbddb45..5b08dd9 100644
+--- a/source/fitz/draw-paint.c
++++ b/source/fitz/draw-paint.c
+@@ -2476,6 +2476,8 @@ fz_paint_pixmap_with_bbox(fz_pixmap * FZ_RESTRICT dst, const fz_pixmap * FZ_REST
+ 
+ 	while (h--)
+ 	{
++		if ((h & 15) == 0 && fz_thread_abort_requested())
++			break;
+ 		(*fn)(dp, da, sp, sa, n, w, alpha, 0);
+ 		sp += src->stride;
+ 		dp += dst->stride;
+@@ -2522,6 +2524,8 @@ fz_paint_pixmap(fz_pixmap * FZ_RESTRICT dst, const fz_pixmap * FZ_RESTRICT src,
+ 
+ 	while (h--)
+ 	{
++		if ((h & 15) == 0 && fz_thread_abort_requested())
++			break;
+ 		(*fn)(dp, da, sp, sa, n, w, alpha, 0);
+ 		sp += src->stride;
+ 		dp += dst->stride;
+@@ -2589,6 +2593,8 @@ fz_paint_pixmap_alpha(fz_pixmap * FZ_RESTRICT dst, const fz_pixmap * FZ_RESTRICT
+ 	{
+ 		while (h--)
+ 		{
++			if ((h & 15) == 0 && fz_thread_abort_requested())
++				break;
+ 			paint_span_alpha_solid(dp, sp, n, w);
+ 			sp += src->stride;
+ 			dp += dst->stride;
+@@ -2598,6 +2604,8 @@ fz_paint_pixmap_alpha(fz_pixmap * FZ_RESTRICT dst, const fz_pixmap * FZ_RESTRICT
+ 	{
+ 		while (h--)
+ 		{
++			if ((h & 15) == 0 && fz_thread_abort_requested())
++				break;
+ 			paint_span_alpha_not_solid(dp, sp, n, w, alpha);
+ 			sp += src->stride;
+ 			dp += dst->stride;
+@@ -2642,6 +2650,8 @@ fz_paint_pixmap_with_overprint(fz_pixmap * FZ_RESTRICT dst, const fz_pixmap * FZ
+ 
+ 	while (h--)
+ 	{
++		if ((h & 15) == 0 && fz_thread_abort_requested())
++			break;
+ 		(*fn)(dp, da, sp, sa, n, w, 255, eop);
+ 		sp += src->stride;
+ 		dp += dst->stride;
+@@ -2688,6 +2698,8 @@ fz_paint_pixmap_with_mask(fz_pixmap * FZ_RESTRICT dst, const fz_pixmap * FZ_REST
+ 
+ 	while (h--)
+ 	{
++		if ((h & 15) == 0 && fz_thread_abort_requested())
++			break;
+ 		(*fn)(dp, sp, mp, w, n, sa, NULL);
+ 		sp += src->stride;
+ 		dp += dst->stride;
+@@ -2750,6 +2762,8 @@ fz_paint_over_pixmap_with_mask(fz_pixmap * FZ_RESTRICT dst, const fz_pixmap * FZ
+ 
+ 	while (h--)
+ 	{
++		if ((h & 15) == 0 && fz_thread_abort_requested())
++			break;
+ 		paint_over_span_with_mask(dp, sp, mp, w);
+ 		sp += src->stride;
+ 		dp += dst->stride;
+diff --git a/source/fitz/draw-path.c b/source/fitz/draw-path.c
+index c39017f..005c482 100644
+--- a/source/fitz/draw-path.c
++++ b/source/fitz/draw-path.c
+@@ -200,6 +200,10 @@ flatten_lineto(fz_context *ctx, void *arg_, float x, float y)
+ {
+ 	flatten_arg *arg = (flatten_arg *)arg_;
+ 
++	/* An aborted page run only needs the rest of the path skipped. */
++	if (fz_abort_requested(ctx))
++		return;
++
+ 	line(ctx, arg->rast, arg->ctm, arg->c.x, arg->c.y, x, y);
+ 	arg->c.x = x;
+ 	arg->c.y = y;
+@@ -210,6 +214,10 @@ flatten_curveto(fz_context *ctx, void *arg_, float x1, float y1, float x2, float
+ {
+ 	flatten_arg *arg = (flatten_arg *)arg_;
+ 
++	/* An aborted page run only needs the rest of the path skipped. */
++	if (fz_abort_requested(ctx))
++		return;
++
+ 	bezier(ctx, arg->rast, arg->ctm, arg->flatness, arg->c.x, arg->c.y, x1, y1, x2, y2, x3, y3, 0);
+ 	arg->c.x = x3;
+ 	arg->c.y = y3;
+@@ -220,6 +228,10 @@ flatten_quadto(fz_context *ctx, void *arg_, float x1, float y1, float x2, float
+ {
+ 	flatten_arg *arg = (flatten_arg *)arg_;
+ 
++	/* An aborted page run only needs the rest of the path skipped. */
++	if (fz_abort_requested(ctx))
++		return;
++
+ 	quadratic(ctx, arg->rast, arg->ctm, arg->flatness, arg->c.x, arg->c.y, x1, y1, x2, y2, 0);
+ 	arg->c.x = x2;
+ 	arg->c.y = y2;
+@@ -241,6 +253,10 @@ flatten_rectto(fz_context *ctx, void *arg_, float x0, float y0, float x1, float
+ 	flatten_arg *arg = (flatten_arg *)arg_;
+ 	fz_matrix ctm = arg->ctm;
+ 
++	/* An aborted page run only needs the rest of the path skipped. */
++	if (fz_abort_requested(ctx))
++		return;
++
+ 	flatten_moveto(ctx, arg_, x0, y0);
+ 
+ 	if (fz_antidropout_rasterizer(ctx, arg->rast))
+@@ -1032,6 +1048,10 @@ stroke_lineto(fz_context *ctx, void *s_, float x, float y)
+ {
+ 	sctx *s = (sctx *)s_;
+ 
++	/* An aborted page run only needs the rest of the path skipped. */
++	if (fz_abort_requested(ctx))
++		return;
++
+ 	fz_stroke_lineto(ctx, s, x, y, 0);
+ 	s->cur.x = x;
+ 	s->cur.y = y;
+@@ -1042,6 +1062,10 @@ stroke_curveto(fz_context *ctx, void *s_, float x1, float y1, float x2, float y2
+ {
+ 	sctx *s = (sctx *)s_;
+ 
++	/* An aborted page run only needs the rest of the path skipped. */
++	if (fz_abort_requested(ctx))
++		return;
++
+ 	fz_stroke_bezier(ctx, s, s->cur.x, s->cur.y, x1, y1, x2, y2, x3, y3, 0);
+ 	s->cur.x = x3;
+ 	s->cur.y = y3;
+@@ -1052,6 +1076,10 @@ stroke_quadto(fz_context *ctx, void *s_, float x1, float y1, float x2, float y2)
+ {
+ 	sctx *s = (sctx *)s_;
+ 
++	/* An aborted page run only needs the rest of the path skipped. */
++	if (fz_abort_requested(ctx))
++		return;
++
+ 	fz_stroke_quad(ctx, s, s->cur.x, s->cur.y, x1, y1, x2, y2, 0);
+ 	s->cur.x = x2;
+ 	s->cur.y = y2;
+@@ -1496,6 +1524,10 @@ dash_lineto(fz_context *ctx, void *s_, float x, float y)
+ {
+ 	sctx *s = (sctx *)s_;
+ 
++	/* An aborted page run only needs the rest of the path skipped. */
++	if (fz_abort_requested(ctx))
++		return;
++
+ 	fz_dash_lineto(ctx, s, x, y, 0);
+ 	s->cur.x = x;
+ 	s->cur.y = y;
+@@ -1506,6 +1538,10 @@ dash_curveto(fz_context *ctx, void *s_, float x1, float y1, float x2, float y2,
+ {
+ 	sctx *s = (sctx *)s_;
+ 
++	/* An aborted page run only needs the rest of the path skipped. */
++	if (fz_abort_requested(ctx))
++		return;
++
+ 	fz_dash_bezier(ctx, s, s->cur.x, s->cur.y, x1, y1, x2, y2, x3, y3, 0);
+ 	s->cur.x = x3;
+ 	s->cur.y = y3;
+@@ -1516,6 +1552,10 @@ dash_quadto(fz_context *ctx, void *s_, float x1, float y1, float x2, float y2)
+ {
+ 	sctx *s = (sctx *)s_;
+ 
++	/* An aborted page run only needs the rest of the path skipped. */
++	if (fz_abort_requested(ctx))
++		return;
++
+ 	fz_dash_quad(ctx, s, s->cur.x, s->cur.y, x1, y1, x2, y2, 0);
+ 	s->cur.x = x2;
+ 	s->cur.y = y2;
+diff --git a/source/fitz/draw-scale-simple.c b/source/fitz/draw-scale-simple.c
+index 84942cd..8a59695 100644
+--- a/source/fitz/draw-scale-simple.c
++++ b/source/fitz/draw-scale-simple.c
+@@ -1854,6 +1854,11 @@ fz_scale_pixmap_cached(fz_context *ctx, const fz_pixmap *src, float x, float y,
+ 			int row_index = contrib_rows->index[row];
+ 			int row_min = contrib_rows->index[row_index++];
+ 			int row_len = contrib_rows->index[row_index];
++
++			/* The result is only drawn, never stored, so an aborted
++			 * page run may leave the rest of it unscaled. */
++			if ((row & 7) == 0 && fz_abort_requested(ctx))
++				break;
+ 			while (max_row < row_min+row_len)
+ 			{
+ 				/* Scale another row */
+diff --git a/source/fitz/draw-unpack.c b/source/fitz/draw-unpack.c
+index fcd964b..aa287e6 100644
+--- a/source/fitz/draw-unpack.c
++++ b/source/fitz/draw-unpack.c
+@@ -369,6 +369,10 @@ fz_decode_tile(fz_context *ctx, fz_pixmap *pix, const float *decode)
+ 	h = pix->h;
+ 	while (h--)
+ 	{
++		/* Callers drop the tile when this throws, so a partly decoded
++		 * tile is never stored. */
++		if ((h & 63) == 0)
++			fz_check_abort(ctx);
+ 		len = pix->w;
+ 		while (len--)
+ 		{
+@@ -405,6 +409,7 @@ unpack_next(fz_context *ctx, fz_stream *stm, size_t max)
+ 	unpack_state *state = (unpack_state *)stm->state;
+ 	size_t n = state->src_stride;
+ 
++	fz_check_abort(ctx);
+ 	stm->rp = state->buf;
+ 	do
+ 	{
+diff --git a/source/fitz/filter-dct.c b/source/fitz/filter-dct.c
+index 5d4a290..dc4455a 100644
+--- a/source/fitz/filter-dct.c
++++ b/source/fitz/filter-dct.c
+@@ -46,6 +46,7 @@ typedef struct
+ 	struct jpeg_decompress_struct cinfo;
+ 	struct jpeg_source_mgr srcmgr;
+ 	struct jpeg_error_mgr errmgr;
++	struct jpeg_progress_mgr progress;
+ 	jmp_buf jb;
+ 	char msg[JMSG_LENGTH_MAX];
+ 
+@@ -125,6 +126,12 @@ static void error_exit_dct(j_common_ptr cinfo)
+ 	fz_throw(ctx, FZ_ERROR_LIBRARY, "jpeg error: %s", msg);
+ }
+ 
++static void progress_dct(j_common_ptr cinfo)
++{
++	fz_dctd *state = JZ_DCT_STATE_FROM_CINFO(cinfo);
++	fz_check_abort(state->ctx);
++}
++
+ static void output_message_dct(j_common_ptr cinfo)
+ {
+ 	/* swallow message */
+@@ -229,6 +236,11 @@ next_dctd(fz_context *ctx, fz_stream *stm, size_t max)
+ 
+ 			jpeg_create_decompress(cinfo);
+ 
++			/* Lets an aborted page run stop a progressive image, which is
++			 * decoded as a whole in jpeg_start_decompress. */
++			state->progress.progress_monitor = progress_dct;
++			cinfo->progress = &state->progress;
++
+ 			cinfo->src = &state->srcmgr;
+ 			cinfo->src->init_source = init_source_dct;
+ 			cinfo->src->fill_input_buffer = fill_input_buffer_dct;
+diff --git a/source/fitz/filter-jbig2.c b/source/fitz/filter-jbig2.c
+index c8612e3..e68a57e 100644
+--- a/source/fitz/filter-jbig2.c
++++ b/source/fitz/filter-jbig2.c
+@@ -96,16 +96,26 @@ next_jbig2d(fz_context *ctx, fz_stream *stm, size_t len)
+ 	{
+ 		while (1)
+ 		{
++			fz_check_abort(ctx);
+ 			n = fz_read(ctx, state->chain, tmp, sizeof tmp);
+ 			if (n == 0)
+ 				break;
+ 
+ 			if (jbig2_data_in(state->ctx, tmp, n) < 0)
++			{
++				fz_check_abort(ctx);
+ 				fz_throw(ctx, FZ_ERROR_LIBRARY, "cannot decode jbig2 image");
++			}
+ 		}
+ 
+ 		if (jbig2_complete_page(state->ctx) < 0)
++		{
++			fz_check_abort(ctx);
+ 			fz_throw(ctx, FZ_ERROR_LIBRARY, "cannot complete jbig2 image");
++		}
++
++		/* jbig2dec may finish a page whose decoding was cut short by an abort. */
++		fz_check_abort(ctx);
+ 
+ 		state->page = jbig2_page_out(state->ctx);
+ 		if (!state->page)
+@@ -127,6 +137,13 @@ next_jbig2d(fz_context *ctx, fz_stream *stm, size_t len)
+ 	return *stm->rp++;
+ }
+ 
++static int
++abort_callback(void *data)
++{
++	fz_context *ctx = data;
++	return fz_abort_requested(ctx);
++}
++
+ static void
+ error_callback(void *data, const char *msg, Jbig2Severity severity, uint32_t seg_idx)
+ {
+@@ -190,11 +207,13 @@ fz_load_jbig2_globals(fz_context *ctx, fz_buffer *buf)
+ 		fz_free(ctx, globals);
+ 		fz_throw(ctx, FZ_ERROR_LIBRARY, "cannot allocate jbig2 globals context");
+ 	}
++	jbig2_ctx_set_abort_callback(jctx, abort_callback, ctx);
+ 
+-	if (jbig2_data_in(jctx, buf->data, buf->len) < 0)
++	if (jbig2_data_in(jctx, buf->data, buf->len) < 0 || fz_abort_requested(ctx))
+ 	{
+ 		jbig2_global_ctx_free(jbig2_make_global_ctx(jctx));
+ 		fz_free(ctx, globals);
++		fz_check_abort(ctx);
+ 		fz_throw(ctx, FZ_ERROR_LIBRARY, "cannot decode jbig2 globals");
+ 	}
+ 
+@@ -242,6 +261,7 @@ fz_open_jbig2d(fz_context *ctx, fz_stream *chain, fz_jbig2_globals *globals, int
+ 		fz_free(ctx, state);
+ 		fz_throw(ctx, FZ_ERROR_LIBRARY, "cannot allocate jbig2 context");
+ 	}
++	jbig2_ctx_set_abort_callback(state->ctx, abort_callback, ctx);
+ 
+ 	state->page = NULL;
+ 	state->idx = 0;
+diff --git a/source/fitz/image.c b/source/fitz/image.c
+index 0ff6856..7b394d8 100644
+--- a/source/fitz/image.c
++++ b/source/fitz/image.c
+@@ -252,6 +252,10 @@ fz_mask_color_key(fz_context *ctx, fz_pixmap *pix, int n, int bpc, const int *co
+ 
+ 	while (h--)
+ 	{
++		/* Callers drop the pixmap when this throws, so a partly keyed
++		 * pixmap is never stored. */
++		if ((h & 63) == 0)
++			fz_check_abort(ctx);
+ 		w = pix->w;
+ 		do
+ 		{
+@@ -461,7 +465,8 @@ subarea_next(fz_context *ctx, fz_stream *stm, size_t len)
+ 
+ 	while (state->nskip > 0)
+ 	{
+-		n = fz_skip(ctx, state->src, state->nskip);
++		fz_check_abort(ctx);
++		n = fz_skip(ctx, state->src, fz_minz(state->nskip, 65536));
+ 		if (n == 0)
+ 			return EOF;
+ 		state->nskip -= n;
+@@ -556,6 +561,8 @@ subsample_next(fz_context *ctx, fz_stream *stm, size_t len)
+ 	if (state->h == 0)
+ 		return EOF;
+ 
++	fz_check_abort(ctx);
++
+ 	/* Copy in data */
+ 	do
+ 	{
+@@ -692,7 +699,19 @@ fz_decomp_image_from_stream(fz_context *ctx, fz_stream *stm, fz_compressed_image
+ 		samples = tile->samples;
+ 		stride = tile->stride;
+ 
+-		len = fz_read(ctx, read_stream, samples, h * stride);
++		/* Read in bands, so that an aborted page run can stop a large image. */
++		len = 0;
++		while (len < h * stride)
++		{
++			size_t want = fz_minz(h * stride - len, fz_maxz(stride, 65536));
++			size_t got;
++			fz_check_abort(ctx);
++			got = fz_read(ctx, read_stream, samples + len, want);
++			len += got;
++			if (got < want)
++				break;
++		}
++		fz_check_abort(ctx);
+ 
+ 		/* Pad truncated images */
+ 		if (len < stride * h)
+@@ -880,6 +899,7 @@ compressed_image_get_pixmap(fz_context *ctx, fz_image *image_, fz_irect *subarea
+ 			fz_catch(ctx)
+ 			{
+ 				fz_drop_pixmap(ctx, keyed);
++				fz_drop_pixmap(ctx, tile);
+ 				fz_rethrow(ctx);
+ 			}
+ 
+@@ -890,7 +910,15 @@ compressed_image_get_pixmap(fz_context *ctx, fz_image *image_, fz_irect *subarea
+ 			!fz_colorspace_is_indexed(ctx, image->super.colorspace) &&
+ 			!fz_colorspace_is_lab(ctx, image->super.colorspace)
+ 		)
+-			fz_decode_tile(ctx, tile, image->super.decode);
++		{
++			fz_try(ctx)
++				fz_decode_tile(ctx, tile, image->super.decode);
++			fz_catch(ctx)
++			{
++				fz_drop_pixmap(ctx, tile);
++				fz_rethrow(ctx);
++			}
++		}
+ 		break;
+ 	case FZ_IMAGE_PSD:
+ 		tile = fz_load_psd(ctx, image->buffer->buffer->data, image->buffer->buffer->len);
+diff --git a/source/fitz/load-jpx.c b/source/fitz/load-jpx.c
+index 26fd190..c8eff42 100644
+--- a/source/fitz/load-jpx.c
++++ b/source/fitz/load-jpx.c
+@@ -221,6 +221,12 @@ static void fz_opj_warning_callback(const char *msg, void *client_data)
+ 	fz_warn(ctx, "openjpeg warning: %.*s", (int) strlen(msg)-1, msg);
+ }
+ 
++static OPJ_BOOL fz_opj_abort_callback(void *client_data)
++{
++	fz_context *ctx = (fz_context *)client_data;
++	return fz_abort_requested(ctx);
++}
++
+ static void fz_opj_info_callback(const char *msg, void *client_data)
+ {
+ #if 0
+@@ -288,7 +294,7 @@ safe_mla32(fz_context *ctx, int32_t a, int32_t b, int32_t c)
+ }
+ 
+ static inline void
+-template_copy_comp(unsigned char *dst0, int w, int h, int stride, const OPJ_INT32 *src, int32_t ox, int32_t oy, OPJ_UINT32 cdx, OPJ_UINT32 cdy, OPJ_UINT32 cw, OPJ_UINT32 ch, OPJ_UINT32 sgnd, OPJ_UINT32 prec, int comps)
++template_copy_comp(fz_context *ctx, unsigned char *dst0, int w, int h, int stride, const OPJ_INT32 *src, int32_t ox, int32_t oy, OPJ_UINT32 cdx, OPJ_UINT32 cdy, OPJ_UINT32 cw, OPJ_UINT32 ch, OPJ_UINT32 sgnd, OPJ_UINT32 prec, int comps)
+ {
+ 	int x, y;
+ 
+@@ -302,9 +308,15 @@ template_copy_comp(unsigned char *dst0, int w, int h, int stride, const OPJ_INT3
+ 	{
+ 		int32_t dymin = oy;
+ 		int32_t dywid = cdy;
+-		unsigned char *dst1 = dst0 + ox * comps;
+-		int32_t oox = ox;
+-		const OPJ_INT32 *src0 = src;
++		unsigned char *dst1;
++		int32_t oox;
++		const OPJ_INT32 *src0;
++
++		if ((y & 63) == 0)
++			fz_check_abort(ctx);
++		dst1 = dst0 + ox * comps;
++		oox = ox;
++		src0 = src;
+ 
+ 		if (dymin < 0)
+ 			dywid += dymin, dst1 -= dymin * stride, dymin = 0;
+@@ -403,9 +415,9 @@ copy_jpx_to_pixmap(fz_context *ctx, fz_pixmap *img, opj_image_t *jpx)
+ 		(void)safe_mla32(ctx, cw, cdx, ox);
+ 
+ 		if (cdx == 1 && cdy == 1)
+-			template_copy_comp(dst0, w, h, stride, comp->data, ox, oy, 1 /*cdx*/, 1 /*cdy*/, cw, ch, sgnd, prec, comps);
++			template_copy_comp(ctx, dst0, w, h, stride, comp->data, ox, oy, 1 /*cdx*/, 1 /*cdy*/, cw, ch, sgnd, prec, comps);
+ 		else
+-			template_copy_comp(dst0, w, h, stride, comp->data, ox, oy, cdx, cdy, cw, ch, sgnd, prec, comps);
++			template_copy_comp(ctx, dst0, w, h, stride, comp->data, ox, oy, cdx, cdy, cw, ch, sgnd, prec, comps);
+ 		dst++;
+ 	}
+ }
+@@ -531,6 +543,7 @@ jpx_read_image(fz_context *ctx, fz_jpxd *state, const unsigned char *data, size_
+ 	opj_set_info_handler(codec, fz_opj_info_callback, ctx);
+ 	opj_set_warning_handler(codec, fz_opj_warning_callback, ctx);
+ 	opj_set_error_handler(codec, fz_opj_error_callback, ctx);
++	opj_set_abort_handler(codec, fz_opj_abort_callback, ctx);
+ 	if (!opj_setup_decoder(codec, &params))
+ 	{
+ 		opj_destroy_codec(codec);
+@@ -565,10 +578,19 @@ jpx_read_image(fz_context *ctx, fz_jpxd *state, const unsigned char *data, size_
+ 			opj_stream_destroy(stream);
+ 			opj_destroy_codec(codec);
+ 			opj_image_destroy(jpx);
++			fz_check_abort(ctx);
+ 			fz_throw(ctx, FZ_ERROR_LIBRARY, "Failed to decode JPX image");
+ 		}
+ 	}
+ 
++	if (!onlymeta && fz_abort_requested(ctx))
++	{
++		opj_stream_destroy(stream);
++		opj_destroy_codec(codec);
++		opj_image_destroy(jpx);
++		fz_throw(ctx, FZ_ERROR_ABORT, "aborted");
++	}
++
+ 	opj_stream_destroy(stream);
+ 	opj_destroy_codec(codec);
+ 
+@@ -784,6 +806,7 @@ fz_load_jpx_reduced(fz_context *ctx, const unsigned char *data, size_t size, fz_
+ 		if (*applied == 0)
+ 			fz_rethrow(ctx);
+ 		fz_rethrow_if(ctx, FZ_ERROR_SYSTEM);
++		fz_rethrow_if(ctx, FZ_ERROR_ABORT);
+ 		fz_report_error(ctx);
+ 		fz_warn(ctx, "JPX decode at reduced resolution failed; retrying at full resolution");
+ 		*applied = 0;
+diff --git a/source/fitz/pixmap.c b/source/fitz/pixmap.c
+index b4bd223..5d43157 100644
+--- a/source/fitz/pixmap.c
++++ b/source/fitz/pixmap.c
+@@ -2119,6 +2119,8 @@ fz_convert_separation_pixmap_to_base(fz_context *ctx, const fz_pixmap *src)
+ 			{
+ 				for (y = 0; y < src->h; y++)
+ 				{
++					if ((y & 15) == 0 && fz_abort_requested(ctx))
++						break;
+ 					for (x = 0; x < src->w; x++)
+ 					{
+ 						for (k = 0; k < sn; ++k)
+@@ -2138,6 +2140,8 @@ fz_convert_separation_pixmap_to_base(fz_context *ctx, const fz_pixmap *src)
+ 			{
+ 				for (y = 0; y < src->h; y++)
+ 				{
++					if ((y & 15) == 0 && fz_abort_requested(ctx))
++						break;
+ 					for (x = 0; x < src->w; x++)
+ 					{
+ 						for (k = 0; k < sn; ++k)
+@@ -2158,6 +2162,8 @@ fz_convert_separation_pixmap_to_base(fz_context *ctx, const fz_pixmap *src)
+ 			{
+ 				for (y = 0; y < src->h; y++)
+ 				{
++					if ((y & 15) == 0 && fz_abort_requested(ctx))
++						break;
+ 					for (x = 0; x < src->w; x++)
+ 					{
+ 						for (k = 0; k < sn; ++k)
+@@ -2176,6 +2182,8 @@ fz_convert_separation_pixmap_to_base(fz_context *ctx, const fz_pixmap *src)
+ 			{
+ 				for (y = 0; y < src->h; y++)
+ 				{
++					if ((y & 15) == 0 && fz_abort_requested(ctx))
++						break;
+ 					for (x = 0; x < src->w; x++)
+ 					{
+ 						for (k = 0; k < sn; ++k)
+diff --git a/source/fitz/separation.c b/source/fitz/separation.c
+index 0591f67..c3d4b92 100644
+--- a/source/fitz/separation.c
++++ b/source/fitz/separation.c
+@@ -368,6 +368,8 @@ fz_copy_pixmap_area_converting_seps(fz_context *ctx, fz_pixmap *src, fz_pixmap *
+ 		const unsigned char *sd = sdata;
+ 		for (y = dh; y > 0; y--)
+ 		{
++			if ((y & 15) == 0 && fz_abort_requested(ctx))
++				break;
+ 			for (x = dw; x > 0; x--)
+ 			{
+ 				for (i = 0; i < dc; i++)
+@@ -399,6 +401,8 @@ fz_copy_pixmap_area_converting_seps(fz_context *ctx, fz_pixmap *src, fz_pixmap *
+ 			int dcs = dc + ds;
+ 			for (y = dh; y > 0; y--)
+ 			{
++				if ((y & 15) == 0 && fz_abort_requested(ctx))
++					break;
+ 				for (x = dw; x > 0; x--)
+ 				{
+ 					for (i = 0; i < dcs; i++)
+@@ -422,6 +426,8 @@ fz_copy_pixmap_area_converting_seps(fz_context *ctx, fz_pixmap *src, fz_pixmap *
+ 			int dcs = dc + ds;
+ 			for (y = dh; y > 0; y--)
+ 			{
++				if ((y & 15) == 0 && fz_abort_requested(ctx))
++					break;
+ 				for (x = dw; x > 0; x--)
+ 				{
+ 					int a = *sd;
+@@ -466,6 +472,8 @@ fz_copy_pixmap_area_converting_seps(fz_context *ctx, fz_pixmap *src, fz_pixmap *
+ 
+ 						for (y = dh; y > 0; y--)
+ 						{
++							if ((y & 15) == 0 && fz_abort_requested(ctx))
++								break;
+ 							for (x = dw; x > 0; x--)
+ 							{
+ 								unsigned char v = *sd;
+@@ -509,6 +517,8 @@ fz_copy_pixmap_area_converting_seps(fz_context *ctx, fz_pixmap *src, fz_pixmap *
+ 
+ 					for (y = dh; y > 0; y--)
+ 					{
++						if ((y & 15) == 0 && fz_abort_requested(ctx))
++							break;
+ 						for (x = dw; x > 0; x--)
+ 						{
+ 							*dd = *sd;
+@@ -555,6 +565,8 @@ fz_copy_pixmap_area_converting_seps(fz_context *ctx, fz_pixmap *src, fz_pixmap *
+ 						{
+ 							for (y = dh; y > 0; y--)
+ 							{
++								if ((y & 15) == 0 && fz_abort_requested(ctx))
++									break;
+ 								for (x = dw; x > 0; x--)
+ 								{
+ 									unsigned char v = sd[i];
+@@ -575,6 +587,8 @@ fz_copy_pixmap_area_converting_seps(fz_context *ctx, fz_pixmap *src, fz_pixmap *
+ 						{
+ 							for (y = dh; y > 0; y--)
+ 							{
++								if ((y & 15) == 0 && fz_abort_requested(ctx))
++									break;
+ 								for (x = dw; x > 0; x--)
+ 								{
+ 									unsigned char v = sd[i];
+@@ -597,6 +611,8 @@ fz_copy_pixmap_area_converting_seps(fz_context *ctx, fz_pixmap *src, fz_pixmap *
+ 						{
+ 							for (y = dh; y > 0; y--)
+ 							{
++								if ((y & 15) == 0 && fz_abort_requested(ctx))
++									break;
+ 								for (x = dw; x > 0; x--)
+ 								{
+ 									unsigned char v = sd[i];
+@@ -617,6 +633,8 @@ fz_copy_pixmap_area_converting_seps(fz_context *ctx, fz_pixmap *src, fz_pixmap *
+ 						{
+ 							for (y = dh; y > 0; y--)
+ 							{
++								if ((y & 15) == 0 && fz_abort_requested(ctx))
++									break;
+ 								for (x = dw; x > 0; x--)
+ 								{
+ 									unsigned char v = sd[i];
+@@ -660,6 +678,8 @@ fz_copy_pixmap_area_converting_seps(fz_context *ctx, fz_pixmap *src, fz_pixmap *
+ 						{
+ 							for (y = dh; y > 0; y--)
+ 							{
++								if ((y & 15) == 0 && fz_abort_requested(ctx))
++									break;
+ 								for (x = dw; x > 0; x--)
+ 								{
+ 									unsigned char v = sd[i];
+@@ -680,6 +700,8 @@ fz_copy_pixmap_area_converting_seps(fz_context *ctx, fz_pixmap *src, fz_pixmap *
+ 						{
+ 							for (y = dh; y > 0; y--)
+ 							{
++								if ((y & 15) == 0 && fz_abort_requested(ctx))
++									break;
+ 								for (x = dw; x > 0; x--)
+ 								{
+ 									unsigned char v = sd[i];
+@@ -704,6 +726,8 @@ fz_copy_pixmap_area_converting_seps(fz_context *ctx, fz_pixmap *src, fz_pixmap *
+ 					{
+ 						for (y = dh; y > 0; y--)
+ 						{
++							if ((y & 15) == 0 && fz_abort_requested(ctx))
++								break;
+ 							for (x = dw; x > 0; x--)
+ 							{
+ 								/* Collect the components that remain unmapped. */
+@@ -730,6 +754,8 @@ fz_copy_pixmap_area_converting_seps(fz_context *ctx, fz_pixmap *src, fz_pixmap *
+ 					{
+ 						for (y = dh; y > 0; y--)
+ 						{
++							if ((y & 15) == 0 && fz_abort_requested(ctx))
++								break;
+ 							for (x = dw; x > 0; x--)
+ 							{
+ 								unsigned char a = sd[sc];
+@@ -872,6 +898,8 @@ fz_copy_pixmap_area_converting_seps(fz_context *ctx, fz_pixmap *src, fz_pixmap *
+ 			const unsigned char *sd = sdata + sc;
+ 			for (y = dh; y > 0; y--)
+ 			{
++				if ((y & 15) == 0 && fz_abort_requested(ctx))
++					break;
+ 				for (x = dw; x > 0; x--)
+ 				{
+ 					for (i = 0; i < ds; i++)
+@@ -912,6 +940,8 @@ fz_copy_pixmap_area_converting_seps(fz_context *ctx, fz_pixmap *src, fz_pixmap *
+ 						{
+ 							for (y = dh; y > 0; y--)
+ 							{
++								if ((y & 15) == 0 && fz_abort_requested(ctx))
++									break;
+ 								for (x = dw; x > 0; x--)
+ 								{
+ 									unsigned char v = sd[i];
+@@ -933,6 +963,8 @@ fz_copy_pixmap_area_converting_seps(fz_context *ctx, fz_pixmap *src, fz_pixmap *
+ 							/* This case is exercised by: -o out%d.pgm -r72 -D -F pgm -stm ../perf-testing-gpdl/pdf/Ad_InDesign.pdf */
+ 							for (y = dh; y > 0; y--)
+ 							{
++								if ((y & 15) == 0 && fz_abort_requested(ctx))
++									break;
+ 								for (x = dw; x > 0; x--)
+ 								{
+ 									unsigned char v = sd[i];
+@@ -956,6 +988,8 @@ fz_copy_pixmap_area_converting_seps(fz_context *ctx, fz_pixmap *src, fz_pixmap *
+ 						{
+ 							for (y = dh; y > 0; y--)
+ 							{
++								if ((y & 15) == 0 && fz_abort_requested(ctx))
++									break;
+ 								for (x = dw; x > 0; x--)
+ 								{
+ 									unsigned char v = sd[i];
+@@ -977,6 +1011,8 @@ fz_copy_pixmap_area_converting_seps(fz_context *ctx, fz_pixmap *src, fz_pixmap *
+ 							/* This case is exercised by: -o out.pkm -r72 -D ../MyTests/Bug704778.pdf 1 */
+ 							for (y = dh; y > 0; y--)
+ 							{
++								if ((y & 15) == 0 && fz_abort_requested(ctx))
++									break;
+ 								for (x = dw; x > 0; x--)
+ 								{
+ 									unsigned char v = sd[i];
+@@ -1005,6 +1041,8 @@ fz_copy_pixmap_area_converting_seps(fz_context *ctx, fz_pixmap *src, fz_pixmap *
+ 						{
+ 							for (y = dh; y > 0; y--)
+ 							{
++								if ((y & 15) == 0 && fz_abort_requested(ctx))
++									break;
+ 								for (x = dw; x > 0; x--)
+ 								{
+ 									unsigned char v = sd[i];
+@@ -1026,6 +1064,8 @@ fz_copy_pixmap_area_converting_seps(fz_context *ctx, fz_pixmap *src, fz_pixmap *
+ 							/* Nothing in the cluster tests this case. */
+ 							for (y = dh; y > 0; y--)
+ 							{
++								if ((y & 15) == 0 && fz_abort_requested(ctx))
++									break;
+ 								for (x = dw; x > 0; x--)
+ 								{
+ 									unsigned char v = sd[i];
+@@ -1049,6 +1089,8 @@ fz_copy_pixmap_area_converting_seps(fz_context *ctx, fz_pixmap *src, fz_pixmap *
+ 						{
+ 							for (y = dh; y > 0; y--)
+ 							{
++								if ((y & 15) == 0 && fz_abort_requested(ctx))
++									break;
+ 								for (x = dw; x > 0; x--)
+ 								{
+ 									unsigned char v = sd[i];
+@@ -1070,6 +1112,8 @@ fz_copy_pixmap_area_converting_seps(fz_context *ctx, fz_pixmap *src, fz_pixmap *
+ 							/* This case is exercised by: -o out.png -r72 -D ../MyTests/Bug704778.pdf 1 */
+ 							for (y = dh; y > 0; y--)
+ 							{
++								if ((y & 15) == 0 && fz_abort_requested(ctx))
++									break;
+ 								for (x = dw; x > 0; x--)
+ 								{
+ 									unsigned char v = sd[i];
+diff --git a/source/fitz/stream-read.c b/source/fitz/stream-read.c
+index 16f16f0..dbef65b 100644
+--- a/source/fitz/stream-read.c
++++ b/source/fitz/stream-read.c
+@@ -118,7 +118,7 @@ fz_read_best(fz_context *ctx, fz_stream *stm, size_t initial, int *truncated, si
+ 	}
+ 	fz_catch(ctx)
+ 	{
+-		if (fz_caught(ctx) == FZ_ERROR_TRYLATER || fz_caught(ctx) == FZ_ERROR_SYSTEM)
++		if (fz_caught(ctx) == FZ_ERROR_TRYLATER || fz_caught(ctx) == FZ_ERROR_SYSTEM || fz_caught(ctx) == FZ_ERROR_ABORT)
+ 		{
+ 			fz_drop_buffer(ctx, buf);
+ 			fz_rethrow(ctx);
+diff --git a/source/pdf/pdf-interpret.c b/source/pdf/pdf-interpret.c
+index 15af6e0..779e31f 100644
+--- a/source/pdf/pdf-interpret.c
++++ b/source/pdf/pdf-interpret.c
+@@ -784,6 +784,7 @@ pdf_try_load_font(fz_context *ctx, pdf_document *doc, pdf_resource_stack *rdb, p
+ 		desc = pdf_load_font(ctx, doc, rdb, font);
+ 	fz_catch(ctx)
+ 	{
++		fz_rethrow_if(ctx, FZ_ERROR_ABORT);
+ 		if (fz_caught(ctx) == FZ_ERROR_TRYLATER)
+ 		{
+ 			fz_ignore_error(ctx);
+@@ -1562,6 +1563,8 @@ pdf_process_stream(fz_context *ctx, pdf_processor *proc, pdf_csi *csi, fz_stream
+ 					}
+ 					cookie->progress++;
+ 				}
++				else
++					fz_check_abort(ctx);
+ 
+ 				tok = pdf_lex(ctx, stm, buf);
+ 
+@@ -1760,6 +1763,11 @@ pdf_process_stream(fz_context *ctx, pdf_processor *proc, pdf_csi *csi, fz_stream
+ 	}
+ 	while (tok != PDF_TOK_EOF);
+ 
++	/* A run without a cookie (a pattern or a type3 glyph) must not end
++	 * normally when an inner run stopped early because of an abort. */
++	if (!cookie)
++		fz_check_abort(ctx);
++
+ 	if (syntax_errors > 0)
+ 		fz_warn(ctx, "encountered syntax errors; page may not be correct");
+ }
+diff --git a/source/pdf/pdf-shade.c b/source/pdf/pdf-shade.c
+index 822da16..1a81b24 100644
+--- a/source/pdf/pdf-shade.c
++++ b/source/pdf/pdf-shade.c
+@@ -33,6 +33,8 @@ pdf_sample_composite_shade_function(fz_context *ctx, float *shade, int n, pdf_fu
+ 
+ 	for (i = 0; i < 256; i++)
+ 	{
++		if ((i & 15) == 0)
++			fz_check_abort(ctx);
+ 		t = t0 + (i / 255.0f) * (t1 - t0);
+ 		pdf_eval_function(ctx, func, &t, 1, shade, n);
+ 		shade += n;
+@@ -48,6 +50,8 @@ pdf_sample_component_shade_function(fz_context *ctx, float *shade, int funcs, pd
+ 
+ 	for (i = 0; i < 256; i++)
+ 	{
++		if ((i & 15) == 0)
++			fz_check_abort(ctx);
+ 		t = t0 + (i / 255.0f) * (t1 - t0);
+ 		for (k = 0; k < funcs; k++)
+ 			pdf_eval_function(ctx, func[k], &t, 1, shade++, 1);
+diff --git a/source/pdf/pdf-type3.c b/source/pdf/pdf-type3.c
+index e52d046..be9a5ba 100644
+--- a/source/pdf/pdf-type3.c
++++ b/source/pdf/pdf-type3.c
+@@ -246,6 +246,7 @@ void pdf_load_type3_glyphs(fz_context *ctx, pdf_document *doc, pdf_font_desc *fo
+ 	}
+ 	fz_catch(ctx)
+ 	{
++		fz_rethrow_if(ctx, FZ_ERROR_ABORT);
+ 		fz_rethrow_if(ctx, FZ_ERROR_TRYLATER);
+ 		fz_rethrow_if(ctx, FZ_ERROR_SYSTEM);
+ 		fz_report_error(ctx);

@@ -30,4 +30,19 @@ object SystemBarsCompat {
             } catch (_: Throwable) { }
         }
     }
+
+    fun needsGestureGap(sdk: Int, buttonLeft: Int, buttonBottom: Int, buttonRight: Int): Boolean =
+        sdk < Build.VERSION_CODES.Q || (buttonLeft == 0 && buttonBottom == 0 && buttonRight == 0)
+
+    fun keyboardAboveNavigation(keyboardBottom: Int, navigationBottom: Int): Int =
+        (keyboardBottom - navigationBottom).coerceAtLeast(0)
+
+    fun applyStatusBarColor(activity: Activity, statusColor: Int) {
+        if (Build.VERSION.SDK_INT < 35) {
+            try {
+                val setColor = activity.window.javaClass.getMethod("setStatusBarColor", Integer.TYPE)
+                setColor.invoke(activity.window, statusColor)
+            } catch (_: Throwable) { }
+        }
+    }
 }

@@ -31,8 +31,20 @@ class PdfNupBuilderTest {
         val cells: List<List<DoubleArray>>,
         val source: PdfSourceParts,
         val pageSizes: PageSizes?,
-        val units: Long
+        val units: Long,
+        val output: File
     )
+
+    @Test
+    fun theLayoutIsAWorkFileForEveryBatchSize() {
+        val pages = List(7) { a4 }
+        for (batchSize in listOf(1, 3, 20)) {
+            val built = build(pages, config(rows = 2, cols = 1), batchSize = batchSize, partPages = 3)
+
+            TestPdfs.assertWorkFile(built.output)
+            assertEquals(4, built.sizes.size)
+        }
+    }
 
     @Test
     fun aOneUpPortraitA4PageIsPlacedUnscaled() {
@@ -244,7 +256,7 @@ class PdfNupBuilderTest {
                     DoubleArray(7) { values.getAsNumber(cell * 7 + it).doubleValue() }
                 }
             }
-            Built(sizes, cells, source, pageSizes, progress.units)
+            Built(sizes, cells, source, pageSizes, progress.units, output)
         }
     }
 

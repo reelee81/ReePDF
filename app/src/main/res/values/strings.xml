@@ -74,7 +74,6 @@
     <string name="pdf_wait_reading_pages">Reading page(s)…</string>
     <string name="pdf_wait_editing_pages">Editing page(s)…</string>
     <string name="pdf_wait_reading_edited_pages">Reading edited page(s)…</string>
-    <string name="pdf_wait_reading_unedited_pages">Reading unedited pages…</string>
     <string name="pdf_wait_erasing_visible">Removing visible edit(s)…</string>
     <string name="pdf_wait_erasing_all">Removing all edits…</string>
     <string name="pdf_wait_searching_edits">Looking for edits…</string>
@@ -109,6 +108,7 @@
     <string name="reorder_failed_with_msg">Reorder failed: %1$s</string>
     <string name="failed_to_delete_page_group_with_msg">Failed to delete page group: %1$s</string>
     <string name="temporary_pdf_not_found">Temporary PDF not found</string>
+    <string name="pdf_clipboard_label">Content copied from PDF</string>
     <string name="no_source_pages">No source pages</string>
     <string name="import_warnings_title">Incomplete import</string>
     <plurals name="import_warning_skipped_pages">
@@ -117,9 +117,7 @@
     </plurals>
     <string name="import_warning_missing_content">%1$s: some form fields or annotations are missing.</string>
     <string name="import_warning_earlier_revision">%1$s: only an earlier saved version could be opened; later changes are missing.</string>
-    <string name="cannot_open_uri">Cannot open %1$s</string>
     <string name="page_size_cm_by_cm">%1$.2fcm x %2$.2fcm</string>
-    <string name="pdf_viewer_requires">The built-in PDF viewer requires Android 9 or higher.</string>
     <string name="file_name_optional">File name is optional</string>
     <string name="enter_value_0_209">Enter a value between 0 and 209 (mm)</string>
     <string name="enter_value_0_296">Enter a value between 0 and 296 (mm)</string>
@@ -157,7 +155,6 @@
     <string name="crop_title">Free crop</string>
     <string name="crop_all_pages">Apply to all pages</string>
     <string name="crop_full_page">RESET</string>
-    <string name="search_pdf">SEARCH</string>
     <string name="edit_pdf">Edit</string>
     <string name="save_pdf_edits">SAVE</string>
     <string name="pdf_editor_requires_s_ext_18">The PDF editor requires Android 12 (S) Extension 18 or higher.</string>

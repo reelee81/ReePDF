@@ -58,6 +58,8 @@
     <!-- overflow menu (text size) -->
     <style name="TextAppearance.ReePDF.PopupMenuItem" parent="TextAppearance.Material3.BodyMedium">
         <item name="android:textSize">@dimen/dp_14</item>
+        <item name="fontFamily">@font/roboto</item>
+        <item name="android:fontFamily">@font/roboto</item>
     </style>
 
     <!-- overflow menu (text color) -->
@@ -88,6 +90,8 @@
     <style name="TextAppearance.ReePDF.ToolbarTitle.NoScale" parent="TextAppearance.Material3.TitleMedium">
         <item name="android:textSize">@dimen/dp_20</item>
         <item name="lineHeight">@dimen/dp_24</item>
+        <item name="fontFamily">@font/roboto</item>
+        <item name="android:fontFamily">@font/roboto</item>
     </style>
 
     <style name="Widget.ReePDF.Toolbar" parent="Widget.Material3.Toolbar.Surface">
@@ -109,6 +113,8 @@
     <style name="TextAppearance.ReePDF.Button.NoScale" parent="TextAppearance.Material3.LabelMedium">
         <item name="android:textSize">@dimen/dp_13</item>
         <item name="lineHeight">@dimen/dp_17</item>
+        <item name="fontFamily">@font/roboto</item>
+        <item name="android:fontFamily">@font/roboto</item>
     </style>
 
     <style name="Widget.ReePDF.Button.Compact" parent="Widget.Material3.Button">
@@ -152,6 +158,8 @@
     <!-- NORMAL TEXT -->
     <style name="TextAppearance.ReePDF.Text.Normal" parent="TextAppearance.Material3.BodyMedium">
         <item name="android:textSize">@dimen/dp_13</item>
+        <item name="fontFamily">@font/roboto</item>
+        <item name="android:fontFamily">@font/roboto</item>
     </style>
 
     <style name="Widget.ReePDF.TextView" parent="Widget.AppCompat.TextView">
@@ -165,6 +173,8 @@
     <!-- THUMB TEXT -->
     <style name="TextAppearance.ReePDF.Text.Thumb" parent="TextAppearance.Material3.BodyMedium">
         <item name="android:textSize">@dimen/dp_11</item>
+        <item name="fontFamily">@font/roboto</item>
+        <item name="android:fontFamily">@font/roboto</item>
     </style>
 
     <style name="ReePDF.TextView.Thumb" parent="Widget.AppCompat.TextView">
@@ -178,6 +188,8 @@
     <!-- NORMAL EDIT TEXT -->
     <style name="TextAppearance.ReePDF.EditText.Normal" parent="TextAppearance.Material3.BodyMedium">
         <item name="android:textSize">@dimen/dp_17</item>
+        <item name="fontFamily">@font/roboto</item>
+        <item name="android:fontFamily">@font/roboto</item>
     </style>
 
     <style name="Widget.ReePDF.EditText" parent="Widget.AppCompat.EditText">
@@ -193,6 +205,8 @@
     <!-- FILENAME EDIT TEXT -->
     <style name="TextAppearance.ReePDF.EditText.Filename" parent="TextAppearance.Material3.BodyMedium">
         <item name="android:textSize">@dimen/dp_12</item>
+        <item name="fontFamily">@font/roboto</item>
+        <item name="android:fontFamily">@font/roboto</item>
     </style>
 
     <style name="ReePDF.EditText.Filename" parent="Widget.AppCompat.EditText">
@@ -208,6 +222,8 @@
     <!-- RADIO BUTTON -->
     <style name="TextAppearance.ReePDF.Radio.NoScale" parent="TextAppearance.Material3.BodyMedium">
         <item name="android:textSize">@dimen/dp_13</item>
+        <item name="fontFamily">@font/roboto</item>
+        <item name="android:fontFamily">@font/roboto</item>
     </style>
 
     <style name="Widget.ReePDF.RadioButton" parent="Widget.Material3.CompoundButton.RadioButton">
@@ -226,6 +242,8 @@
     <!-- CHECKBOX BUTTON -->
     <style name="TextAppearance.ReePDF.Check.NoScale" parent="TextAppearance.Material3.BodyMedium">
         <item name="android:textSize">@dimen/dp_13</item>
+        <item name="fontFamily">@font/roboto</item>
+        <item name="android:fontFamily">@font/roboto</item>
     </style>
 
     <style name="Widget.ReePDF.CheckBox" parent="Widget.Material3.CompoundButton.CheckBox">
@@ -243,6 +261,8 @@
     <!-- SWITCH BUTTON -->
     <style name="TextAppearance.ReePDF.Switch.M2.NoScale" parent="TextAppearance.Material3.BodyMedium">
         <item name="android:textSize">@dimen/dp_13</item>
+        <item name="fontFamily">@font/roboto</item>
+        <item name="android:fontFamily">@font/roboto</item>
     </style>
 
     <style name="Widget.ReePDF.Switch.M2" parent="Widget.MaterialComponents.CompoundButton.Switch">
@@ -274,11 +294,15 @@
     <style name="TextAppearance.ReePDF.ListItem" parent="TextAppearance.Material3.BodyMedium">
         <item name="android:textSize">@dimen/dp_14</item>
         <item name="android:textColor">@color/list_first_text_color</item>
+        <item name="fontFamily">@font/roboto</item>
+        <item name="android:fontFamily">@font/roboto</item>
     </style>
 
     <style name="TextAppearance.ReePDF.ListItemSecondary" parent="TextAppearance.Material3.BodyMedium">
         <item name="android:textSize">@dimen/dp_12</item>
         <item name="android:textColor">@color/list_secondary_text_color</item>
+        <item name="fontFamily">@font/roboto</item>
+        <item name="android:fontFamily">@font/roboto</item>
     </style>
 
     <!-- PROGRESS BAR -->

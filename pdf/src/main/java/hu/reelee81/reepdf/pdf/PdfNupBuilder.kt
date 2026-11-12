@@ -183,7 +183,7 @@ object PdfNupBuilder {
             }
 
             PdfDocument(
-                PdfWriter(outFile.absolutePath, writerProps)
+                PdfIo.workFileWriter(outFile.absolutePath)
             ).use { destDoc ->
                 destDoc.setFlushUnusedObjects(true)
 

@@ -27,8 +27,8 @@ android {
         applicationId = "hu.reelee81.reepdf"
         minSdk = 26
         targetSdk = 37
-        versionCode = 300
-        versionName = "3.00"
+        versionCode = 301
+        versionName = "3.01"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -89,6 +89,7 @@ dependencies {
 
     implementation(project(":core"))
     implementation(project(":pdf"))
+    implementation(project(":viewer"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
     implementation(libs.material)

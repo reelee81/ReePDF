@@ -1,0 +1,69 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: reelee81 <reelee81@gmail.com>
+Date: Thu, 12 Nov 2026 13:36:14 +0100
+Subject: [PATCH 15/18] fitz: Saturate the edge colour values of mesh shadings.
+
+prepare_edge() converted the colour values and steps of a triangle edge
+to 16.16 fixed point with a plain cast. For an edge that is almost
+horizontal the step is huge and the conversion overflows: x86 gives
+INT_MIN, ARM saturates at the int limits. The conversion now saturates
+on every platform (NaN as 0), as ARM did, and step_edge() adds the steps
+with the same wrap-around as before, but without signed overflow. ARM
+output is unchanged and x86 matches it. Adds fz_saturate_float_to_int()
+to draw-imp.h.
+
+Modified for ReePDF on 2026-11-12.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ source/fitz/draw-imp.h  | 12 ++++++++++++
+ source/fitz/draw-mesh.c |  6 +++---
+ 2 files changed, 15 insertions(+), 3 deletions(-)
+
+diff --git a/source/fitz/draw-imp.h b/source/fitz/draw-imp.h
+index 71ca2a8..efed526 100644
+--- a/source/fitz/draw-imp.h
++++ b/source/fitz/draw-imp.h
+@@ -26,6 +26,18 @@
+ #define BBOX_MIN -(1<<20)
+ #define BBOX_MAX (1<<20)
+ 
++/* convert to int, saturating at the limits, NaN as 0 */
++static inline int fz_saturate_float_to_int(float f)
++{
++	if (f >= 2147483648.0f)
++		return 2147483647;
++	if (f < -2147483648.0f)
++		return -2147483647 - 1;
++	if (f != f)
++		return 0;
++	return (int)f;
++}
++
+ /* divide and floor towards -inf */
+ static inline int fz_idiv(int a, int b)
+ {
+diff --git a/source/fitz/draw-mesh.c b/source/fitz/draw-mesh.c
+index 941e6c7..27360a6 100644
+--- a/source/fitz/draw-mesh.c
++++ b/source/fitz/draw-mesh.c
+@@ -104,8 +104,8 @@ static inline void prepare_edge(const float *FZ_RESTRICT vtop, const float *FZ_R
+ 	for (i = 0; i < n; i++)
+ 	{
+ 		diff = vbot[i+2] - vtop[i+2];
+-		edge->v[i] = (int)(65536.0f * (vtop[i+2] + diff * t));
+-		edge->v[i+MAXN] = (int)(65536.0f * diff * r);
++		edge->v[i] = fz_saturate_float_to_int(65536.0f * (vtop[i+2] + diff * t));
++		edge->v[i+MAXN] = fz_saturate_float_to_int(65536.0f * diff * r);
+ 	}
+ }
+ 
+@@ -117,7 +117,7 @@ static inline void step_edge(edge_data *edge, int n)
+ 
+ 	for (i = 0; i < n; i++)
+ 	{
+-		edge->v[i] += edge->v[i + MAXN];
++		edge->v[i] = (int)((unsigned int)edge->v[i] + (unsigned int)edge->v[i + MAXN]);
+ 	}
+ }
+ 

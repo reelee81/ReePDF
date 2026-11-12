@@ -17,7 +17,6 @@ import com.itextpdf.kernel.pdf.PdfReader
 import com.itextpdf.kernel.pdf.PdfResources
 import com.itextpdf.kernel.pdf.PdfStream
 import com.itextpdf.kernel.pdf.PdfString
-import com.itextpdf.kernel.pdf.PdfWriter
 import com.itextpdf.kernel.pdf.canvas.PdfCanvas
 import com.itextpdf.kernel.pdf.canvas.parser.util.PdfCanvasParser
 import com.itextpdf.kernel.pdf.xobject.PdfFormXObject
@@ -140,7 +139,7 @@ object PdfEditProjection {
         val total = PdfDocument(open().setMemorySavingMode(true)).use { it.numberOfPages }
         val batch = batchSize.coerceAtLeast(1)
         var cleared = 0
-        PdfDocument(PdfWriter(output.absolutePath, PdfIo.writerProperties())).use { destination ->
+        PdfDocument(PdfIo.workFileWriter(output.absolutePath)).use { destination ->
             destination.setFlushUnusedObjects(true)
             var from = 1
             while (from <= total) {

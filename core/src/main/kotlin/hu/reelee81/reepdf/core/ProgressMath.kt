@@ -5,6 +5,14 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 
 object ProgressMath {
+    const val THUMBNAIL_PHASE_START = 90
+
+    fun sharedPercent(percent: Int?, share: Int): Int? = percent?.let { it * share / 100 }
+
+    fun thumbnailPercent(from: Int, waited: Int, done: Int): Int =
+        if (waited <= 0) 100
+        else from + (100 - from) * done.coerceIn(0, waited) / waited
+
     fun signedPageWeight(highDpi: Boolean, scanEffect: Boolean, grayscale: Boolean): Int {
         var weight = if (highDpi) 280.0 else 100.0
         if (scanEffect) weight *= if (highDpi) 1.3 else 1.2
@@ -16,6 +24,9 @@ object ProgressMath {
         val outPages = (sourcePages + per - 1) / per
         return sourcePages.toLong() + outPages + if (per == 1) sourcePages else 0
     }
+
+    fun importUnits(writtenPages: Int, laterPages: Int, sourcePages: Int, per: Int): Long =
+        writtenPages.toLong() + laterPages + layoutUnits(sourcePages + laterPages, per)
 
     fun measuredPercent(total: Long, done: Long, idleSince: Long, now: Long, lastPercent: Int, idleMs: Long): Int? {
         val clampedDone = min(done, total)

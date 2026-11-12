@@ -1,0 +1,33 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: reelee81 <reelee81@gmail.com>
+Date: Wed, 11 Nov 2026 19:02:16 +0100
+Subject: [PATCH 11/18] fitz: Fix the sub-pixel position of vertically flipped
+ scaled images.
+
+fz_scale_pixmap_cached() took the sub-pixel offset of a vertically
+flipped image from its bottom edge, while the weights count the rows
+from the top, so an image at a fractional position was drawn as if
+mirrored around the half pixel (at 30.25 as if at 30.75). The offset is
+now taken from the top edge. Images on whole pixels, the usual case
+after grid fitting, are unchanged.
+
+Modified for ReePDF on 2026-11-11.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ source/fitz/draw-scale-simple.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/source/fitz/draw-scale-simple.c b/source/fitz/draw-scale-simple.c
+index 8a59695..7e7d1b8 100644
+--- a/source/fitz/draw-scale-simple.c
++++ b/source/fitz/draw-scale-simple.c
+@@ -1684,7 +1684,7 @@ fz_scale_pixmap_cached(fz_context *ctx, const fz_pixmap *src, float x, float y,
+ 		dst_y_int = floorf(y-h);
+ 		tmp = ceilf(y);
+ 		dst_h_int = (int)tmp;
+-		y = tmp - y;
++		y = (y - h) - dst_y_int;
+ 		dst_h_int -= dst_y_int;
+ 	}
+ 	else

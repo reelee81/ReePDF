@@ -1,0 +1,76 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: reelee81 <reelee81@gmail.com>
+Date: Thu, 12 Nov 2026 13:36:14 +0100
+Subject: [PATCH 13/18] pdf: Treat a NaN function input as the start of its
+ domain.
+
+The functions clamp each input to their domain with fz_clamp(), which
+lets NaN through. A sampled function then turns NaN into an array index:
+on x86 that gives INT_MIN and reads outside the samples (a random
+function test crashed), on ARM it gives 0 and the output is NaN. Numbers
+read from a PDF are never NaN, but computed inputs can be. A NaN input
+is now taken as the start of the domain in all four function types, so
+the output is defined and the same on every platform. Other inputs are
+unchanged.
+
+Modified for ReePDF on 2026-11-12.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ source/pdf/pdf-function.c | 15 +++++++++++----
+ 1 file changed, 11 insertions(+), 4 deletions(-)
+
+diff --git a/source/pdf/pdf-function.c b/source/pdf/pdf-function.c
+index 5765cfe..d67e0c6 100644
+--- a/source/pdf/pdf-function.c
++++ b/source/pdf/pdf-function.c
+@@ -135,6 +135,13 @@ static inline float lerp(float x, float xmin, float xmax, float ymin, float ymax
+ 	return ymin + (x - xmin) * (ymax - ymin) / (xmax - xmin);
+ }
+ 
++static inline float clamp_input(float x, float min, float max)
++{
++	if (isnan(x))
++		return min;
++	return fz_clamp(x, min, max);
++}
++
+ /*
+  * PostScript calculator
+  */
+@@ -938,7 +945,7 @@ eval_postscript_func(fz_context *ctx, fz_function *func_, const float *in, float
+ 
+ 	for (i = 0; i < func->super.super.m; i++)
+ 	{
+-		x = fz_clamp(in[i], func->super.domain[i][0], func->super.domain[i][1]);
++		x = clamp_input(in[i], func->super.domain[i][0], func->super.domain[i][1]);
+ 		ps_push_real(&st, x);
+ 	}
+ 
+@@ -1115,7 +1122,7 @@ eval_sample_func(fz_context *ctx, fz_function *func_, const float *in, float *ou
+ 	/* encode input coordinates */
+ 	for (i = 0; i < func->super.super.m; i++)
+ 	{
+-		x = fz_clamp(in[i], func->super.domain[i][0], func->super.domain[i][1]);
++		x = clamp_input(in[i], func->super.domain[i][0], func->super.domain[i][1]);
+ 		x = lerp(x, func->super.domain[i][0], func->super.domain[i][1],
+ 			func->encode[i][0], func->encode[i][1]);
+ 		x = fz_clamp(x, 0, func->size[i] - 1);
+@@ -1239,7 +1246,7 @@ eval_exponential_func(fz_context *ctx, fz_function *func_, const float *in, floa
+ 	float tmp;
+ 	int i;
+ 
+-	x = fz_clamp(x, func->super.domain[0][0], func->super.domain[0][1]);
++	x = clamp_input(x, func->super.domain[0][0], func->super.domain[0][1]);
+ 
+ 	/* Default output is zero, which is suitable for violated constraints */
+ 	if ((func->n != (int)func->n && x < 0) || (func->n < 0 && x == 0))
+@@ -1357,7 +1364,7 @@ eval_stitching_func(fz_context *ctx, fz_function *func_, const float *inp, float
+ 	int k = func->k;
+ 	float *bounds = func->bounds;
+ 	int i;
+-	float in = fz_clamp(*inp, func->super.domain[0][0], func->super.domain[0][1]);
++	float in = clamp_input(*inp, func->super.domain[0][0], func->super.domain[0][1]);
+ 
+ 	for (i = 0; i < k - 1; i++)
+ 	{

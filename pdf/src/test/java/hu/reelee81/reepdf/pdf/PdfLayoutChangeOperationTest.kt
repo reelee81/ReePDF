@@ -48,6 +48,7 @@ class PdfLayoutChangeOperationTest {
         assertEquals(listOf(1), result.selected)
         assertEquals(listOf("selection saved"), events)
         assertEquals(3, pageCount(nup()))
+        TestPdfs.assertWorkFile(nup())
         assertFalse(File(dir, "nup_temp.pdf.part").exists())
         assertEquals(5, pageCount(File(dir, "source_temp_copy/0001.pdf")))
         assertEquals("old layout", File(dir, "nup_temp_copy.pdf").readText())

@@ -28,6 +28,24 @@ References (examples):
 - <https://www.apache.org/licenses/LICENSE-2.0>
 
 
+## Compose Multiplatform (Apache License 2.0)
+
+The app's own PDF viewer screen (module `:viewer`) is built with
+**Compose Multiplatform 1.12.2** by JetBrains:
+
+- `org.jetbrains.compose.runtime:runtime:1.12.2`
+- `org.jetbrains.compose.foundation:foundation:1.12.2`
+- `org.jetbrains.compose.ui:ui:1.12.2`
+- `org.jetbrains.compose.components:components-resources:1.12.2`
+
+On Android these modules pull in the matching Jetpack Compose libraries
+(`androidx.compose.*`), which are also licensed under the Apache License 2.0.
+
+References:
+- <https://github.com/JetBrains/compose-multiplatform>
+- <https://www.apache.org/licenses/LICENSE-2.0>
+
+
 ## PDF viewer and editor (Apache License 2.0)
 
 - `androidx.pdf:pdf-viewer-fragment:1.0.0-beta01`
@@ -60,19 +78,38 @@ References:
 
 ## MuPDF (AGPL-3.0)
 
-The app uses **MuPDF 1.28.5** (Java bindings with native libraries) to measure
+The app uses **MuPDF 1.28.6** (Java bindings with native libraries) to measure
 the visible content bounds of PDF pages:
 
-- `com.artifex.mupdf:fitz:1.28.5` (from <https://maven.ghostscript.com>)
+- `hu.reelee81.reepdf:mupdf-fitz:1.28.6-reepdf` — a modified build of MuPDF
+  1.28.6 made for ReePDF: the unmodified upstream source plus eighteen patches
+  (modified on 2026-11-08, 2026-11-10, 2026-11-11 and 2026-11-12): the missing
+  JNI binding for `PDFDocument.setPageTreeCache`, a new
+  `Context.releaseFreeMemory()`, decoding JPEG 2000 images at a reduced
+  resolution when they are drawn scaled down, a new `PDFDocument.clearXref()`,
+  stopping the long steps of an aborted page drawing early, with small abort
+  hooks added to the bundled OpenJPEG, jbig2dec and Little CMS, decoding only
+  the needed area of a JPEG 2000 image when a zoomed part of it is drawn, with
+  an exact area decode in the bundled OpenJPEG, the right sub-pixel position
+  for vertically flipped scaled images, skipping the zero-weight samples of
+  sampled functions, and removing four cases of undefined behaviour (a NaN
+  function input, an empty rasterizer clip, mesh shading edge values and
+  pattern tile ranges converted or multiplied out of the int range), and
+  remembering where inline images end so that they are not decoded again
+  just to find their end, and drawing the repeats of a very large pattern
+  cell directly instead of through one huge tile. The patches, the build script and the exact
+  upstream commits are in the [`mupdf`](mupdf) folder of this repository; the
+  built AAR is published as an asset of the GitHub release `mupdf`.
 
 MuPDF is developed by Artifex Software, Inc. and is licensed under the
 **GNU Affero General Public License v3**, or can be used under a separate
 commercial license purchased from Artifex.
 
 The native library also contains third-party components bundled by MuPDF
-(for example FreeType, HarfBuzz, zlib, libjpeg, OpenJPEG, jbig2dec and
-Little CMS), each under its own license; see the `thirdparty` directory of
-the MuPDF source distribution.
+(FreeType, HarfBuzz, libjpeg, OpenJPEG, jbig2dec, Little CMS, MuJS, Gumbo,
+Brotli, cmark-gfm and Extract), each under its own license; see the
+`thirdparty` directory of the MuPDF source distribution. zlib is not bundled;
+the library uses the zlib of the Android system.
 
 References:
 - <https://mupdf.com/>

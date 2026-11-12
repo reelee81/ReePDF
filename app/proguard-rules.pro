@@ -12,8 +12,6 @@
 -keep class com.itextpdf.forms.util.RegisterDefaultDiContainer { *; }
 -keep class com.itextpdf.layout.utils.RegisterDefaultDiContainer { *; }
 
--keepnames class androidx.pdf.viewer.fragment.PdfViewerFragment
-
 -keep class org.apache.xerces.dom.CoreDocumentImpl { <init>(...); }
 -keep class org.apache.xerces.dom.DocumentImpl { <init>(...); }
 -keep class org.apache.xerces.dom.PSVIDocumentImpl { <init>(...); }

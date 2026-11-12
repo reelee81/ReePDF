@@ -1,0 +1,60 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: reelee81 <reelee81@gmail.com>
+Date: Tue, 10 Nov 2026 22:44:34 +0100
+Subject: [PATCH 4/18] java: Add PDFDocument.clearXref() to drop cached objects.
+
+A PDF document keeps every object it has parsed until it is closed. A
+viewer that scrolls through a large document therefore grows by a few
+kilobytes per visited page, and reading the size of every page keeps all
+page dictionaries. clearXref() exposes pdf_clear_xref(): it drops every
+cached object that nothing else references, so it is parsed again from
+the file when needed. Objects in use (for example by the store or a loaded
+page) stay. Do not call it on a repaired document (wasRepaired()), because
+repaired objects may not be parsed the same way from the file again.
+
+Modified for ReePDF on 2026-11-10.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ platform/java/jni/pdfdocument.c                    | 14 ++++++++++++++
+ .../src/com/artifex/mupdf/fitz/PDFDocument.java    |  2 ++
+ 2 files changed, 16 insertions(+)
+
+diff --git a/platform/java/jni/pdfdocument.c b/platform/java/jni/pdfdocument.c
+index 7c4728d..a01fbb3 100644
+--- a/platform/java/jni/pdfdocument.c
++++ b/platform/java/jni/pdfdocument.c
+@@ -399,6 +399,20 @@ FUN(PDFDocument_setPageTreeCache)(JNIEnv *env, jobject self, jboolean enabled)
+ 		jni_rethrow_void(env, ctx);
+ }
+ 
++JNIEXPORT void JNICALL
++FUN(PDFDocument_clearXref)(JNIEnv *env, jobject self)
++{
++	fz_context *ctx = get_context(env);
++	pdf_document *pdf = from_PDFDocument(env, self);
++
++	if (!ctx || !pdf) return;
++
++	fz_try(ctx)
++		pdf_clear_xref(ctx, pdf);
++	fz_catch(ctx)
++		jni_rethrow_void(env, ctx);
++}
++
+ JNIEXPORT jobject JNICALL
+ FUN(PDFDocument_findPage)(JNIEnv *env, jobject self, jint jat)
+ {
+diff --git a/platform/java/src/com/artifex/mupdf/fitz/PDFDocument.java b/platform/java/src/com/artifex/mupdf/fitz/PDFDocument.java
+index 1bd8474..17c05c9 100644
+--- a/platform/java/src/com/artifex/mupdf/fitz/PDFDocument.java
++++ b/platform/java/src/com/artifex/mupdf/fitz/PDFDocument.java
+@@ -68,6 +68,8 @@ public class PDFDocument extends Document
+ 
+ 	public native void setPageTreeCache(boolean enabled);
+ 
++	public native void clearXref();
++
+ 	public native PDFObject findPage(int at);
+ 
+ 	public native PDFObject getTrailer();

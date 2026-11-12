@@ -1,0 +1,134 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: reelee81 <reelee81@gmail.com>
+Date: Wed, 11 Nov 2026 12:30:14 +0100
+Subject: [PATCH 8/18] lcms2: Add an abort check for building transforms.
+
+cmsSetAbortCheck() sets a process wide callback that is asked while a
+transform is built: every 1024 grid points when a CLUT is resampled and
+every 64 points when a tone curve is reversed. When it returns TRUE
+that step fails, so the build either fails or ends without that
+optimization; the caller must then discard the transform. Without a
+callback nothing changes.
+
+Modified for ReePDF on 2026-11-11.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ thirdparty/lcms2/include/lcms2mt.h    |  9 +++++++++
+ thirdparty/lcms2/src/cmserr.c         | 12 ++++++++++++
+ thirdparty/lcms2/src/cmsgamma.c       |  5 +++++
+ thirdparty/lcms2/src/cmslut.c         |  6 ++++++
+ thirdparty/lcms2/src/lcms2_internal.h |  3 +++
+ 5 files changed, 35 insertions(+)
+
+diff --git a/thirdparty/lcms2/include/lcms2mt.h b/thirdparty/lcms2/include/lcms2mt.h
+index cc575c7..6c0de71 100644
+--- a/thirdparty/lcms2/include/lcms2mt.h
++++ b/thirdparty/lcms2/include/lcms2mt.h
+@@ -555,6 +555,7 @@ typedef int                  cmsBool;
+ #define cmsSetHeaderProfileID                    LCMS2MT_PREF(cmsSetHeaderProfileID)
+ #define cmsSetHeaderRenderingIntent              LCMS2MT_PREF(cmsSetHeaderRenderingIntent)
+ #define cmsSetLogErrorHandler                    LCMS2MT_PREF(cmsSetLogErrorHandler)
++#define cmsSetAbortCheck                         LCMS2MT_PREF(cmsSetAbortCheck)
+ #define cmsSetPCS                                LCMS2MT_PREF(cmsSetPCS)
+ #define cmsSetProfileVersion                     LCMS2MT_PREF(cmsSetProfileVersion)
+ #define cmsSignalError                           LCMS2MT_PREF(cmsSignalError)
+@@ -612,6 +613,7 @@ typedef int                  cmsBool;
+ #define cmsGetAlarmCodes                         LCMS2MT_PREF(cmsGetAlarmCodes)
+ #define cmsSetAdaptationState                    LCMS2MT_PREF(cmsSetAdaptationState)
+ #define cmsSetLogErrorHandler                    LCMS2MT_PREF(cmsSetLogErrorHandler)
++#define cmsSetAbortCheck                         LCMS2MT_PREF(cmsSetAbortCheck)
+ #define cmsGetSupportedIntents                   LCMS2MT_PREF(cmsGetSupportedIntents)
+ #define cmsMLUtranslationsCount                  LCMS2MT_PREF(cmsMLUtranslationsCount)
+ #define cmsMLUtranslationsCodes                  LCMS2MT_PREF(cmsMLUtranslationsCodes)
+@@ -1627,6 +1629,13 @@ typedef void  (* cmsLogErrorHandlerFunction)(cmsContext ContextID, cmsUInt32Numb
+ // Allows user to set any specific logger
+ CMSAPI void              CMSEXPORT cmsSetLogErrorHandler(cmsContext ContextID, cmsLogErrorHandlerFunction Fn);
+ 
++// Abort check, asked while a transform is being built (resampling and curve
++// reversal). Returning TRUE makes that step fail, so the build either fails or
++// ends without that optimization. The check is process wide.
++typedef cmsBool (* cmsAbortCheckFunction)(cmsContext ContextID);
++
++CMSAPI void              CMSEXPORT cmsSetAbortCheck(cmsAbortCheckFunction Fn);
++
+ // Conversions --------------------------------------------------------------------------------------------------------------
+ 
+ // Returns pointers to constant structs
+diff --git a/thirdparty/lcms2/src/cmserr.c b/thirdparty/lcms2/src/cmserr.c
+index 158fba9..884b169 100644
+--- a/thirdparty/lcms2/src/cmserr.c
++++ b/thirdparty/lcms2/src/cmserr.c
+@@ -529,6 +529,18 @@ void DefaultLogErrorHandlerFunction(cmsContext ContextID, cmsUInt32Number ErrorC
+ }
+ 
+ // Change log error, context based
++static cmsAbortCheckFunction AbortCheck = NULL;
++
++void CMSEXPORT cmsSetAbortCheck(cmsAbortCheckFunction Fn)
++{
++    AbortCheck = Fn;
++}
++
++cmsBool _cmsAborted(cmsContext ContextID)
++{
++    return AbortCheck != NULL && AbortCheck(ContextID);
++}
++
+ void CMSEXPORT cmsSetLogErrorHandler(cmsContext ContextID, cmsLogErrorHandlerFunction Fn)
+ {
+     _cmsLogErrorChunkType* lhg = (_cmsLogErrorChunkType*) _cmsContextGetClientChunk(ContextID, Logger);
+diff --git a/thirdparty/lcms2/src/cmsgamma.c b/thirdparty/lcms2/src/cmsgamma.c
+index c5f1be7..dcc5523 100644
+--- a/thirdparty/lcms2/src/cmsgamma.c
++++ b/thirdparty/lcms2/src/cmsgamma.c
+@@ -1097,6 +1097,11 @@ cmsToneCurve* CMSEXPORT cmsReverseToneCurveEx(cmsContext ContextID, cmsUInt32Num
+     // Iterate across Y axis
+     for (i=0; i < (int) nResultSamples; i++) {
+ 
++        if ((i & 63) == 0 && _cmsAborted(ContextID)) {
++            cmsFreeToneCurve(ContextID, out);
++            return NULL;
++        }
++
+         y = (cmsFloat64Number) i * 65535.0 / (nResultSamples - 1);
+ 
+         // Find interval in which y is within.
+diff --git a/thirdparty/lcms2/src/cmslut.c b/thirdparty/lcms2/src/cmslut.c
+index c84a796..8ead19c 100644
+--- a/thirdparty/lcms2/src/cmslut.c
++++ b/thirdparty/lcms2/src/cmslut.c
+@@ -778,6 +778,9 @@ cmsBool CMSEXPORT cmsStageSampleCLut16bit(cmsContext ContextID, cmsStage* mpe, c
+     index = 0;
+     for (i = 0; i < (int) nTotalPoints; i++) {
+ 
++        if ((i & 1023) == 0 && _cmsAborted(ContextID))
++            return FALSE;
++
+         rest = i;
+         for (t = (int)nInputs - 1; t >= 0; --t) {
+ 
+@@ -841,6 +844,9 @@ cmsBool CMSEXPORT cmsStageSampleCLutFloat(cmsContext ContextID, cmsStage* mpe, c
+     index = 0;
+     for (i = 0; i < (int)nTotalPoints; i++) {
+ 
++        if ((i & 1023) == 0 && _cmsAborted(ContextID))
++            return FALSE;
++
+         rest = i;
+         for (t = (int) nInputs-1; t >=0; --t) {
+ 
+diff --git a/thirdparty/lcms2/src/lcms2_internal.h b/thirdparty/lcms2/src/lcms2_internal.h
+index 9f94fe3..57616de 100644
+--- a/thirdparty/lcms2/src/lcms2_internal.h
++++ b/thirdparty/lcms2/src/lcms2_internal.h
+@@ -533,6 +533,9 @@ struct _cmsContext_struct {
+ // Verifies the magic number.
+ struct _cmsContext_struct* _cmsGetContext(cmsContext ContextID);
+ 
++// Asks the abort check set by cmsSetAbortCheck
++cmsBool _cmsAborted(cmsContext ContextID);
++
+ // Returns the block assigned to the specific zone.
+ void*     _cmsContextGetClientChunk(cmsContext id, _cmsMemoryClient mc);
+ 

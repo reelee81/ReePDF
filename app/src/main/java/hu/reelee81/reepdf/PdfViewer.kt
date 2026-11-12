@@ -1,278 +1,293 @@
 package hu.reelee81.reepdf
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Intent
 import android.content.res.Configuration
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.ext.SdkExtensions
-import android.provider.OpenableColumns
-import android.view.Gravity
-import android.view.ViewGroup
-import android.widget.LinearLayout
+import android.view.View
+import android.view.accessibility.AccessibilityManager
+import android.widget.FrameLayout
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.appcompat.content.res.AppCompatResources
-import androidx.appcompat.widget.AppCompatImageButton
-import androidx.appcompat.widget.Toolbar.LayoutParams
+import androidx.appcompat.app.AppCompatActivity
+import androidx.compose.runtime.snapshotFlow
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
+import androidx.core.graphics.drawable.toDrawable
 import androidx.core.net.toUri
+import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
-import com.google.android.material.appbar.MaterialToolbar
+import androidx.core.view.WindowInsetsCompat
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.lifecycleScope
+import hu.reelee81.reepdf.viewer.ViewerActions
+import hu.reelee81.reepdf.viewer.ViewerState
+import hu.reelee81.reepdf.viewer.ViewerWait
+import hu.reelee81.reepdf.viewer.viewerView
+import java.io.File
+import kotlin.time.Duration.Companion.milliseconds
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
-class PdfViewer : PdfActivity() {
+class PdfViewer : AppCompatActivity(), ViewerActions {
 
     companion object {
-        const val EXTRA_URI = "pdf_uri"
+        const val EXTRA_PATH = "pdf_path"
+        const val EXTRA_TITLE = "pdf_title"
         const val EXTRA_OUTPUT_URI = "pdf_output_uri"
         const val EXTRA_INITIAL_PAGE_INDEX = "pdf_initial_page_index"
-        private const val FRAG_TAG = "pdfFragTag"
-        private const val STATE_CURRENT_URI = "pdf_current_uri"
-        private const val STATE_HAS_EDITED_DOCUMENT = "pdf_has_edited_document"
+        private const val STATE_PATH = "pdf_current_path"
+        private const val STATE_TITLE = "pdf_current_title"
+        private const val STATE_OUTPUT_URI = "pdf_current_output_uri"
+        private const val STATE_PAGE = "pdf_current_page"
+        private const val NOTIFICATION_PROGRESS_MS = 5_000L
     }
 
-    private var currentUri: Uri? = null
-    private var hasEditedDocument = false
-    private var reloadingEditedDocument = false
-    private var returningUnedited = false
-    private var pendingReload: Pair<Uri, Int>? = null
+    private lateinit var model: PdfViewerModel
+    private var serviceCaption: String? = null
+    private var serviceJob: Job? = null
+    private var editJob: Job? = null
+    private var accessibility: AccessibilityManager? = null
+    private val touchExploration = AccessibilityManager.TouchExplorationStateChangeListener { enabled ->
+        model.state?.readsPageTexts = enabled
+    }
 
     private val editLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        val fragment = currentFragment()
-        val returnedPageIndex = result.data
-            ?.getIntExtra(PdfEditorActivity.EXTRA_CURRENT_PAGE_INDEX, -1)
-            ?.takeIf { it >= 0 }
-        val editedUri = result.data
-            ?.getStringExtra(PdfEditorActivity.EXTRA_OUTPUT_URI)
-            ?.toUri()
-
-        if (result.resultCode == RESULT_OK && editedUri != null) {
-            currentUri = editedUri
-            hasEditedDocument = true
-            reloadingEditedDocument = true
-            reloadViewerDocument(editedUri, returnedPageIndex ?: fragment?.currentPageIndex ?: 0)
-
-            findViewById<MaterialToolbar>(R.id.toolbar).title = resolveDisplayName(editedUri)
-            setEditedDocumentResult(editedUri)
-        } else if (returnedPageIndex != null) {
-            returningUnedited = true
-            fragment?.scrollToPage(returnedPageIndex)
-        }
+        onEditorResult(result.resultCode, result.data)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        applySystemBars()
 
-        setContentView(R.layout.viewer_pdf)
+        model = ViewModelProvider(this)[PdfViewerModel::class.java]
+        if (model.state == null) {
+            val path = savedInstanceState?.getString(STATE_PATH) ?: intent.getStringExtra(EXTRA_PATH)
+            if (path == null) {
+                Toast.makeText(this, getString(R.string.temporary_pdf_not_found), Toast.LENGTH_LONG).show()
+                finish()
+                return
+            }
+            val file = File(path)
+            val title = savedInstanceState?.getString(STATE_TITLE) ?: intent.getStringExtra(EXTRA_TITLE) ?: file.name
+            val page = savedInstanceState?.getInt(STATE_PAGE) ?: intent.getIntExtra(EXTRA_INITIAL_PAGE_INDEX, 0)
+            model.start(title, supportsPdfEditing(), file, page, savedInstanceState?.getString(STATE_OUTPUT_URI))
+        }
+        val state = model.state ?: return
+        model.outputUri?.let(::setEditedDocumentResult)
 
-        run {
-            val night = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
-                    Configuration.UI_MODE_NIGHT_YES
-            val insets = WindowCompat.getInsetsController(window, window.decorView)
-            insets.isAppearanceLightStatusBars = !night
-            run {
-                val navColor = ContextCompat.getColor(this, R.color.pdf_viewer_sb_bg_color)
-                SystemBarsCompat.applyNavBarColor(this, navColor)
+        val frame = FrameLayout(this).apply {
+            fitsSystemWindows = true
+            addView(viewerView(this@PdfViewer, state, this@PdfViewer, R.font.roboto_regular, R.font.roboto_medium))
+        }
+        ViewCompat.setOnApplyWindowInsetsListener(frame) { view, insets ->
+            val applied = ViewCompat.onApplyWindowInsets(view, insets)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+                val keyboard = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
+                state.keyboardCover = (keyboard - view.paddingBottom).coerceAtLeast(0)
+            }
+            updateBottomGap(state, view)
+            applied
+        }
+        frame.addOnLayoutChangeListener { view, _, _, _, _, _, _, _, _ -> updateBottomGap(state, view) }
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+            ViewCompat.setOnApplyWindowInsetsListener(window.decorView) { decor, insets ->
+                val applied = ViewCompat.onApplyWindowInsets(decor, insets)
+                state.keyboardCover = SystemBarsCompat.keyboardAboveNavigation(
+                    insets.getInsets(WindowInsetsCompat.Type.ime()).bottom,
+                    insets.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom
+                )
+                applied
             }
         }
+        setContentView(frame)
 
-        val toolbar = findViewById<MaterialToolbar>(R.id.toolbar)
-        setSupportActionBar(toolbar)
-        toolbar.navigationIcon = AppCompatResources.getDrawable(this, R.drawable.ic_arrow_back_24)
-        toolbar.setNavigationOnClickListener {
-            onBackPressedDispatcher.onBackPressed()
+        accessibility = getSystemService(AccessibilityManager::class.java)?.also { manager ->
+            state.readsPageTexts = manager.isTouchExplorationEnabled
+            manager.addTouchExplorationStateChangeListener(touchExploration)
         }
 
-        val uriStr = savedInstanceState?.getString(STATE_CURRENT_URI) ?: intent.getStringExtra(EXTRA_URI)
-        val uri: Uri? = uriStr?.toUri()
-        if (uri == null) {
-            Toast.makeText(this, getString(R.string.temporary_pdf_not_found), Toast.LENGTH_LONG).show()
-            finish()
-            return
-        }
-
-        currentUri = uri
-        hasEditedDocument = savedInstanceState?.getBoolean(STATE_HAS_EDITED_DOCUMENT) ?: false
-        if (hasEditedDocument) setEditedDocumentResult(uri)
-
-        toolbar.title = resolveDisplayName(uri)
-
-        val supportsPdfViewer = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P
-
-        if (!supportsPdfViewer) {
-            Toast.makeText(
-                this,
-                getString(R.string.pdf_viewer_requires),
-                Toast.LENGTH_LONG
-            ).show()
-            finish()
-            return
-        }
-
-        val frag = (supportFragmentManager.findFragmentByTag(FRAG_TAG) as? ReadOnlyPdfViewerFragment)
-            ?: ReadOnlyPdfViewerFragment().also {
-                supportFragmentManager.beginTransaction()
-                    .replace(R.id.pdfFragContainer, it, FRAG_TAG)
-                    .commitNow()
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (!state.isWaiting && !state.handleBack()) finish()
             }
+        })
 
-        if (savedInstanceState == null) {
-            val initialPageIndex = intent.getIntExtra(EXTRA_INITIAL_PAGE_INDEX, 0)
-            frag.loadDocumentAtPage(uri, initialPageIndex)
-        } else {
-            frag.documentUri = uri
+        lifecycleScope.launch {
+            snapshotFlow { state.waitRevealed to state.leavesOnCancel }.collect { (revealed, edited) ->
+                updateService(revealed, edited)
+            }
         }
-
-        addToolbarButtons(toolbar)
-        onPdfOperationStateChanged()
-    }
-
-    override fun onResume() {
-        super.onResume()
-        pendingReload?.let { (uri, pageIndex) ->
-            pendingReload = null
-            reloadViewerDocument(uri, pageIndex)
+        lifecycleScope.launch {
+            snapshotFlow { state.openError }.collect { error ->
+                if (error != null) {
+                    Toast.makeText(this@PdfViewer, getString(R.string.failed_to_open_pdf_with_msg, error), Toast.LENGTH_LONG).show()
+                    finish()
+                }
+            }
         }
     }
 
-    private fun currentFragment(): ReadOnlyPdfViewerFragment? =
-        supportFragmentManager.findFragmentByTag(FRAG_TAG) as? ReadOnlyPdfViewerFragment
+    override fun onStart() {
+        super.onStart()
+        model.state?.onShown()
+    }
 
-    private fun reloadViewerDocument(uri: Uri, pageIndex: Int) {
-        if (supportFragmentManager.isStateSaved) {
-            pendingReload = uri to pageIndex
-            return
-        }
-        val replacement = ReadOnlyPdfViewerFragment()
-        supportFragmentManager.beginTransaction()
-            .replace(R.id.pdfFragContainer, replacement, FRAG_TAG)
-            .commitNow()
-        replacement.loadDocumentAtPage(uri, pageIndex, refresh = true)
+    override fun onStop() {
+        model.state?.onHidden()
+        super.onStop()
+    }
+
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        model.state?.trimMemory()
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        applySystemBars()
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
-        outState.putString(STATE_CURRENT_URI, currentUri?.toString())
-        outState.putBoolean(STATE_HAS_EDITED_DOCUMENT, hasEditedDocument)
+        model.file?.let { outState.putString(STATE_PATH, it.absolutePath) }
+        model.state?.let { state ->
+            outState.putString(STATE_TITLE, state.title)
+            outState.putInt(STATE_PAGE, state.currentPage)
+        }
+        model.outputUri?.let { outState.putString(STATE_OUTPUT_URI, it) }
         super.onSaveInstanceState(outState)
     }
 
-    override fun isPdfNavigationInProgress(): Boolean =
-        (supportFragmentManager.findFragmentByTag(FRAG_TAG) as? ReadOnlyPdfViewerFragment)
-            ?.isPageNavigationInProgress == true
+    override fun finish() {
+        if (::model.isInitialized) model.close()
+        super.finish()
+    }
 
-    override fun onPdfNavigationStateChanged(inProgress: Boolean) {
-        if (!inProgress) {
-            reloadingEditedDocument = false
-            returningUnedited = false
+    override fun onDestroy() {
+        accessibility?.removeTouchExplorationStateChangeListener(touchExploration)
+        accessibility = null
+        serviceJob?.cancel()
+        if (serviceCaption != null) {
+            serviceCaption = null
+            PdfProcessingForegroundService.stop(this)
+        }
+        super.onDestroy()
+    }
+
+    override fun onBack() {
+        onBackPressedDispatcher.onBackPressed()
+    }
+
+    override fun onCancelWait() {
+        finish()
+    }
+
+    override fun onCopy(text: String) {
+        val clipboard = getSystemService(ClipboardManager::class.java) ?: return
+        ClipData.newPlainText(getString(R.string.pdf_clipboard_label), text).let(clipboard::setPrimaryClip)
+    }
+
+    override fun onMessage(text: String) {
+        Toast.makeText(this, text, Toast.LENGTH_LONG).show()
+    }
+
+    override fun onEdit() {
+        val state = model.state ?: return
+        val file = model.file ?: return
+        if (state.isWaiting || state.layout == null || editJob?.isActive == true) return
+        val page = state.currentPage
+        editJob = lifecycleScope.launch {
+            val uri = withContext(Dispatchers.IO) {
+                runCatching { FileProvider.getUriForFile(this@PdfViewer, "$packageName.provider", file) }.getOrNull()
+            } ?: return@launch
+            editLauncher.launch(
+                Intent(this@PdfViewer, PdfEditorActivity::class.java).apply {
+                    putExtra(PdfEditorActivity.EXTRA_INPUT_URI, uri.toString())
+                    putExtra(PdfEditorActivity.EXTRA_INITIAL_PAGE_INDEX, page)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+            )
         }
     }
 
-    override fun leavesOnPdfWaitCancel(): Boolean = reloadingEditedDocument && isPdfNavigationInProgress()
-
-    override fun pdfNavigationCaption(): Int = when {
-        reloadingEditedDocument -> R.string.pdf_wait_reading_edited_pages
-        returningUnedited -> R.string.pdf_wait_reading_unedited_pages
-        else -> R.string.pdf_wait_reading_pages
+    private fun onEditorResult(resultCode: Int, data: Intent?) {
+        val state = model.state ?: return
+        val returnedPage = data?.getIntExtra(PdfEditorActivity.EXTRA_CURRENT_PAGE_INDEX, -1)?.takeIf { it >= 0 }
+        val editedUri = data?.getStringExtra(PdfEditorActivity.EXTRA_OUTPUT_URI)
+        if (resultCode == RESULT_OK && editedUri != null) {
+            setEditedDocumentResult(editedUri)
+            val edited = ownCacheFile(editedUri.toUri())
+            if (edited == null) {
+                finish()
+                return
+            }
+            model.openEdited(edited, editedUri, returnedPage ?: state.currentPage)
+        } else if (returnedPage != null) {
+            state.scrollToPage(returnedPage)
+        }
     }
 
-    override fun isPdfDocumentLoading(): Boolean =
-        (supportFragmentManager.findFragmentByTag(FRAG_TAG) as? ReadOnlyPdfViewerFragment)
-            ?.isDocumentLoading == true
+    private fun ownCacheFile(uri: Uri): File? {
+        if (uri.scheme != "content" || uri.authority != "$packageName.provider") return null
+        val segments = uri.pathSegments
+        if (segments.size != 2 || segments[0] != "cache") return null
+        val name = segments[1]
+        if (name.isEmpty() || name.contains('/') || name == "." || name == "..") return null
+        return File(cacheDir, name)
+    }
 
-    override fun isPdfDocumentOpening(): Boolean =
-        (supportFragmentManager.findFragmentByTag(FRAG_TAG) as? ReadOnlyPdfViewerFragment)
-            ?.isAwaitingDocument == true
-
-    private fun setEditedDocumentResult(uri: Uri) {
+    private fun setEditedDocumentResult(uri: String) {
         setResult(
             RESULT_OK,
-            Intent().putExtra(EXTRA_OUTPUT_URI, uri.toString())
+            Intent().putExtra(EXTRA_OUTPUT_URI, uri)
                 .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         )
     }
 
+    private fun updateService(revealed: Boolean, edited: Boolean) {
+        serviceJob?.cancel()
+        if (!revealed) {
+            if (serviceCaption != null) {
+                serviceCaption = null
+                PdfProcessingForegroundService.stop(this)
+            }
+            return
+        }
+        val caption = getString(if (edited) R.string.pdf_wait_reading_edited_pages else R.string.pdf_wait_reading_pages)
+        if (serviceCaption != caption) {
+            serviceCaption = caption
+            PdfProcessingForegroundService.start(this, caption)
+        }
+        serviceJob = lifecycleScope.launch {
+            delay((NOTIFICATION_PROGRESS_MS - ViewerWait.REVEAL_MS).milliseconds)
+            PdfProcessingForegroundService.start(this@PdfViewer, caption, PdfProcessingForegroundService.PROGRESS_INDETERMINATE)
+        }
+    }
+
+    private fun updateBottomGap(state: ViewerState, view: View) {
+        val insets = ViewCompat.getRootWindowInsets(view) ?: return
+        val buttons = insets.getInsets(WindowInsetsCompat.Type.tappableElement())
+        state.bottomGap = SystemBarsCompat.needsGestureGap(Build.VERSION.SDK_INT, buttons.left, buttons.bottom, buttons.right)
+    }
+
+    private fun applySystemBars() {
+        val night = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+        val background = ContextCompat.getColor(this, R.color.pdf_viewer_sb_bg_color)
+        WindowCompat.getInsetsController(window, window.decorView).isAppearanceLightStatusBars = !night
+        window.setBackgroundDrawable(background.toDrawable())
+        SystemBarsCompat.applyStatusBarColor(this, background)
+        SystemBarsCompat.applyNavBarColor(this, background)
+    }
+
     private fun supportsPdfEditing(): Boolean =
         Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
-                SdkExtensions.getExtensionVersion(Build.VERSION_CODES.S) >= 18
-
-    private fun addToolbarButtons(toolbar: MaterialToolbar) {
-        val buttonSize = resources.getDimensionPixelSize(R.dimen.dp_32)
-        val oldSearchRightMargin = toolbar.contentInsetStartWithNavigation +
-                resources.getDimensionPixelSize(R.dimen.dp_10)
-
-        val buttons = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            layoutParams = LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-            ).apply {
-                gravity = Gravity.END or Gravity.CENTER_VERTICAL
-                marginEnd = oldSearchRightMargin + resources.getDimensionPixelSize(R.dimen.dp_6)
-            }
-        }
-
-        buttons.addView(
-            createToolbarIconButton(R.drawable.ic_search_24, getString(R.string.search_pdf), buttonSize).apply {
-                (layoutParams as LinearLayout.LayoutParams).marginEnd =
-                    resources.getDimensionPixelSize(R.dimen.dp_4)
-                setOnClickListener {
-                    val current = currentFragment() ?: return@setOnClickListener
-                    if (current.isPageNavigationInProgress) return@setOnClickListener
-                    current.isTextSearchActive = true
-                }
-            }
-        )
-
-        if (supportsPdfEditing()) {
-            buttons.addView(
-                createToolbarIconButton(R.drawable.ic_edit_24, getString(R.string.edit_pdf), buttonSize).apply {
-                    setOnClickListener {
-                        val current = currentFragment() ?: return@setOnClickListener
-                        if (current.isPageNavigationInProgress) return@setOnClickListener
-                        val editUri = currentUri ?: return@setOnClickListener
-                        editLauncher.launch(
-                            Intent(this@PdfViewer, PdfEditorActivity::class.java).apply {
-                                putExtra(PdfEditorActivity.EXTRA_INPUT_URI, editUri.toString())
-                                putExtra(PdfEditorActivity.EXTRA_INITIAL_PAGE_INDEX, current.currentPageIndex)
-                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                            }
-                        )
-                    }
-                }
-            )
-        }
-
-        toolbar.addView(buttons)
-    }
-
-    private fun createToolbarIconButton(
-        iconRes: Int,
-        description: String,
-        size: Int
-    ): AppCompatImageButton =
-        AppCompatImageButton(this).apply {
-            setImageDrawable(AppCompatResources.getDrawable(this@PdfViewer, iconRes))
-            contentDescription = description
-            imageTintList = AppCompatResources.getColorStateList(this@PdfViewer, R.color.toolbar_navigation_icon_color)
-            background = null
-            scaleType = android.widget.ImageView.ScaleType.CENTER
-            setPadding(0, 0, 0, 0)
-            layoutParams = LinearLayout.LayoutParams(size, size)
-        }
-
-    private fun resolveDisplayName(uri: Uri): String {
-        return try {
-            contentResolver.query(uri, null, null, null, null)?.use { cursor ->
-                val nameIdx = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-                if (nameIdx >= 0 && cursor.moveToFirst()) {
-                    cursor.getString(nameIdx)
-                } else {
-                    uri.lastPathSegment
-                }
-            } ?: (uri.lastPathSegment ?: getString(R.string.app_name))
-        } catch (_: Exception) {
-            uri.lastPathSegment ?: getString(R.string.app_name)
-        } ?: getString(R.string.app_name)
-    }
+            SdkExtensions.getExtensionVersion(Build.VERSION_CODES.S) >= 18
 }

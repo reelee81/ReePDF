@@ -52,6 +52,7 @@ class PdfViewerEditOperationTest {
 
         assertEquals(listOf(200f, 201f, 202f), pageWidths(source()))
         assertEquals(2, pageCount(nup()))
+        TestPdfs.assertWorkFile(nup())
         assertEquals(config, result.config)
         assertArrayEquals(intArrayOf(0, 0, 0), result.rotation)
         assertArrayEquals(intArrayOf(9, 5, 5), result.position)

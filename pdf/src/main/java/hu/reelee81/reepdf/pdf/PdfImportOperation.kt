@@ -6,7 +6,6 @@ import hu.reelee81.reepdf.core.NupConfig
 import hu.reelee81.reepdf.core.PageGroups
 import hu.reelee81.reepdf.core.PdfCropRect
 import hu.reelee81.reepdf.core.ProgressMath
-import hu.reelee81.reepdf.core.ProgressNotifyPacing
 import hu.reelee81.reepdf.core.ProgressTicker
 import hu.reelee81.reepdf.core.SourcePageArrays
 import hu.reelee81.reepdf.core.SourcePartPlan
@@ -35,7 +34,8 @@ class PdfImportOperation(
         val password: ByteArray?,
         val openFailure: Exception?,
         val isImage: Boolean = false,
-        val name: String = file.name
+        val name: String = file.name,
+        val pages: Int = 0
     )
 
     class Input(
@@ -61,7 +61,7 @@ class PdfImportOperation(
         ): PdfMuPdfRepair.Repaired?
     }
 
-    class Probe(val canOpen: Boolean, val noPages: Boolean, val failure: Exception?)
+    class Probe(val canOpen: Boolean, val noPages: Boolean, val failure: Exception?, val pages: Int = 0)
 
     private class Loss {
         var skippedPages = 0
@@ -87,11 +87,7 @@ class PdfImportOperation(
         try {
             ProgressTicker.run(
                 tick = progress.tickMs.milliseconds,
-                percent = {
-                    val now = progress.clock()
-                    if (now - tracker.startedAt < ProgressNotifyPacing.REVEAL_MS) null
-                    else tracker.percent(now, progress.idleMs)
-                },
+                percent = { progress.percentOf(tracker) },
                 report = report,
                 onCancel = tracker::cancel
             ) {
@@ -110,17 +106,19 @@ class PdfImportOperation(
                     var position = input.position
                     val warnings = ArrayList<PdfImportWarning>()
                     val ownRotations = ArrayList<OwnRotations>()
-                    for (source in input.sources) {
+                    val knownPages = input.sources.map { if (it.isImage) 1 else it.pages }
+                    for ((index, source) in input.sources.withIndex()) {
                         val loss = Loss()
+                        val laterPages = knownPages.drop(index + 1).sum()
                         if (source.isImage) {
                             val imagePdf = imageToPdf(source.file)
                             try {
-                                append(listOf(imagePdf), null, tracker, loss, ownRotations)
+                                append(listOf(imagePdf), null, laterPages, tracker, loss, ownRotations)
                             } finally {
                                 runCatching { imagePdf.delete() }
                             }
                         } else {
-                            appendOrRepair(source, tracker, ensureActive, loss, ownRotations)
+                            appendOrRepair(source, laterPages, tracker, ensureActive, loss, ownRotations)
                         }
                         loss.warningFor(source.name)?.let(warnings::add)
                         runCatching { source.file.delete() }
@@ -177,6 +175,7 @@ class PdfImportOperation(
 
     private fun appendOrRepair(
         source: Source,
+        laterPages: Int,
         tracker: ProgressTracker,
         ensureActive: () -> Unit,
         loss: Loss,
@@ -184,7 +183,7 @@ class PdfImportOperation(
     ) {
         val doneBefore = tracker.doneUnits()
         val failure = source.openFailure ?: try {
-            append(listOf(source.file), source.password, tracker, loss, ownRotations)
+            append(listOf(source.file), source.password, laterPages, tracker, loss, ownRotations)
             return
         } catch (e: CancellationException) {
             throw e
@@ -201,7 +200,7 @@ class PdfImportOperation(
             workDir = files.workDir,
             batchSize = input.batchSize,
             ensureActive = ensureActive
-        ) { parts -> append(parts, null, tracker, loss, ownRotations) }
+        ) { parts -> append(parts, null, laterPages, tracker, loss, ownRotations) }
         if (repaired != null) {
             loss.skippedPages = repaired.skippedPages
             if (repaired.annotationsLost) loss.missingContent = true
@@ -222,7 +221,7 @@ class PdfImportOperation(
                     false
                 }
             }
-        ) { revision -> append(listOf(revision), source.password, tracker, loss, ownRotations) }
+        ) { revision -> append(listOf(revision), source.password, laterPages, tracker, loss, ownRotations) }
         if (!recovered) throw failure
         loss.earlierRevision = true
     }
@@ -230,6 +229,7 @@ class PdfImportOperation(
     private fun append(
         srcPdfs: List<File>,
         password: ByteArray?,
+        laterPages: Int,
         tracker: ProgressTracker,
         loss: Loss,
         ownRotations: MutableList<OwnRotations>
@@ -239,7 +239,7 @@ class PdfImportOperation(
         val pieces = pages.mapIndexedNotNull { index, count -> if (count > 0) SourcePartPlan.Piece.Incoming(index, 0, count - 1) else null }
         val plan = SourcePartPlan.append(source.layout, pieces)
         val per = (input.config.rows * input.config.cols).coerceAtLeast(1)
-        val stage = tracker.stage(plan.writtenPages + ProgressMath.layoutUnits(source.total + pages.sum(), per))
+        val stage = tracker.stage(ProgressMath.importUnits(plan.writtenPages, laterPages, source.total + pages.sum(), per))
         val firstPages = pages.runningFold(0, Int::plus)
         var turned: IntArray? = null
 
@@ -286,7 +286,7 @@ class PdfImportOperation(
             val (encrypted, pageCount) = PdfDocument(PdfIo.reader(file.absolutePath, password)).use {
                 it.reader.isEncrypted to it.numberOfPages
             }
-            Probe(canOpen = !encrypted || !rejectsPassword(file, password), noPages = pageCount == 0, failure = null)
+            Probe(canOpen = !encrypted || !rejectsPassword(file, password), noPages = pageCount == 0, failure = null, pages = pageCount)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {

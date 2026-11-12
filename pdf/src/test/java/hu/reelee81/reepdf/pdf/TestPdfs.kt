@@ -1,6 +1,10 @@
 package hu.reelee81.reepdf.pdf
 
+import com.itextpdf.kernel.pdf.PdfDocument
+import com.itextpdf.kernel.pdf.PdfReader
 import java.io.File
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
 
 internal object TestPdfs {
@@ -20,6 +24,28 @@ internal object TestPdfs {
     }
 
     fun outputFolder(name: String): File = File(output, name).apply { mkdirs() }
+
+    fun assertWorkFile(file: File) {
+        val (crossReferenceStream, packedObjects) = layoutOf(file)
+        assertTrue("${file.name} has no cross-reference stream", crossReferenceStream)
+        assertEquals("objects of ${file.name} in object streams", 0, packedObjects)
+    }
+
+    fun assertPacked(file: File) {
+        val (crossReferenceStream, packedObjects) = layoutOf(file)
+        assertTrue("${file.name} has no cross-reference stream", crossReferenceStream)
+        assertTrue("${file.name} has no object in an object stream", packedObjects > 0)
+    }
+
+    private fun layoutOf(file: File): Pair<Boolean, Int> {
+        val reader = PdfReader(file)
+        return PdfDocument(reader).use { pdf ->
+            val packed = (1 until pdf.numberOfPdfObjects).count { number ->
+                (pdf.getPdfObject(number)?.indirectReference?.objStreamNumber ?: 0) != 0
+            }
+            reader.hasXrefStm() to packed
+        }
+    }
 
     private fun projectFolder(name: String): File? =
         listOf(File("../$name"), File(name)).firstOrNull { it.isDirectory }

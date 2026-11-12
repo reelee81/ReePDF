@@ -63,71 +63,45 @@ class PdfRotationInstrumentedTest {
     }
 
     @Test
-    fun viewerScrubberSurvivesRotationWithoutLosingPage() {
-        verifyRotation(PdfViewer::class.java, PdfViewer.EXTRA_URI, PdfViewer.EXTRA_INITIAL_PAGE_INDEX)
-    }
-
-    @Test
     fun editorScrubberSurvivesRotationWithoutLosingPage() {
-        verifyRotation(
-            PdfEditorActivity::class.java,
-            PdfEditorActivity.EXTRA_INPUT_URI,
-            PdfEditorActivity.EXTRA_INITIAL_PAGE_INDEX,
-            editBeforeRotation = true
-        )
-    }
-
-    @Test
-    fun viewerWaitBlocksCommandsAnimatesOnlyWhilePendingAndAllowsBack() {
-        withPdfActivity(PdfViewer::class.java, PdfViewer.EXTRA_URI) { scenario, _ ->
-            awaitNavigation(scenario)
-            var parent: ViewGroup? = null
-            try {
+        val file = createPdf()
+        try {
+            val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
+            val intent = Intent(context, PdfEditorActivity::class.java)
+                .putExtra(PdfEditorActivity.EXTRA_INPUT_URI, uri.toString())
+                .putExtra(PdfEditorActivity.EXTRA_INITIAL_PAGE_INDEX, TARGET_PAGE)
+            ActivityScenario.launch<PdfEditorActivity>(intent).use { scenario ->
+                awaitNavigation(scenario)
                 scenario.onActivity { activity ->
-                    val view = findPdfView(activity)
-                    val content = view.parent as ViewGroup
-                    parent = content
-                    content.suppressLayout(true)
-                    view.requestLayout()
-                    val fragment = activity.supportFragmentManager.fragments.first() as ReadOnlyPdfViewerFragment
-                    fragment.scrollToPage(TARGET_PAGE / 2)
-                    assertWaitBlocksContent(activity)
-                    val searchButtons = ArrayList<View>()
-                    activity.findViewById<View>(R.id.toolbar).findViewsWithText(
-                        searchButtons, activity.getString(R.string.search_pdf), View.FIND_VIEWS_WITH_CONTENT_DESCRIPTION
-                    )
-                    assertEquals(1, searchButtons.size)
-                    searchButtons.single().performClick()
-                    assertFalse(fragment.isTextSearchActive)
-                    assertWaitIndicatorShown(activity)
-                    saveWaitPreview(activity)
+                    assertEquals(TARGET_PAGE, pageAtViewportCenter(findPdfView(activity)))
+                    assertScrubberDrawn(activity)
                 }
-                SystemClock.sleep(600)
-                scenario.onActivity { activity ->
-                    assertWaitBlocksContent(activity)
-                    assertWaitIndicatorShown(activity)
+                drawAnnotation(scenario)
+                for (orientation in listOf(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE, ActivityInfo.SCREEN_ORIENTATION_PORTRAIT)) {
+                    scenario.onActivity { it.requestedOrientation = orientation }
+                    val expectedConfiguration = if (orientation == ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE) {
+                        Configuration.ORIENTATION_LANDSCAPE
+                    } else Configuration.ORIENTATION_PORTRAIT
+                    waitUntil {
+                        var rotated = false
+                        scenario.onActivity {
+                            rotated = it.resources.configuration.orientation == expectedConfiguration
+                        }
+                        rotated
+                    }
+                    awaitNavigation(scenario)
+                    SystemClock.sleep(1800)
+                    scenario.onActivity { activity ->
+                        val view = findPdfView(activity)
+                        assertEquals(TARGET_PAGE, pageAtViewportCenter(view))
+                        view.scrollBy(0, 8)
+                        assertScrubberDrawn(activity)
+                        assertTrue((activity.supportFragmentManager.fragments.first() as PdfEditorFragment).hasUnsavedChanges)
+                    }
                 }
-            } finally {
-                scenario.onActivity { parent?.suppressLayout(false) }
             }
-            awaitNavigation(scenario)
-            scenario.onActivity { activity ->
-                assertEquals(View.GONE, activity.findViewById<View>(R.id.overlay_pdf_navigation_wait).visibility)
-            }
-            SystemClock.sleep(600)
-            scenario.onActivity { activity ->
-                assertEquals(View.GONE, activity.findViewById<View>(R.id.overlay_pdf_navigation_wait).visibility)
-                val view = findPdfView(activity)
-                val content = view.parent as ViewGroup
-                content.suppressLayout(true)
-                view.requestLayout()
-                (activity.supportFragmentManager.fragments.first() as ReadOnlyPdfViewerFragment).scrollToPage(TARGET_PAGE)
-                assertWaitBlocksContent(activity)
-                activity.onBackPressedDispatcher.onBackPressed()
-                assertTrue(activity.isFinishing)
-                content.suppressLayout(false)
-            }
-            waitUntil { scenario.state == Lifecycle.State.DESTROYED }
+        } finally {
+            file.delete()
         }
     }
 
@@ -143,7 +117,7 @@ class PdfRotationInstrumentedTest {
         }
         instrumentation.runOnMainSync { monitor.addLifecycleCallback(callback) }
         try {
-            withPdfActivity(PdfEditorActivity::class.java, PdfEditorActivity.EXTRA_INPUT_URI) { scenario, _ ->
+            withEditor { scenario, _ ->
                 try {
                     scenario.onActivity { activity ->
                         assertTrue(requireNotNull(parent).isLayoutSuppressed)
@@ -177,7 +151,7 @@ class PdfRotationInstrumentedTest {
 
     @Test
     fun editorWaitInterceptsDrawingAndAllowsBackWithoutDiscardDialog() {
-        withPdfActivity(PdfEditorActivity::class.java, PdfEditorActivity.EXTRA_INPUT_URI) { scenario, uri ->
+        withEditor { scenario, uri ->
             awaitNavigation(scenario)
             scenario.onActivity { activity ->
                 val view = findPdfView(activity)
@@ -213,7 +187,7 @@ class PdfRotationInstrumentedTest {
 
     @Test
     fun editorWaitPreservesDraftAndKeepsDiscardConfirmationUsable() {
-        withPdfActivity(PdfEditorActivity::class.java, PdfEditorActivity.EXTRA_INPUT_URI) { scenario, uri ->
+        withEditor { scenario, uri ->
             awaitNavigation(scenario)
             drawAnnotation(scenario)
             var parent: ViewGroup? = null
@@ -270,7 +244,7 @@ class PdfRotationInstrumentedTest {
 
     @Test
     fun editorSaveBlocksBackFromButtonPressUntilSavedDocumentCanBeReopened() {
-        withPdfActivity(PdfEditorActivity::class.java, PdfEditorActivity.EXTRA_INPUT_URI, forResult = true) { scenario, _ ->
+        withEditor(forResult = true) { scenario, _ ->
             awaitNavigation(scenario)
             drawAnnotation(scenario)
             scenario.onActivity { activity ->
@@ -298,7 +272,7 @@ class PdfRotationInstrumentedTest {
         val writingStarted = CompletableDeferred<Unit>()
         val releaseWrite = CompletableDeferred<Unit>()
         val handleClosed = AtomicBoolean(false)
-        withPdfActivity(PdfEditorActivity::class.java, PdfEditorActivity.EXTRA_INPUT_URI, forResult = true) { scenario, uri ->
+        withEditor(forResult = true) { scenario, uri ->
             awaitNavigation(scenario)
             try {
                 scenario.onActivity { activity ->
@@ -327,7 +301,7 @@ class PdfRotationInstrumentedTest {
                 scenario.onActivity { activity ->
                     assertSaveBlocksBack(activity)
                     assertWaitIndicatorShown(activity)
-                    saveWaitPreview(activity, "saving_wait_preview.png")
+                    saveWaitPreview(activity)
                 }
                 releaseWrite.complete(Unit)
                 if (writeFails) {
@@ -393,119 +367,21 @@ class PdfRotationInstrumentedTest {
         }
     }
 
-    @Test
-    fun viewerReturnFromEditorWithoutScrollingReleasesWait() {
-        verifyEditorReturn(cancelWhileLoading = false)
-    }
-
-    @Test
-    fun viewerReturnFromCanceledEditorNavigationReleasesWait() {
-        verifyEditorReturn(cancelWhileLoading = true)
-    }
-
-    @Test
-    fun viewerReturnRestartsWaitAnimationUntilLayoutIsReady() {
-        verifyEditorReturn(cancelWhileLoading = true, holdViewerLayout = true)
-    }
-
-    private fun verifyEditorReturn(cancelWhileLoading: Boolean, holdViewerLayout: Boolean = false) {
-        var editor: PdfEditorActivity? = null
-        var editorRoot: ViewGroup? = null
-        val monitor = ActivityLifecycleMonitorRegistry.getInstance()
-        val callback = ActivityLifecycleCallback { activity, stage ->
-            if (activity is PdfEditorActivity && stage == Stage.CREATED) {
-                editor = activity
-                if (cancelWhileLoading) {
-                    editorRoot = activity.findViewById(android.R.id.content)
-                    editorRoot?.suppressLayout(true)
-                }
-            }
-        }
-        instrumentation.runOnMainSync { monitor.addLifecycleCallback(callback) }
-        try {
-            withPdfActivity(PdfViewer::class.java, PdfViewer.EXTRA_URI) { scenario, _ ->
-                awaitNavigation(scenario)
-                var viewerParent: ViewGroup? = null
-                try {
-                    scenario.onActivity { viewer ->
-                        if (holdViewerLayout) {
-                            val view = findPdfView(viewer)
-                            val content = view.parent as ViewGroup
-                            viewerParent = content
-                            content.suppressLayout(true)
-                            view.requestLayout()
-                        }
-                        val buttons = ArrayList<View>()
-                        viewer.findViewById<View>(R.id.toolbar).findViewsWithText(
-                            buttons, viewer.getString(R.string.edit_pdf), View.FIND_VIEWS_WITH_CONTENT_DESCRIPTION
-                        )
-                        buttons.single().performClick()
-                    }
-                    waitUntil {
-                        var ready = false
-                        instrumentation.runOnMainSync {
-                            editor?.let {
-                                ready = it.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) &&
-                                    (cancelWhileLoading ||
-                                        !(it.supportFragmentManager.fragments.first() as PdfEditorFragment).isPageNavigationInProgress)
-                            }
-                        }
-                        ready
-                    }
-                    instrumentation.runOnMainSync {
-                        val activity = requireNotNull(editor)
-                        if (cancelWhileLoading) assertWaitBlocksContent(activity)
-                        else assertEquals(TARGET_PAGE, pageAtViewportCenter(findPdfView(activity)))
-                        activity.onBackPressedDispatcher.onBackPressed()
-                        assertTrue(activity.isFinishing)
-                        editorRoot?.suppressLayout(false)
-                    }
-                    waitUntil { scenario.state == Lifecycle.State.RESUMED }
-                    if (holdViewerLayout) {
-                        scenario.onActivity { viewer ->
-                            assertWaitBlocksContent(viewer)
-                            assertWaitIndicatorShown(viewer)
-                        }
-                    }
-                } finally {
-                    scenario.onActivity { viewerParent?.suppressLayout(false) }
-                }
-                waitUntil(timeoutMillis = 5_000) {
-                    var idle = false
-                    scenario.onActivity { viewer ->
-                        idle = !(viewer.supportFragmentManager.fragments.first() as ReadOnlyPdfViewerFragment).isPageNavigationInProgress
-                    }
-                    idle
-                }
-                scenario.onActivity { viewer ->
-                    assertEquals(TARGET_PAGE, pageAtViewportCenter(findPdfView(viewer)))
-                    assertEquals(View.GONE, viewer.findViewById<View>(R.id.overlay_pdf_navigation_wait).visibility)
-                    assertFalse(viewer.findViewById<View>(R.id.pdfFragContainer).importantForAccessibility ==
-                        View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS)
-                }
-            }
-        } finally {
-            instrumentation.runOnMainSync {
-                editorRoot?.suppressLayout(false)
-                editor?.takeUnless { it.isFinishing || it.isDestroyed }?.onBackPressedDispatcher?.onBackPressed()
-                monitor.removeLifecycleCallback(callback)
-            }
-        }
-    }
-
-    private fun <T : PdfActivity> withPdfActivity(
-        activityClass: Class<T>,
-        uriExtra: String,
+    private fun withEditor(
         forResult: Boolean = false,
-        block: (ActivityScenario<T>, Uri) -> Unit
+        block: (ActivityScenario<PdfEditorActivity>, Uri) -> Unit
     ) {
         val file = createPdf()
         try {
             val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
-            val intent = Intent(context, activityClass)
-                .putExtra(uriExtra, uri.toString())
-                .putExtra(PdfViewer.EXTRA_INITIAL_PAGE_INDEX, TARGET_PAGE)
-            val scenario = if (forResult) ActivityScenario.launchActivityForResult<T>(intent) else ActivityScenario.launch<T>(intent)
+            val intent = Intent(context, PdfEditorActivity::class.java)
+                .putExtra(PdfEditorActivity.EXTRA_INPUT_URI, uri.toString())
+                .putExtra(PdfEditorActivity.EXTRA_INITIAL_PAGE_INDEX, TARGET_PAGE)
+            val scenario: ActivityScenario<PdfEditorActivity> = if (forResult) {
+                ActivityScenario.launchActivityForResult(intent)
+            } else {
+                ActivityScenario.launch(intent)
+            }
             scenario.use { block(it, uri) }
         } finally {
             file.delete()
@@ -533,12 +409,12 @@ class PdfRotationInstrumentedTest {
         return buttons.single()
     }
 
-    private fun saveWaitPreview(activity: PdfActivity, fileName: String = "navigation_wait_preview.png") {
+    private fun saveWaitPreview(activity: PdfActivity) {
         val root = activity.findViewById<View>(android.R.id.content)
         val bitmap = Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888)
         try {
             root.draw(Canvas(bitmap))
-            File(context.getExternalFilesDir(null), fileName).outputStream().use {
+            File(context.getExternalFilesDir(null), "saving_wait_preview.png").outputStream().use {
                 bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)
             }
         } finally {
@@ -559,55 +435,6 @@ class PdfRotationInstrumentedTest {
             } finally {
                 event.recycle()
             }
-        }
-    }
-
-    private fun <T : PdfActivity> verifyRotation(
-        activityClass: Class<T>,
-        uriExtra: String,
-        pageExtra: String,
-        editBeforeRotation: Boolean = false
-    ) {
-        val file = createPdf()
-        try {
-            val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
-            val intent = Intent(context, activityClass)
-                .putExtra(uriExtra, uri.toString())
-                .putExtra(pageExtra, TARGET_PAGE)
-            ActivityScenario.launch<T>(intent).use { scenario ->
-                awaitNavigation(scenario)
-                scenario.onActivity { activity ->
-                    assertEquals(TARGET_PAGE, pageAtViewportCenter(findPdfView(activity)))
-                    assertScrubberDrawn(activity)
-                }
-                if (editBeforeRotation) drawAnnotation(scenario)
-                for (orientation in listOf(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE, ActivityInfo.SCREEN_ORIENTATION_PORTRAIT)) {
-                    scenario.onActivity { it.requestedOrientation = orientation }
-                    val expectedConfiguration = if (orientation == ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE) {
-                        Configuration.ORIENTATION_LANDSCAPE
-                    } else Configuration.ORIENTATION_PORTRAIT
-                    waitUntil {
-                        var rotated = false
-                        scenario.onActivity {
-                            rotated = it.resources.configuration.orientation == expectedConfiguration
-                        }
-                        rotated
-                    }
-                    awaitNavigation(scenario)
-                    SystemClock.sleep(1800)
-                    scenario.onActivity { activity ->
-                        val view = findPdfView(activity)
-                        assertEquals(TARGET_PAGE, pageAtViewportCenter(view))
-                        view.scrollBy(0, 8)
-                        assertScrubberDrawn(activity)
-                        if (editBeforeRotation) {
-                            assertTrue((activity.supportFragmentManager.fragments.first() as PdfEditorFragment).hasUnsavedChanges)
-                        }
-                    }
-                }
-            }
-        } finally {
-            file.delete()
         }
     }
 
@@ -656,7 +483,6 @@ class PdfRotationInstrumentedTest {
             scenario.onActivity { activity ->
                 val fragment = activity.supportFragmentManager.fragments.firstOrNull()
                 ready = when (fragment) {
-                    is ReadOnlyPdfViewerFragment -> !fragment.isPageNavigationInProgress
                     is PdfEditorFragment -> !fragment.isPageNavigationInProgress
                     else -> false
                 }

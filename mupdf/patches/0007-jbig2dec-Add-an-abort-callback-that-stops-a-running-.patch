@@ -1,0 +1,151 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: reelee81 <reelee81@gmail.com>
+Date: Wed, 11 Nov 2026 12:30:14 +0100
+Subject: [PATCH 7/18] jbig2dec: Add an abort callback that stops a running
+ decode.
+
+jbig2_ctx_set_abort_callback() sets a callback that the decoder asks
+every few input bytes of arithmetic decoding and every few rows of MMR
+decoding. When it returns non-zero the region fails with a fatal error,
+so a caller can stop decoding a very large page early. Without a
+callback nothing changes.
+
+Modified for ReePDF on 2026-11-11.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ thirdparty/jbig2dec/jbig2.c       | 17 +++++++++++++++++
+ thirdparty/jbig2dec/jbig2.h       |  5 +++++
+ thirdparty/jbig2dec/jbig2_arith.c |  8 ++++++++
+ thirdparty/jbig2dec/jbig2_mmr.c   |  4 ++++
+ thirdparty/jbig2dec/jbig2_priv.h  |  4 ++++
+ 5 files changed, 38 insertions(+)
+
+diff --git a/thirdparty/jbig2dec/jbig2.c b/thirdparty/jbig2dec/jbig2.c
+index c232e30..8da079e 100644
+--- a/thirdparty/jbig2dec/jbig2.c
++++ b/thirdparty/jbig2dec/jbig2.c
+@@ -135,6 +135,8 @@ jbig2_ctx_new_imp(Jbig2Allocator *allocator, Jbig2Options options, Jbig2GlobalCt
+     result->global_ctx = (const Jbig2Ctx *)global_ctx;
+     result->error_callback = error_callback;
+     result->error_callback_data = error_callback_data;
++    result->abort_callback = NULL;
++    result->abort_callback_data = NULL;
+ 
+     result->state = (options & JBIG2_OPTIONS_EMBEDDED) ? JBIG2_FILE_HEADER_MAYBE : JBIG2_FILE_HEADER;
+ 
+@@ -453,6 +455,21 @@ jbig2_data_in(Jbig2Ctx *ctx, const unsigned char *data, size_t size)
+     }
+ }
+ 
++void
++jbig2_ctx_set_abort_callback(Jbig2Ctx *ctx, Jbig2AbortCallback abort_callback, void *abort_callback_data)
++{
++    if (ctx == NULL)
++        return;
++    ctx->abort_callback = abort_callback;
++    ctx->abort_callback_data = abort_callback_data;
++}
++
++int
++jbig2_aborted(Jbig2Ctx *ctx)
++{
++    return ctx != NULL && ctx->abort_callback != NULL && ctx->abort_callback(ctx->abort_callback_data);
++}
++
+ Jbig2Allocator *
+ jbig2_ctx_free(Jbig2Ctx *ctx)
+ {
+diff --git a/thirdparty/jbig2dec/jbig2.h b/thirdparty/jbig2dec/jbig2.h
+index 94989fa..5ecb0cb 100644
+--- a/thirdparty/jbig2dec/jbig2.h
++++ b/thirdparty/jbig2dec/jbig2.h
+@@ -91,6 +91,11 @@ Jbig2Ctx *jbig2_ctx_new_imp(Jbig2Allocator *allocator,
+                         int jbig2_version_minor);
+ Jbig2Allocator *jbig2_ctx_free(Jbig2Ctx *ctx);
+ 
++/* abort callback: asked while decoding; returning non-zero makes the
++   running decode fail as soon as possible */
++typedef int (*Jbig2AbortCallback)(void *data);
++void jbig2_ctx_set_abort_callback(Jbig2Ctx *ctx, Jbig2AbortCallback abort_callback, void *abort_callback_data);
++
+ /* global context for embedded streams */
+ Jbig2GlobalCtx *jbig2_make_global_ctx(Jbig2Ctx *ctx);
+ Jbig2Allocator *jbig2_global_ctx_free(Jbig2GlobalCtx *global_ctx);
+diff --git a/thirdparty/jbig2dec/jbig2_arith.c b/thirdparty/jbig2dec/jbig2_arith.c
+index 1b73441..d341fe9 100644
+--- a/thirdparty/jbig2dec/jbig2_arith.c
++++ b/thirdparty/jbig2dec/jbig2_arith.c
+@@ -38,6 +38,7 @@ struct _Jbig2ArithState {
+     uint32_t next_word;
+     size_t next_word_bytes;
+     int err;
++    unsigned int abort_count;
+ 
+     Jbig2WordStream *ws;
+     size_t offset;
+@@ -59,6 +60,12 @@ jbig2_arith_bytein(Jbig2Ctx *ctx, Jbig2ArithState *as)
+ {
+     byte B;
+ 
++    if ((++as->abort_count & 63) == 0 && jbig2_aborted(ctx)) {
++        as->err = 1;
++        jbig2_error(ctx, JBIG2_SEVERITY_FATAL, JBIG2_UNKNOWN_SEGMENT_NUMBER, "decoding aborted");
++        return -1;
++    }
++
+     /* Treat both errors and reading beyond end of stream as an error. */
+     if (as->err != 0) {
+         jbig2_error(ctx, JBIG2_SEVERITY_FATAL, JBIG2_UNKNOWN_SEGMENT_NUMBER, "failed to read from underlying stream during arithmetic decoding");
+@@ -199,6 +206,7 @@ jbig2_arith_new(Jbig2Ctx *ctx, Jbig2WordStream *ws)
+     }
+ 
+     result->err = 0;
++    result->abort_count = 0;
+     result->ws = ws;
+     result->offset = 0;
+ 
+diff --git a/thirdparty/jbig2dec/jbig2_mmr.c b/thirdparty/jbig2dec/jbig2_mmr.c
+index 03b31a4..82a8d5f 100644
+--- a/thirdparty/jbig2dec/jbig2_mmr.c
++++ b/thirdparty/jbig2dec/jbig2_mmr.c
+@@ -1218,6 +1218,8 @@ jbig2_decode_generic_mmr(Jbig2Ctx *ctx, Jbig2Segment *segment, const Jbig2Generi
+     jbig2_decode_mmr_init(&mmr, image->width, image->height, data, size);
+ 
+     for (y = 0; !eofb && y < image->height; y++) {
++        if ((y & 63) == 0 && jbig2_aborted(ctx))
++            return jbig2_error(ctx, JBIG2_SEVERITY_FATAL, segment->number, "decoding aborted");
+         memset(dst, 0, rowstride);
+         code = jbig2_decode_mmr_line(ctx, &mmr, ref, dst, &eofb);
+         if (code < 0)
+@@ -1264,6 +1266,8 @@ jbig2_decode_halftone_mmr(Jbig2Ctx *ctx, const Jbig2GenericRegionParams *params,
+     jbig2_decode_mmr_init(&mmr, image->width, image->height, data, size);
+ 
+     for (y = 0; !eofb && y < image->height; y++) {
++        if ((y & 63) == 0 && jbig2_aborted(ctx))
++            return jbig2_error(ctx, JBIG2_SEVERITY_FATAL, JBIG2_UNKNOWN_SEGMENT_NUMBER, "decoding aborted");
+         memset(dst, 0, rowstride);
+         code = jbig2_decode_mmr_line(ctx, &mmr, ref, dst, &eofb);
+         if (code < 0)
+diff --git a/thirdparty/jbig2dec/jbig2_priv.h b/thirdparty/jbig2dec/jbig2_priv.h
+index 188c70c..d7f57ae 100644
+--- a/thirdparty/jbig2dec/jbig2_priv.h
++++ b/thirdparty/jbig2dec/jbig2_priv.h
+@@ -100,6 +100,8 @@ struct _Jbig2Ctx {
+     const Jbig2Ctx *global_ctx;
+     Jbig2ErrorCallback error_callback;
+     void *error_callback_data;
++    Jbig2AbortCallback abort_callback;
++    void *abort_callback_data;
+ 
+     byte *buf;
+     size_t buf_size;
+@@ -142,6 +144,8 @@ void *jbig2_realloc(Jbig2Allocator *allocator, void *p, size_t size, size_t num)
+ 
+ #define jbig2_renew(ctx, p, t, num) ((t *)jbig2_realloc(ctx->allocator, (p), sizeof(t), num))
+ 
++int jbig2_aborted(Jbig2Ctx *ctx);
++
+ int jbig2_error(Jbig2Ctx *ctx, Jbig2Severity severity, uint32_t seg_idx, const char *fmt, ...)
+ #ifdef __GNUC__
+     __attribute__ ((format (__printf__, 4, 5)))

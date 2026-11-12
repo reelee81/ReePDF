@@ -56,6 +56,7 @@ class PdfSignOperationTest {
         assertEquals(emptyList<Int>(), result.selected)
         assertEquals(config, result.config)
         assertEquals(2, pageCount(nup()))
+        TestPdfs.assertWorkFile(nup())
         assertEquals(listOf(0, 2), renderer.rendered)
         assertTrue(renderer.closed)
         assertEquals(listOf("selection saved"), events)

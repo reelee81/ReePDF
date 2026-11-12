@@ -1,0 +1,569 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: reelee81 <reelee81@gmail.com>
+Date: Thu, 12 Nov 2026 18:28:53 +0100
+Subject: [PATCH 17/18] pdf: Remember where inline images end to skip decoding
+ them again.
+
+An inline image has no length, so every run of a content stream decodes
+each inline image completely just to find where its data ends, and then
+throws the decoded pixmap away; an image that is drawn is decoded once
+more. A page with 73 000 small CCITT inline images (pdf.js test
+issue8078.pdf) spends most of every run on this, and a viewer that draws
+a zoomed page in parts runs the same content many times.
+
+The document now remembers, for each content stream (by its object
+number, for an array of streams by all of their object numbers), the
+offset and the length of every inline image it has decoded
+successfully, when the image has no filter or only an image filter, so
+its data is read directly from the content stream. When the same content
+is run again, the remembered number of bytes is copied without
+decoding; the stream position and the image are the same as before.
+Images that fail to decode are not remembered. The list takes 8 bytes
+per image and at most 4 MB per document. It is not used for an older
+version of the document or while a local xref is active, and it is
+dropped when an object or a stream is updated, the xref is repaired, an
+edit is undone or redone, objects are renumbered for saving, and when
+the document is dropped.
+
+Modified for ReePDF on 2026-11-12.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ include/mupdf/pdf/document.h  |   2 +
+ include/mupdf/pdf/interpret.h |   2 +
+ source/pdf/pdf-image.c        |  19 ++-
+ source/pdf/pdf-imp.h          |   4 +
+ source/pdf/pdf-interpret.c    |   4 +-
+ source/pdf/pdf-object.c       |   4 +
+ source/pdf/pdf-repair.c       |   2 +
+ source/pdf/pdf-stream.c       | 273 +++++++++++++++++++++++++++++++++-
+ source/pdf/pdf-write.c        |   1 +
+ source/pdf/pdf-xref.c         |   6 +
+ 10 files changed, 306 insertions(+), 11 deletions(-)
+
+diff --git a/include/mupdf/pdf/document.h b/include/mupdf/pdf/document.h
+index 4df07ae..6dfacfa 100644
+--- a/include/mupdf/pdf/document.h
++++ b/include/mupdf/pdf/document.h
+@@ -572,6 +572,8 @@ struct pdf_document
+ 	pdf_journal *journal;
+ 
+ 	int throw_on_repair;
++
++	struct pdf_inline_image_cache *inline_images;
+ };
+ 
+ pdf_document *pdf_create_document(fz_context *ctx);
+diff --git a/include/mupdf/pdf/interpret.h b/include/mupdf/pdf/interpret.h
+index d643a45..ca99578 100644
+--- a/include/mupdf/pdf/interpret.h
++++ b/include/mupdf/pdf/interpret.h
+@@ -234,6 +234,8 @@ typedef struct
+ 	size_t string_len;
+ 	int top;
+ 	float stack[32];
++
++	pdf_obj *content;
+ } pdf_csi;
+ 
+ void pdf_count_q_balance(fz_context *ctx, pdf_document *doc, pdf_obj *res, pdf_obj *stm, int *prepend, int *append);
+diff --git a/source/pdf/pdf-image.c b/source/pdf/pdf-image.c
+index 5c2a6a3..352a1a6 100644
+--- a/source/pdf/pdf-image.c
++++ b/source/pdf/pdf-image.c
+@@ -22,6 +22,7 @@
+ 
+ #include "mupdf/fitz.h"
+ #include "mupdf/pdf.h"
++#include "pdf-imp.h"
+ 
+ #include <string.h>
+ 
+@@ -29,7 +30,7 @@ static fz_image *pdf_load_jpx_as_compressed_image(fz_context *ctx, pdf_document
+ static fz_image *pdf_load_jpx_as_compressed_image_mask(fz_context *ctx, pdf_document *doc, pdf_obj *dict);
+ 
+ static fz_image *
+-pdf_load_image_imp(fz_context *ctx, pdf_document *doc, pdf_resource_stack *rdb, pdf_obj *dict, fz_stream *cstm, int forcemask)
++pdf_load_image_imp(fz_context *ctx, pdf_document *doc, pdf_resource_stack *rdb, pdf_obj *dict, fz_stream *cstm, int forcemask, pdf_obj *content)
+ {
+ 	fz_image *image = NULL;
+ 	pdf_obj *obj, *res;
+@@ -155,7 +156,7 @@ pdf_load_image_imp(fz_context *ctx, pdf_document *doc, pdf_resource_stack *rdb,
+ 				fz_warn(ctx, "Ignoring recursive image soft mask");
+ 			else
+ 			{
+-				mask = pdf_load_image_imp(ctx, doc, rdb, obj, NULL, 1);
++				mask = pdf_load_image_imp(ctx, doc, rdb, obj, NULL, 1, NULL);
+ 				obj = pdf_dict_get(ctx, obj, PDF_NAME(Matte));
+ 				if (pdf_is_array(ctx, obj))
+ 				{
+@@ -200,7 +201,7 @@ pdf_load_image_imp(fz_context *ctx, pdf_document *doc, pdf_resource_stack *rdb,
+ 				fz_throw(ctx, FZ_ERROR_SYNTAX, "integer overflow in inline image size");
+ 
+ 			image = fz_new_image_from_compressed_buffer(ctx, w, h, bpc, colorspace, 96, 96, interpolate, imagemask, decode, use_colorkey ? colorkey : NULL, NULL, mask);
+-			pdf_load_compressed_inline_image(ctx, doc, dict, size, cstm, indexed, (fz_compressed_image *)image);
++			pdf_load_compressed_inline_image_from(ctx, doc, dict, size, cstm, indexed, (fz_compressed_image *)image, content);
+ 		}
+ 		if (pdf_name_eq(ctx, intent, PDF_NAME(Perceptual)))
+ 			image->has_intent = 1, image->intent = FZ_RI_PERCEPTUAL;
+@@ -227,7 +228,13 @@ pdf_load_image_imp(fz_context *ctx, pdf_document *doc, pdf_resource_stack *rdb,
+ fz_image *
+ pdf_load_inline_image(fz_context *ctx, pdf_document *doc, pdf_resource_stack *rdb, pdf_obj *dict, fz_stream *file)
+ {
+-	return pdf_load_image_imp(ctx, doc, rdb, dict, file, 0);
++	return pdf_load_image_imp(ctx, doc, rdb, dict, file, 0, NULL);
++}
++
++fz_image *
++pdf_load_inline_image_from(fz_context *ctx, pdf_document *doc, pdf_resource_stack *rdb, pdf_obj *dict, fz_stream *file, pdf_obj *content)
++{
++	return pdf_load_image_imp(ctx, doc, rdb, dict, file, 0, content);
+ }
+ 
+ int
+@@ -309,7 +316,7 @@ pdf_load_jpx_as_compressed_image(fz_context *ctx, pdf_document *doc, pdf_obj *di
+ 
+ 		obj = pdf_dict_geta(ctx, dict, PDF_NAME(SMask), PDF_NAME(Mask));
+ 		if (pdf_is_dict(ctx, obj))
+-			img->mask = pdf_load_image_imp(ctx, doc, NULL, obj, NULL, 1);
++			img->mask = pdf_load_image_imp(ctx, doc, NULL, obj, NULL, 1, NULL);
+ 		else if (pdf_is_array(ctx, obj))
+ 		{
+ 			img->use_colorkey = 1;
+@@ -348,7 +355,7 @@ pdf_load_image(fz_context *ctx, pdf_document *doc, pdf_obj *dict)
+ 	if ((image = pdf_find_item(ctx, fz_drop_image_imp, dict)) != NULL)
+ 		return image;
+ 
+-	image = pdf_load_image_imp(ctx, doc, NULL, dict, NULL, 0);
++	image = pdf_load_image_imp(ctx, doc, NULL, dict, NULL, 0, NULL);
+ 	pdf_store_item(ctx, dict, image, fz_image_size(ctx, image));
+ 	return image;
+ }
+diff --git a/source/pdf/pdf-imp.h b/source/pdf/pdf-imp.h
+index 0376cda..81d13dc 100644
+--- a/source/pdf/pdf-imp.h
++++ b/source/pdf/pdf-imp.h
+@@ -34,6 +34,10 @@ pdf_obj *pdf_lookup_mcid_in_mcids(fz_context *ctx, int id, pdf_obj *mcids);
+ 
+ void pdf_repair_page_tree_parents(fz_context *ctx, pdf_document *doc);
+ 
++fz_image *pdf_load_inline_image_from(fz_context *ctx, pdf_document *doc, pdf_resource_stack *rdb, pdf_obj *dict, fz_stream *file, pdf_obj *content);
++void pdf_load_compressed_inline_image_from(fz_context *ctx, pdf_document *doc, pdf_obj *dict, size_t length, fz_stream *file_stm, int indexed, fz_compressed_image *image, pdf_obj *content);
++void pdf_drop_inline_image_cache(fz_context *ctx, pdf_document *doc);
++
+ pdf_obj *pdf_hash_obj(fz_context *ctx, pdf_document *doc, int num, int include_streams, uint32_t *hash);
+ 
+ /*
+diff --git a/source/pdf/pdf-interpret.c b/source/pdf/pdf-interpret.c
+index 779e31f..97fa676 100644
+--- a/source/pdf/pdf-interpret.c
++++ b/source/pdf/pdf-interpret.c
+@@ -22,6 +22,7 @@
+ 
+ #include "mupdf/fitz.h"
+ #include "pdf-annot-imp.h"
++#include "pdf-imp.h"
+ 
+ #include <string.h>
+ #include <math.h>
+@@ -833,7 +834,7 @@ parse_inline_image(fz_context *ctx, pdf_processor *proc, pdf_csi *csi, fz_stream
+ 			if (fz_peek_byte(ctx, stm) == '\n')
+ 				fz_read_byte(ctx, stm);
+ 
+-		img = pdf_load_inline_image(ctx, doc, proc->rstack, obj, stm);
++		img = pdf_load_inline_image_from(ctx, doc, proc->rstack, obj, stm, csi->content);
+ 
+ 		/* find EI */
+ 		found = 0;
+@@ -1827,6 +1828,7 @@ pdf_process_raw_contents(fz_context *ctx, pdf_processor *proc, pdf_document *doc
+ 
+ 	pdf_lexbuf_init(ctx, &buf, PDF_LEXBUF_SMALL);
+ 	pdf_init_csi(ctx, &csi, doc, &buf, cookie);
++	csi.content = stmobj;
+ 
+ 	fz_try(ctx)
+ 	{
+diff --git a/source/pdf/pdf-object.c b/source/pdf/pdf-object.c
+index 452bebf..db58b64 100644
+--- a/source/pdf/pdf-object.c
++++ b/source/pdf/pdf-object.c
+@@ -1432,6 +1432,8 @@ void pdf_undo(fz_context *ctx, pdf_document *doc)
+ 	if (ctx == NULL || doc == NULL)
+ 		return;
+ 
++	pdf_drop_inline_image_cache(ctx, doc);
++
+ 	if (doc->journal == NULL)
+ 		fz_throw(ctx, FZ_ERROR_ARGUMENT, "Cannot undo on unjournaled PDF");
+ 
+@@ -1467,6 +1469,8 @@ void pdf_redo(fz_context *ctx, pdf_document *doc)
+ 	if (ctx == NULL || doc == NULL)
+ 		return;
+ 
++	pdf_drop_inline_image_cache(ctx, doc);
++
+ 	if (doc->journal == NULL)
+ 		fz_throw(ctx, FZ_ERROR_ARGUMENT, "Cannot redo on unjournaled PDF");
+ 
+diff --git a/source/pdf/pdf-repair.c b/source/pdf/pdf-repair.c
+index d8375cb..14f65d9 100644
+--- a/source/pdf/pdf-repair.c
++++ b/source/pdf/pdf-repair.c
+@@ -965,6 +965,8 @@ void pdf_repair_xref_aux(fz_context *ctx, pdf_document *doc, void (*mid)(fz_cont
+ 
+ 	fz_var(roots);
+ 
++	pdf_drop_inline_image_cache(ctx, doc);
++
+ 	fz_try(ctx)
+ 	{
+ 		roots = pdf_repair_xref_base(ctx, doc);
+diff --git a/source/pdf/pdf-stream.c b/source/pdf/pdf-stream.c
+index a33a008..bb48475 100644
+--- a/source/pdf/pdf-stream.c
++++ b/source/pdf/pdf-stream.c
+@@ -22,6 +22,7 @@
+ 
+ #include "mupdf/fitz.h"
+ #include "mupdf/pdf.h"
++#include "pdf-imp.h"
+ 
+ #include <string.h>
+ 
+@@ -426,13 +427,262 @@ pdf_open_inline_stream(fz_context *ctx, pdf_document *doc, pdf_obj *stmobj, size
+ 	return fz_open_null_filter(ctx, file_stm, length, fz_tell(ctx, file_stm));
+ }
+ 
++enum
++{
++	INLINE_IMAGE_MAX_KEY = 128,
++	INLINE_IMAGE_MAX_BYTES = 4 << 20
++};
++
++typedef struct
++{
++	uint32_t offset;
++	uint32_t length;
++} pdf_inline_image_entry;
++
++typedef struct pdf_inline_image_content
++{
++	struct pdf_inline_image_content *next;
++	uint32_t hash;
++	int key_len;
++	int *key;
++	int len;
++	int cap;
++	pdf_inline_image_entry *entries;
++} pdf_inline_image_content;
++
++struct pdf_inline_image_cache
++{
++	int size;
++	int count;
++	size_t bytes;
++	pdf_inline_image_content **buckets;
++};
++
++void
++pdf_drop_inline_image_cache(fz_context *ctx, pdf_document *doc)
++{
++	struct pdf_inline_image_cache *cache = doc->inline_images;
++	int i;
++
++	if (!cache)
++		return;
++	for (i = 0; i < cache->size; i++)
++	{
++		pdf_inline_image_content *content = cache->buckets[i];
++		while (content)
++		{
++			pdf_inline_image_content *next = content->next;
++			fz_free(ctx, content->key);
++			fz_free(ctx, content->entries);
++			fz_free(ctx, content);
++			content = next;
++		}
++	}
++	fz_free(ctx, cache->buckets);
++	fz_free(ctx, cache);
++	doc->inline_images = NULL;
++}
++
++static int
++inline_image_key(fz_context *ctx, pdf_document *doc, pdf_obj *content, int *key, uint32_t *hash)
++{
++	int i, n, len;
++	uint32_t h = 2166136261u;
++
++	if (!content || doc->xref_base != 0 || doc->local_xref_nesting > 0)
++		return 0;
++	if (pdf_is_indirect(ctx, content))
++	{
++		key[0] = pdf_to_num(ctx, content);
++		key[1] = pdf_to_gen(ctx, content);
++		len = 2;
++	}
++	else if (pdf_is_array(ctx, content))
++	{
++		n = pdf_array_len(ctx, content);
++		if (n <= 0 || n * 2 > INLINE_IMAGE_MAX_KEY)
++			return 0;
++		for (i = 0; i < n; i++)
++		{
++			pdf_obj *part = pdf_array_get(ctx, content, i);
++			if (!pdf_is_indirect(ctx, part))
++				return 0;
++			key[2 * i] = pdf_to_num(ctx, part);
++			key[2 * i + 1] = pdf_to_gen(ctx, part);
++		}
++		len = 2 * n;
++	}
++	else
++		return 0;
++	for (i = 0; i < len; i++)
++		h = (h ^ (uint32_t)key[i]) * 16777619u;
++	*hash = h;
++	return len;
++}
++
++static pdf_inline_image_content *
++find_inline_image_content(struct pdf_inline_image_cache *cache, const int *key, int key_len, uint32_t hash)
++{
++	pdf_inline_image_content *content;
++
++	if (!cache)
++		return NULL;
++	for (content = cache->buckets[hash % cache->size]; content; content = content->next)
++		if (content->hash == hash && content->key_len == key_len && !memcmp(content->key, key, key_len * sizeof *key))
++			return content;
++	return NULL;
++}
++
++static int
++find_inline_image_entry(pdf_inline_image_content *content, uint32_t offset)
++{
++	int lo = 0, hi = content->len;
++
++	while (lo < hi)
++	{
++		int mid = lo + (hi - lo) / 2;
++		if (content->entries[mid].offset < offset)
++			lo = mid + 1;
++		else
++			hi = mid;
++	}
++	return lo;
++}
++
++static size_t
++pdf_find_inline_image_length(fz_context *ctx, pdf_document *doc, pdf_obj *content_obj, int64_t offset)
++{
++	int key[INLINE_IMAGE_MAX_KEY];
++	uint32_t hash;
++	int key_len, at;
++	pdf_inline_image_content *content;
++
++	if (offset < 0 || offset > UINT32_MAX)
++		return 0;
++	key_len = inline_image_key(ctx, doc, content_obj, key, &hash);
++	if (key_len == 0)
++		return 0;
++	content = find_inline_image_content(doc->inline_images, key, key_len, hash);
++	if (!content)
++		return 0;
++	at = find_inline_image_entry(content, (uint32_t)offset);
++	if (at < content->len && content->entries[at].offset == (uint32_t)offset)
++		return content->entries[at].length;
++	return 0;
++}
++
++static void
++pdf_remember_inline_image_length(fz_context *ctx, pdf_document *doc, pdf_obj *content_obj, int64_t offset, size_t length)
++{
++	int key[INLINE_IMAGE_MAX_KEY];
++	uint32_t hash;
++	int key_len, at;
++	struct pdf_inline_image_cache *cache;
++	pdf_inline_image_content *content;
++
++	if (offset < 0 || offset > UINT32_MAX || length == 0 || length > UINT32_MAX)
++		return;
++	key_len = inline_image_key(ctx, doc, content_obj, key, &hash);
++	if (key_len == 0)
++		return;
++	cache = doc->inline_images;
++	if (!cache)
++	{
++		cache = fz_malloc_struct(ctx, struct pdf_inline_image_cache);
++		fz_try(ctx)
++			cache->buckets = fz_malloc_struct_array(ctx, 64, pdf_inline_image_content *);
++		fz_catch(ctx)
++		{
++			fz_free(ctx, cache);
++			fz_rethrow(ctx);
++		}
++		cache->size = 64;
++		cache->bytes = sizeof *cache + 64 * sizeof *cache->buckets;
++		doc->inline_images = cache;
++	}
++	content = find_inline_image_content(cache, key, key_len, hash);
++	if (!content)
++	{
++		size_t need = sizeof *content + key_len * sizeof *key;
++		if (cache->count >= cache->size * 2)
++			need += (size_t)cache->size * 3 * sizeof *cache->buckets;
++		if (cache->bytes + need > INLINE_IMAGE_MAX_BYTES)
++			return;
++		if (cache->count >= cache->size * 2)
++		{
++			int i, size = cache->size * 4;
++			pdf_inline_image_content **buckets = fz_malloc_struct_array(ctx, size, pdf_inline_image_content *);
++			for (i = 0; i < cache->size; i++)
++			{
++				pdf_inline_image_content *c = cache->buckets[i];
++				while (c)
++				{
++					pdf_inline_image_content *next = c->next;
++					c->next = buckets[c->hash % size];
++					buckets[c->hash % size] = c;
++					c = next;
++				}
++			}
++			fz_free(ctx, cache->buckets);
++			cache->buckets = buckets;
++			cache->bytes += (size_t)(size - cache->size) * sizeof *cache->buckets;
++			cache->size = size;
++		}
++		content = fz_malloc_struct(ctx, pdf_inline_image_content);
++		fz_try(ctx)
++		{
++			content->key = fz_malloc_array(ctx, key_len, int);
++			memcpy(content->key, key, key_len * sizeof *key);
++		}
++		fz_catch(ctx)
++		{
++			fz_free(ctx, content);
++			fz_rethrow(ctx);
++		}
++		content->key_len = key_len;
++		content->hash = hash;
++		content->next = cache->buckets[hash % cache->size];
++		cache->buckets[hash % cache->size] = content;
++		cache->count++;
++		cache->bytes += sizeof *content + key_len * sizeof *key;
++	}
++	at = find_inline_image_entry(content, (uint32_t)offset);
++	if (at < content->len && content->entries[at].offset == (uint32_t)offset)
++		return;
++	if (content->len == content->cap)
++	{
++		size_t room = (INLINE_IMAGE_MAX_BYTES - cache->bytes) / sizeof *content->entries;
++		int cap = content->cap ? content->cap * 2 : 16;
++		if ((size_t)(cap - content->cap) > room)
++			cap = content->cap + (int)room;
++		if (cap <= content->cap)
++			return;
++		content->entries = fz_realloc_array(ctx, content->entries, cap, pdf_inline_image_entry);
++		cache->bytes += (size_t)(cap - content->cap) * sizeof *content->entries;
++		content->cap = cap;
++	}
++	memmove(&content->entries[at + 1], &content->entries[at], (content->len - at) * sizeof *content->entries);
++	content->entries[at].offset = (uint32_t)offset;
++	content->entries[at].length = (uint32_t)length;
++	content->len++;
++}
++
+ void
+ pdf_load_compressed_inline_image(fz_context *ctx, pdf_document *doc, pdf_obj *dict, size_t length, fz_stream *file_stm, int indexed, fz_compressed_image *image)
++{
++	pdf_load_compressed_inline_image_from(ctx, doc, dict, length, file_stm, indexed, image, NULL);
++}
++
++void
++pdf_load_compressed_inline_image_from(fz_context *ctx, pdf_document *doc, pdf_obj *dict, size_t length, fz_stream *file_stm, int indexed, fz_compressed_image *image, pdf_obj *content)
+ {
+ 	fz_stream *istm = NULL, *leech = NULL, *decomp = NULL;
+ 	fz_pixmap *pixmap = NULL;
+ 	fz_compressed_buffer *bc;
+ 	int dummy_l2factor = 0;
++	int64_t start = fz_tell(ctx, file_stm);
++	size_t known = 0;
++	int exact;
+ 
+ 	fz_var(istm);
+ 	fz_var(leech);
+@@ -442,11 +692,26 @@ pdf_load_compressed_inline_image(fz_context *ctx, pdf_document *doc, pdf_obj *di
+ 	bc = fz_new_compressed_buffer(ctx);
+ 	fz_try(ctx)
+ 	{
+-		bc->buffer = fz_new_buffer(ctx, 1024);
+ 		istm = pdf_open_inline_stream(ctx, doc, dict, length, file_stm, &bc->params);
+-		leech = fz_open_leecher(ctx, istm, bc->buffer);
+-		decomp = fz_open_image_decomp_stream(ctx, leech, &bc->params, &dummy_l2factor);
+-		pixmap = fz_decomp_image_from_stream(ctx, decomp, image, NULL, indexed, 0, NULL);
++		exact = istm == file_stm || !pdf_dict_geta(ctx, dict, PDF_NAME(Filter), PDF_NAME(F));
++		if (exact)
++			known = pdf_find_inline_image_length(ctx, doc, content, start);
++		if (known)
++		{
++			bc->buffer = fz_new_buffer(ctx, known);
++			bc->buffer->len = fz_read(ctx, istm, bc->buffer->data, known);
++			if (bc->buffer->len != known)
++				fz_throw(ctx, FZ_ERROR_FORMAT, "inline image data changed");
++		}
++		else
++		{
++			bc->buffer = fz_new_buffer(ctx, 1024);
++			leech = fz_open_leecher(ctx, istm, bc->buffer);
++			decomp = fz_open_image_decomp_stream(ctx, leech, &bc->params, &dummy_l2factor);
++			pixmap = fz_decomp_image_from_stream(ctx, decomp, image, NULL, indexed, 0, NULL);
++			if (exact)
++				pdf_remember_inline_image_length(ctx, doc, content, start, bc->buffer->len);
++		}
+ 		fz_set_compressed_image_buffer(ctx, image, bc);
+ 	}
+ 	fz_always(ctx)
+diff --git a/source/pdf/pdf-write.c b/source/pdf/pdf-write.c
+index bf83a42..74142e8 100644
+--- a/source/pdf/pdf-write.c
++++ b/source/pdf/pdf-write.c
+@@ -2727,6 +2727,7 @@ do_pdf_save_document(fz_context *ctx, pdf_document *doc, pdf_write_state *opts,
+ 			pdf_ensure_pages_are_pages(ctx, doc);
+ 			pdf_drop_page_tree_internal(ctx, doc);
+ 			pdf_empty_store(ctx, doc);
++			pdf_drop_inline_image_cache(ctx, doc);
+ 		}
+ 
+ 		do
+diff --git a/source/pdf/pdf-xref.c b/source/pdf/pdf-xref.c
+index 6f01a7e..f2ecd2f 100644
+--- a/source/pdf/pdf-xref.c
++++ b/source/pdf/pdf-xref.c
+@@ -1996,6 +1996,8 @@ pdf_drop_document_imp(fz_context *ctx, fz_document *doc_)
+ 
+ 	fz_defer_reap_start(ctx);
+ 
++	pdf_drop_inline_image_cache(ctx, doc);
++
+ 	/* Type3 glyphs in the glyph cache can contain pdf_obj pointers
+ 	 * that we are about to destroy. Simplest solution is to bin the
+ 	 * glyph cache at this point. */
+@@ -2953,6 +2955,8 @@ pdf_update_object(fz_context *ctx, pdf_document *doc, int num, pdf_obj *newobj)
+ 	if (!doc)
+ 		return;
+ 
++	pdf_drop_inline_image_cache(ctx, doc);
++
+ 	if (doc->local_xref && doc->local_xref_nesting > 0)
+ 	{
+ 		pdf_update_local_object(ctx, doc, num, newobj);
+@@ -2988,6 +2992,8 @@ pdf_update_stream(fz_context *ctx, pdf_document *doc, pdf_obj *obj, fz_buffer *n
+ 	int num;
+ 	pdf_xref_entry *x;
+ 
++	pdf_drop_inline_image_cache(ctx, doc);
++
+ 	if (pdf_is_indirect(ctx, obj))
+ 		num = pdf_to_num(ctx, obj);
+ 	else

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="cancel_text">CANCEL</string>
+    <string name="pdf_wait_reading_pages">Reading page(s)…</string>
+    <string name="pdf_wait_reading_edited_pages">Reading edited page(s)…</string>
+    <string name="edit_pdf">Edit</string>
+    <string name="back_to_main_screen">BACK TO MAIN SCREEN</string>
+    <string name="viewer_back">Back</string>
+    <string name="fast_scroller_thumb">Scroll bar</string>
+    <string name="page_indicator_single">%1$d / %2$d</string>
+    <string name="page_indicator_range">%1$d-%2$d / %3$d</string>
+    <string name="page_render_failed">This page can't be displayed.</string>
+    <string name="viewer_search">Search</string>
+    <string name="search_match_count">%1$d / %2$d</string>
+    <string name="search_no_match">No matching results</string>
+    <string name="search_previous">Previous</string>
+    <string name="search_next">Next</string>
+    <string name="selection_copy">Copy</string>
+    <string name="selection_select_all">Select all</string>
+    <string name="selection_too_large">The selection is too large to copy.</string>
+    <string name="page_description_text">Page %1$d: %2$s</string>
+    <string name="page_description">Page %1$d</string>
+</resources>

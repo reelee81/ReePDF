@@ -1,0 +1,533 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: reelee81 <reelee81@gmail.com>
+Date: Wed, 11 Nov 2026 12:30:14 +0100
+Subject: [PATCH 6/18] openjpeg: Add an abort handler that stops a running
+ decode.
+
+opj_set_abort_handler() sets a callback that the decoder asks before
+each code-block, between the wavelet, colour transform and level shift
+steps, and every few rows inside them. When it returns true the decode
+fails, so a caller can stop decoding a very large image early. Without
+a handler nothing changes. The new symbols are renamed like the others
+in opj_config.h.
+
+Modified for ReePDF on 2026-11-11.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ .../openjpeg/src/lib/openjp2/bench_dwt.c      |  6 +-
+ thirdparty/openjpeg/src/lib/openjp2/dwt.c     | 44 +++++++--
+ thirdparty/openjpeg/src/lib/openjp2/dwt.h     |  6 +-
+ thirdparty/openjpeg/src/lib/openjp2/event.c   |  7 ++
+ thirdparty/openjpeg/src/lib/openjp2/event.h   | 13 +++
+ .../openjpeg/src/lib/openjp2/openjpeg.c       | 15 +++
+ .../openjpeg/src/lib/openjp2/openjpeg.h       | 18 ++++
+ .../openjpeg/src/lib/openjp2/opj_config.h     |  2 +
+ thirdparty/openjpeg/src/lib/openjp2/t1.c      |  6 ++
+ thirdparty/openjpeg/src/lib/openjp2/tcd.c     | 98 ++++++++++++++-----
+ 10 files changed, 179 insertions(+), 36 deletions(-)
+
+diff --git a/thirdparty/openjpeg/src/lib/openjp2/bench_dwt.c b/thirdparty/openjpeg/src/lib/openjp2/bench_dwt.c
+index ee70c40..c4e7e75 100644
+--- a/thirdparty/openjpeg/src/lib/openjp2/bench_dwt.c
++++ b/thirdparty/openjpeg/src/lib/openjp2/bench_dwt.c
+@@ -265,9 +265,9 @@ int main(int argc, char** argv)
+     start_wc = opj_wallclock();
+     if (bench_decode) {
+         if (irreversible)  {
+-            opj_dwt_decode_real(&tcd, &tilec, tilec.numresolutions);
++            opj_dwt_decode_real(&tcd, &tilec, tilec.numresolutions, NULL);
+         } else {
+-            opj_dwt_decode(&tcd, &tilec, tilec.numresolutions);
++            opj_dwt_decode(&tcd, &tilec, tilec.numresolutions, NULL);
+         }
+     } else {
+         if (irreversible)  {
+@@ -308,7 +308,7 @@ int main(int argc, char** argv)
+         if (bench_decode) {
+             opj_dwt_encode(&tcd, &tilec);
+         } else {
+-            opj_dwt_decode(&tcd, &tilec, tilec.numresolutions);
++            opj_dwt_decode(&tcd, &tilec, tilec.numresolutions, NULL);
+         }
+ 
+ 
+diff --git a/thirdparty/openjpeg/src/lib/openjp2/dwt.c b/thirdparty/openjpeg/src/lib/openjp2/dwt.c
+index 4c2c6a4..d47f0d9 100644
+--- a/thirdparty/openjpeg/src/lib/openjp2/dwt.c
++++ b/thirdparty/openjpeg/src/lib/openjp2/dwt.c
+@@ -146,7 +146,8 @@ static void opj_dwt_encode_stepsize(OPJ_INT32 stepsize, OPJ_INT32 numbps,
+ Inverse wavelet transform in 2-D.
+ */
+ static OPJ_BOOL opj_dwt_decode_tile(opj_thread_pool_t* tp,
+-                                    opj_tcd_tilecomp_t* tilec, OPJ_UINT32 i);
++                                    opj_tcd_tilecomp_t* tilec, OPJ_UINT32 i,
++                                    opj_event_mgr_t *p_manager);
+ 
+ static OPJ_BOOL opj_dwt_decode_partial_tile(
+     opj_tcd_tilecomp_t* tilec,
+@@ -2134,10 +2135,10 @@ OPJ_BOOL opj_dwt_encode(opj_tcd_t *p_tcd,
+ /* Inverse 5-3 wavelet transform in 2-D. */
+ /* </summary>                           */
+ OPJ_BOOL opj_dwt_decode(opj_tcd_t *p_tcd, opj_tcd_tilecomp_t* tilec,
+-                        OPJ_UINT32 numres)
++                        OPJ_UINT32 numres, opj_event_mgr_t *p_manager)
+ {
+     if (p_tcd->whole_tile_decoding) {
+-        return opj_dwt_decode_tile(p_tcd->thread_pool, tilec, numres);
++        return opj_dwt_decode_tile(p_tcd->thread_pool, tilec, numres, p_manager);
+     } else {
+         return opj_dwt_decode_partial_tile(tilec, numres);
+     }
+@@ -2288,7 +2289,8 @@ static void opj_dwt_decode_v_func(void* user_data, opj_tls_t* tls)
+ /* Inverse wavelet transform in 2-D.    */
+ /* </summary>                           */
+ static OPJ_BOOL opj_dwt_decode_tile(opj_thread_pool_t* tp,
+-                                    opj_tcd_tilecomp_t* tilec, OPJ_UINT32 numres)
++                                    opj_tcd_tilecomp_t* tilec, OPJ_UINT32 numres,
++                                    opj_event_mgr_t *p_manager)
+ {
+     opj_dwt_t h;
+     opj_dwt_t v;
+@@ -2334,6 +2336,11 @@ static OPJ_BOOL opj_dwt_decode_tile(opj_thread_pool_t* tp,
+         OPJ_INT32 * OPJ_RESTRICT tiledp = tilec->data;
+         OPJ_UINT32 j;
+ 
++        if (opj_event_aborted(p_manager)) {
++            opj_aligned_free(h.mem);
++            return OPJ_FALSE;
++        }
++
+         ++tr;
+         h.sn = (OPJ_INT32)rw;
+         v.sn = (OPJ_INT32)rh;
+@@ -2346,6 +2353,10 @@ static OPJ_BOOL opj_dwt_decode_tile(opj_thread_pool_t* tp,
+ 
+         if (num_threads <= 1 || rh <= 1) {
+             for (j = 0; j < rh; ++j) {
++                if ((j & 63) == 0 && opj_event_aborted(p_manager)) {
++                    opj_aligned_free(h.mem);
++                    return OPJ_FALSE;
++                }
+                 opj_idwt53_h(&h, &tiledp[(OPJ_SIZE_T)j * w]);
+             }
+         } else {
+@@ -2398,6 +2409,10 @@ static OPJ_BOOL opj_dwt_decode_tile(opj_thread_pool_t* tp,
+         if (num_threads <= 1 || rw <= 1) {
+             for (j = 0; j + PARALLEL_COLS_53 <= rw;
+                     j += PARALLEL_COLS_53) {
++                if ((j & 511) == 0 && opj_event_aborted(p_manager)) {
++                    opj_aligned_free(h.mem);
++                    return OPJ_FALSE;
++                }
+                 opj_idwt53_v(&v, &tiledp[j], (OPJ_SIZE_T)w, PARALLEL_COLS_53);
+             }
+             if (j < rw) {
+@@ -3612,7 +3627,8 @@ static void opj_dwt97_decode_v_func(void* user_data, opj_tls_t* tls)
+ static
+ OPJ_BOOL opj_dwt_decode_tile_97(opj_thread_pool_t* tp,
+                                 opj_tcd_tilecomp_t* OPJ_RESTRICT tilec,
+-                                OPJ_UINT32 numres)
++                                OPJ_UINT32 numres,
++                                opj_event_mgr_t *p_manager)
+ {
+     opj_v8dwt_t h;
+     opj_v8dwt_t v;
+@@ -3652,6 +3668,11 @@ OPJ_BOOL opj_dwt_decode_tile_97(opj_thread_pool_t* tp,
+         OPJ_FLOAT32 * OPJ_RESTRICT aj = (OPJ_FLOAT32*) tilec->data;
+         OPJ_UINT32 j;
+ 
++        if (opj_event_aborted(p_manager)) {
++            opj_aligned_free(h.wavelet);
++            return OPJ_FALSE;
++        }
++
+         h.sn = (OPJ_INT32)rw;
+         v.sn = (OPJ_INT32)rh;
+ 
+@@ -3673,6 +3694,10 @@ OPJ_BOOL opj_dwt_decode_tile_97(opj_thread_pool_t* tp,
+         if (num_threads <= 1 || rh < 2 * NB_ELTS_V8) {
+             for (j = 0; j + (NB_ELTS_V8 - 1) < rh; j += NB_ELTS_V8) {
+                 OPJ_UINT32 k;
++                if ((j & 63) == 0 && opj_event_aborted(p_manager)) {
++                    opj_aligned_free(h.wavelet);
++                    return OPJ_FALSE;
++                }
+                 opj_v8dwt_interleave_h(&h, aj, w, NB_ELTS_V8);
+                 opj_v8dwt_decode(&h);
+ 
+@@ -3759,6 +3784,10 @@ OPJ_BOOL opj_dwt_decode_tile_97(opj_thread_pool_t* tp,
+             for (j = rw; j > (NB_ELTS_V8 - 1); j -= NB_ELTS_V8) {
+                 OPJ_UINT32 k;
+ 
++                if (((rw - j) & 63) == 0 && opj_event_aborted(p_manager)) {
++                    opj_aligned_free(h.wavelet);
++                    return OPJ_FALSE;
++                }
+                 opj_v8dwt_interleave_v(&v, aj, w, NB_ELTS_V8);
+                 opj_v8dwt_decode(&v);
+ 
+@@ -4069,10 +4098,11 @@ OPJ_BOOL opj_dwt_decode_partial_97(opj_tcd_tilecomp_t* OPJ_RESTRICT tilec,
+ 
+ OPJ_BOOL opj_dwt_decode_real(opj_tcd_t *p_tcd,
+                              opj_tcd_tilecomp_t* OPJ_RESTRICT tilec,
+-                             OPJ_UINT32 numres)
++                             OPJ_UINT32 numres,
++                             opj_event_mgr_t *p_manager)
+ {
+     if (p_tcd->whole_tile_decoding) {
+-        return opj_dwt_decode_tile_97(p_tcd->thread_pool, tilec, numres);
++        return opj_dwt_decode_tile_97(p_tcd->thread_pool, tilec, numres, p_manager);
+     } else {
+         return opj_dwt_decode_partial_97(tilec, numres);
+     }
+diff --git a/thirdparty/openjpeg/src/lib/openjp2/dwt.h b/thirdparty/openjpeg/src/lib/openjp2/dwt.h
+index 215061e..9e9ee6c 100644
+--- a/thirdparty/openjpeg/src/lib/openjp2/dwt.h
++++ b/thirdparty/openjpeg/src/lib/openjp2/dwt.h
+@@ -71,7 +71,8 @@ Apply a reversible inverse DWT transform to a component of an image.
+ */
+ OPJ_BOOL opj_dwt_decode(opj_tcd_t *p_tcd,
+                         opj_tcd_tilecomp_t* tilec,
+-                        OPJ_UINT32 numres);
++                        OPJ_UINT32 numres,
++                        opj_event_mgr_t *p_manager);
+ 
+ /**
+ Get the norm of a wavelet function of a subband at a specified level for the reversible 5-3 DWT.
+@@ -97,7 +98,8 @@ Apply an irreversible inverse DWT transform to a component of an image.
+ */
+ OPJ_BOOL opj_dwt_decode_real(opj_tcd_t *p_tcd,
+                              opj_tcd_tilecomp_t* OPJ_RESTRICT tilec,
+-                             OPJ_UINT32 numres);
++                             OPJ_UINT32 numres,
++                             opj_event_mgr_t *p_manager);
+ 
+ /**
+ Get the norm of a wavelet function of a subband at a specified level for the irreversible 9-7 DWT
+diff --git a/thirdparty/openjpeg/src/lib/openjp2/event.c b/thirdparty/openjpeg/src/lib/openjp2/event.c
+index aad9d76..26389dc 100644
+--- a/thirdparty/openjpeg/src/lib/openjp2/event.c
++++ b/thirdparty/openjpeg/src/lib/openjp2/event.c
+@@ -147,5 +147,12 @@ void opj_set_default_event_handler(opj_event_mgr_t * p_manager)
+     p_manager->error_handler = opj_default_callback;
+     p_manager->info_handler = opj_default_callback;
+     p_manager->warning_handler = opj_default_callback;
++    p_manager->abort_handler = 00;
++    p_manager->m_abort_data = 00;
+ }
+ 
++OPJ_BOOL opj_event_aborted(opj_event_mgr_t* p_event_mgr)
++{
++    return p_event_mgr != NULL && p_event_mgr->abort_handler != NULL &&
++           p_event_mgr->abort_handler(p_event_mgr->m_abort_data);
++}
+diff --git a/thirdparty/openjpeg/src/lib/openjp2/event.h b/thirdparty/openjpeg/src/lib/openjp2/event.h
+index d880388..0a6f6a8 100644
+--- a/thirdparty/openjpeg/src/lib/openjp2/event.h
++++ b/thirdparty/openjpeg/src/lib/openjp2/event.h
+@@ -60,6 +60,10 @@ typedef struct opj_event_mgr {
+     opj_msg_callback warning_handler;
+     /** Debug message callback if available, NULL otherwise */
+     opj_msg_callback info_handler;
++    /** Abort callback if available, NULL otherwise */
++    opj_abort_callback abort_handler;
++    /** Data to call the abort callback upon */
++    void *          m_abort_data;
+ } opj_event_mgr_t;
+ 
+ 
+@@ -88,6 +92,15 @@ typedef struct opj_event_mgr {
+  */
+ OPJ_BOOL opj_event_msg(opj_event_mgr_t* event_mgr, OPJ_INT32 event_type,
+                        const char *fmt, ...);
++
++/**
++ * Ask the abort handler whether the running decode should stop.
++ *
++ * @param event_mgr the event manager, may be NULL.
++ *
++ * @return OPJ_TRUE if the decode should stop.
++*/
++OPJ_BOOL opj_event_aborted(opj_event_mgr_t* event_mgr);
+ /* ----------------------------------------------------------------------- */
+ 
+ /**
+diff --git a/thirdparty/openjpeg/src/lib/openjp2/openjpeg.c b/thirdparty/openjpeg/src/lib/openjp2/openjpeg.c
+index 382d8f4..023660d 100644
+--- a/thirdparty/openjpeg/src/lib/openjp2/openjpeg.c
++++ b/thirdparty/openjpeg/src/lib/openjp2/openjpeg.c
+@@ -86,6 +86,21 @@ OPJ_BOOL OPJ_CALLCONV opj_set_error_handler(opj_codec_t * p_codec,
+     return OPJ_TRUE;
+ }
+ 
++OPJ_BOOL OPJ_CALLCONV opj_set_abort_handler(opj_codec_t * p_codec,
++        opj_abort_callback p_callback,
++        void * p_user_data)
++{
++    opj_codec_private_t * l_codec = (opj_codec_private_t *) p_codec;
++    if (! l_codec) {
++        return OPJ_FALSE;
++    }
++
++    l_codec->m_event_mgr.abort_handler = p_callback;
++    l_codec->m_event_mgr.m_abort_data = p_user_data;
++
++    return OPJ_TRUE;
++}
++
+ /* ---------------------------------------------------------------------- */
+ 
+ static OPJ_SIZE_T opj_read_from_file(void * p_buffer, OPJ_SIZE_T p_nb_bytes,
+diff --git a/thirdparty/openjpeg/src/lib/openjp2/openjpeg.h b/thirdparty/openjpeg/src/lib/openjp2/openjpeg.h
+index fe2f1ee..22f1301 100644
+--- a/thirdparty/openjpeg/src/lib/openjp2/openjpeg.h
++++ b/thirdparty/openjpeg/src/lib/openjp2/openjpeg.h
+@@ -1298,6 +1298,24 @@ OPJ_API OPJ_BOOL OPJ_CALLCONV opj_set_error_handler(opj_codec_t * p_codec,
+         opj_msg_callback p_callback,
+         void * p_user_data);
+ 
++/**
++ * Callback asking whether a running decode should stop.
++ * It returns OPJ_TRUE to stop; the decode then fails.
++ */
++typedef OPJ_BOOL(*opj_abort_callback)(void *client_data);
++
++/**
++ * Set the abort handler used by openjpeg while decoding.
++ * The handler is asked between code-blocks and between rows of the
++ * wavelet, colour and level shift steps.
++ * @param p_codec       the codec previously initialise
++ * @param p_callback    the callback function, or NULL
++ * @param p_user_data   client object passed to the callback
++*/
++OPJ_API OPJ_BOOL OPJ_CALLCONV opj_set_abort_handler(opj_codec_t * p_codec,
++        opj_abort_callback p_callback,
++        void * p_user_data);
++
+ /*
+ ==========================================================
+    codec functions definitions
+diff --git a/thirdparty/openjpeg/src/lib/openjp2/opj_config.h b/thirdparty/openjpeg/src/lib/openjp2/opj_config.h
+index 88e75e9..3a8fae4 100644
+--- a/thirdparty/openjpeg/src/lib/openjp2/opj_config.h
++++ b/thirdparty/openjpeg/src/lib/openjp2/opj_config.h
+@@ -106,6 +106,7 @@
+ #define opj_encoder_set_extra_options fz_opj_encoder_set_extra_options
+ #define opj_end_compress fz_opj_end_compress
+ #define opj_end_decompress fz_opj_end_decompress
++#define opj_event_aborted fz_opj_event_aborted
+ #define opj_event_msg fz_opj_event_msg
+ #define opj_free fz_opj_free
+ #define opj_get_all_encoding_parameters fz_opj_get_all_encoding_parameters
+@@ -448,6 +449,7 @@
+ #define opj_realloc fz_opj_realloc
+ #define opj_seek_from_file fz_opj_seek_from_file
+ #define opj_set_MCT fz_opj_set_MCT
++#define opj_set_abort_handler fz_opj_set_abort_handler
+ #define opj_set_decode_area fz_opj_set_decode_area
+ #define opj_set_decoded_components fz_opj_set_decoded_components
+ #define opj_set_decoded_resolution_factor fz_opj_set_decoded_resolution_factor
+diff --git a/thirdparty/openjpeg/src/lib/openjp2/t1.c b/thirdparty/openjpeg/src/lib/openjp2/t1.c
+index 98dce47..a37d133 100644
+--- a/thirdparty/openjpeg/src/lib/openjp2/t1.c
++++ b/thirdparty/openjpeg/src/lib/openjp2/t1.c
+@@ -1667,6 +1667,12 @@ static void opj_t1_clbl_decode_processor(void* user_data, opj_tls_t* tls)
+         return;
+     }
+ 
++    if (opj_event_aborted(job->p_manager)) {
++        *(job->pret) = OPJ_FALSE;
++        opj_free(job);
++        return;
++    }
++
+     t1 = (opj_t1_t*) opj_tls_get(tls, OPJ_TLS_KEY_T1);
+     if (t1 == NULL) {
+         t1 = opj_t1_create(OPJ_FALSE);
+diff --git a/thirdparty/openjpeg/src/lib/openjp2/tcd.c b/thirdparty/openjpeg/src/lib/openjp2/tcd.c
+index 5d466fb..96dd16b 100644
+--- a/thirdparty/openjpeg/src/lib/openjp2/tcd.c
++++ b/thirdparty/openjpeg/src/lib/openjp2/tcd.c
+@@ -166,12 +166,22 @@ static OPJ_BOOL opj_tcd_t2_decode(opj_tcd_t *p_tcd,
+ static OPJ_BOOL opj_tcd_t1_decode(opj_tcd_t *p_tcd,
+                                   opj_event_mgr_t *p_manager);
+ 
+-static OPJ_BOOL opj_tcd_dwt_decode(opj_tcd_t *p_tcd);
++static OPJ_BOOL opj_tcd_dwt_decode(opj_tcd_t *p_tcd, opj_event_mgr_t *p_manager);
++
++/* Samples per colour transform step, so that an abort is noticed in time.
++ * A multiple of 8 keeps the SIMD loads of every step aligned. */
++#define OPJ_MCT_ABORT_CHUNK ((OPJ_SIZE_T)1 << 20)
++
++static OPJ_SIZE_T opj_mct_abort_chunk(OPJ_SIZE_T remaining)
++{
++    return remaining < OPJ_MCT_ABORT_CHUNK ? remaining : OPJ_MCT_ABORT_CHUNK;
++}
+ 
+ static OPJ_BOOL opj_tcd_mct_decode(opj_tcd_t *p_tcd,
+                                    opj_event_mgr_t *p_manager);
+ 
+-static OPJ_BOOL opj_tcd_dc_level_shift_decode(opj_tcd_t *p_tcd);
++static OPJ_BOOL opj_tcd_dc_level_shift_decode(opj_tcd_t *p_tcd,
++        opj_event_mgr_t *p_manager);
+ 
+ 
+ static OPJ_BOOL opj_tcd_dc_level_shift_encode(opj_tcd_t *p_tcd);
+@@ -1770,14 +1780,20 @@ OPJ_BOOL opj_tcd_decode_tile(opj_tcd_t *p_tcd,
+     /*----------------DWT---------------------*/
+ 
+     /* FIXME _ProfStart(PGROUP_DWT); */
++    if (opj_event_aborted(p_manager)) {
++        return OPJ_FALSE;
++    }
+     if
+-    (! opj_tcd_dwt_decode(p_tcd)) {
++    (! opj_tcd_dwt_decode(p_tcd, p_manager)) {
+         return OPJ_FALSE;
+     }
+     /* FIXME _ProfStop(PGROUP_DWT); */
+ 
+     /*----------------MCT-------------------*/
+     /* FIXME _ProfStart(PGROUP_MCT); */
++    if (opj_event_aborted(p_manager)) {
++        return OPJ_FALSE;
++    }
+     if
+     (! opj_tcd_mct_decode(p_tcd, p_manager)) {
+         return OPJ_FALSE;
+@@ -1785,8 +1801,11 @@ OPJ_BOOL opj_tcd_decode_tile(opj_tcd_t *p_tcd,
+     /* FIXME _ProfStop(PGROUP_MCT); */
+ 
+     /* FIXME _ProfStart(PGROUP_DC_SHIFT); */
++    if (opj_event_aborted(p_manager)) {
++        return OPJ_FALSE;
++    }
+     if
+-    (! opj_tcd_dc_level_shift_decode(p_tcd)) {
++    (! opj_tcd_dc_level_shift_decode(p_tcd, p_manager)) {
+         return OPJ_FALSE;
+     }
+     /* FIXME _ProfStop(PGROUP_DC_SHIFT); */
+@@ -2080,7 +2099,7 @@ static OPJ_BOOL opj_tcd_t1_decode(opj_tcd_t *p_tcd, opj_event_mgr_t *p_manager)
+ }
+ 
+ 
+-static OPJ_BOOL opj_tcd_dwt_decode(opj_tcd_t *p_tcd)
++static OPJ_BOOL opj_tcd_dwt_decode(opj_tcd_t *p_tcd, opj_event_mgr_t *p_manager)
+ {
+     OPJ_UINT32 compno;
+     opj_tcd_tile_t * l_tile = p_tcd->tcd_image->tiles;
+@@ -2096,12 +2115,12 @@ static OPJ_BOOL opj_tcd_dwt_decode(opj_tcd_t *p_tcd)
+ 
+         if (l_tccp->qmfbid == 1) {
+             if (! opj_dwt_decode(p_tcd, l_tile_comp,
+-                                 l_img_comp->resno_decoded + 1)) {
++                                 l_img_comp->resno_decoded + 1, p_manager)) {
+                 return OPJ_FALSE;
+             }
+         } else {
+             if (! opj_dwt_decode_real(p_tcd, l_tile_comp,
+-                                      l_img_comp->resno_decoded + 1)) {
++                                      l_img_comp->resno_decoded + 1, p_manager)) {
+                 return OPJ_FALSE;
+             }
+         }
+@@ -2228,27 +2247,51 @@ static OPJ_BOOL opj_tcd_mct_decode(opj_tcd_t *p_tcd, opj_event_mgr_t *p_manager)
+         } else {
+             if (l_tcp->tccps->qmfbid == 1) {
+                 if (p_tcd->whole_tile_decoding) {
+-                    opj_mct_decode(l_tile->comps[0].data,
+-                                   l_tile->comps[1].data,
+-                                   l_tile->comps[2].data,
+-                                   l_samples);
++                    OPJ_SIZE_T l_offset;
++                    for (l_offset = 0; l_offset < l_samples; l_offset += OPJ_MCT_ABORT_CHUNK) {
++                        if (opj_event_aborted(p_manager)) {
++                            return OPJ_FALSE;
++                        }
++                        opj_mct_decode(l_tile->comps[0].data + l_offset,
++                                       l_tile->comps[1].data + l_offset,
++                                       l_tile->comps[2].data + l_offset,
++                                       opj_mct_abort_chunk(l_samples - l_offset));
++                    }
+                 } else {
+-                    opj_mct_decode(l_tile->comps[0].data_win,
+-                                   l_tile->comps[1].data_win,
+-                                   l_tile->comps[2].data_win,
+-                                   l_samples);
++                    OPJ_SIZE_T l_offset;
++                    for (l_offset = 0; l_offset < l_samples; l_offset += OPJ_MCT_ABORT_CHUNK) {
++                        if (opj_event_aborted(p_manager)) {
++                            return OPJ_FALSE;
++                        }
++                        opj_mct_decode(l_tile->comps[0].data_win + l_offset,
++                                       l_tile->comps[1].data_win + l_offset,
++                                       l_tile->comps[2].data_win + l_offset,
++                                       opj_mct_abort_chunk(l_samples - l_offset));
++                    }
+                 }
+             } else {
+                 if (p_tcd->whole_tile_decoding) {
+-                    opj_mct_decode_real((OPJ_FLOAT32*)l_tile->comps[0].data,
+-                                        (OPJ_FLOAT32*)l_tile->comps[1].data,
+-                                        (OPJ_FLOAT32*)l_tile->comps[2].data,
+-                                        l_samples);
++                    OPJ_SIZE_T l_offset;
++                    for (l_offset = 0; l_offset < l_samples; l_offset += OPJ_MCT_ABORT_CHUNK) {
++                        if (opj_event_aborted(p_manager)) {
++                            return OPJ_FALSE;
++                        }
++                        opj_mct_decode_real((OPJ_FLOAT32*)l_tile->comps[0].data + l_offset,
++                                            (OPJ_FLOAT32*)l_tile->comps[1].data + l_offset,
++                                            (OPJ_FLOAT32*)l_tile->comps[2].data + l_offset,
++                                            opj_mct_abort_chunk(l_samples - l_offset));
++                    }
+                 } else {
+-                    opj_mct_decode_real((OPJ_FLOAT32*)l_tile->comps[0].data_win,
+-                                        (OPJ_FLOAT32*)l_tile->comps[1].data_win,
+-                                        (OPJ_FLOAT32*)l_tile->comps[2].data_win,
+-                                        l_samples);
++                    OPJ_SIZE_T l_offset;
++                    for (l_offset = 0; l_offset < l_samples; l_offset += OPJ_MCT_ABORT_CHUNK) {
++                        if (opj_event_aborted(p_manager)) {
++                            return OPJ_FALSE;
++                        }
++                        opj_mct_decode_real((OPJ_FLOAT32*)l_tile->comps[0].data_win + l_offset,
++                                            (OPJ_FLOAT32*)l_tile->comps[1].data_win + l_offset,
++                                            (OPJ_FLOAT32*)l_tile->comps[2].data_win + l_offset,
++                                            opj_mct_abort_chunk(l_samples - l_offset));
++                    }
+                 }
+             }
+         }
+@@ -2262,7 +2305,8 @@ static OPJ_BOOL opj_tcd_mct_decode(opj_tcd_t *p_tcd, opj_event_mgr_t *p_manager)
+ }
+ 
+ 
+-static OPJ_BOOL opj_tcd_dc_level_shift_decode(opj_tcd_t *p_tcd)
++static OPJ_BOOL opj_tcd_dc_level_shift_decode(opj_tcd_t *p_tcd,
++        opj_event_mgr_t *p_manager)
+ {
+     OPJ_UINT32 compno;
+     opj_tcd_tilecomp_t * l_tile_comp = 00;
+@@ -2321,6 +2365,9 @@ static OPJ_BOOL opj_tcd_dc_level_shift_decode(opj_tcd_t *p_tcd)
+ 
+         if (l_tccp->qmfbid == 1) {
+             for (j = 0; j < l_height; ++j) {
++                if ((j & 63) == 0 && opj_event_aborted(p_manager)) {
++                    return OPJ_FALSE;
++                }
+                 for (i = 0; i < l_width; ++i) {
+                     /* TODO: do addition on int64 ? */
+                     *l_current_ptr = opj_int_clamp(*l_current_ptr + l_tccp->m_dc_level_shift, l_min,
+@@ -2331,6 +2378,9 @@ static OPJ_BOOL opj_tcd_dc_level_shift_decode(opj_tcd_t *p_tcd)
+             }
+         } else {
+             for (j = 0; j < l_height; ++j) {
++                if ((j & 63) == 0 && opj_event_aborted(p_manager)) {
++                    return OPJ_FALSE;
++                }
+                 for (i = 0; i < l_width; ++i) {
+                     OPJ_FLOAT32 l_value = *((OPJ_FLOAT32 *) l_current_ptr);
+                     if (l_value > (OPJ_FLOAT32)INT_MAX) {

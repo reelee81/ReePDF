@@ -56,7 +56,13 @@ class PdfLayoutChangeOperation(
         val selected: List<Int>
     )
 
-    class Progress(val clock: () -> Long, val tickMs: Long, val idleMs: Long)
+    class Progress(val clock: () -> Long, val tickMs: Long, val idleMs: Long, val share: Int = 100) {
+        fun percentOf(tracker: ProgressTracker): Int? {
+            val now = clock()
+            if (now - tracker.startedAt < ProgressNotifyPacing.REVEAL_MS) return null
+            return ProgressMath.sharedPercent(tracker.percent(now, idleMs), share)
+        }
+    }
 
     class Result(
         val crops: Map<Int, PdfCropRect>,
@@ -83,11 +89,7 @@ class PdfLayoutChangeOperation(
 
         val built = ProgressTicker.run(
             tick = progress.tickMs.milliseconds,
-            percent = {
-                val now = progress.clock()
-                if (now - tracker.startedAt < ProgressNotifyPacing.REVEAL_MS) null
-                else tracker.percent(now, progress.idleMs)
-            },
+            percent = { progress.percentOf(tracker) },
             report = report,
             onCancel = tracker::cancel
         ) {

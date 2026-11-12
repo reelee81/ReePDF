@@ -1,0 +1,37 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: reelee81 <reelee81@gmail.com>
+Date: Thu, 12 Nov 2026 13:36:14 +0100
+Subject: [PATCH 16/18] fitz: Saturate the tile range of a pattern.
+
+fz_draw_end_tile() converted the first and last tile numbers to int with
+a plain cast. For an empty area they can be far outside the int range
+(about 6e9 in a test file): x86 gives INT_MIN, ARM saturates at the int
+limits. The conversion now saturates on every platform, as ARM did, so
+the range is the same everywhere. It needs 0015.
+
+Modified for ReePDF on 2026-11-12.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ source/fitz/draw-device.c | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/source/fitz/draw-device.c b/source/fitz/draw-device.c
+index 72c45fd..5834612 100644
+--- a/source/fitz/draw-device.c
++++ b/source/fitz/draw-device.c
+@@ -2997,10 +2997,10 @@ fz_draw_end_tile(fz_context *ctx, fz_device *devp)
+ 	extra_y = tile_tmp.y1 - tile_tmp.y0 - ystep;
+ 	if (extra_y < 0)
+ 		extra_y = 0;
+-	x0 = floorf((area.x0-1 - tile_tmp.x0 - extra_x) / xstep);
+-	y0 = floorf((area.y0-1 - tile_tmp.y0 - extra_y) / ystep);
+-	x1 = ceilf((area.x1+1 - tile_tmp.x0 + extra_x) / xstep);
+-	y1 = ceilf((area.y1+1 - tile_tmp.y0 + extra_y) / ystep);
++	x0 = fz_saturate_float_to_int(floorf((area.x0-1 - tile_tmp.x0 - extra_x) / xstep));
++	y0 = fz_saturate_float_to_int(floorf((area.y0-1 - tile_tmp.y0 - extra_y) / ystep));
++	x1 = fz_saturate_float_to_int(ceilf((area.x1+1 - tile_tmp.x0 + extra_x) / xstep));
++	y1 = fz_saturate_float_to_int(ceilf((area.y1+1 - tile_tmp.y0 + extra_y) / ystep));
+ 
+ 	ctm.e = state[1].dest->x;
+ 	ctm.f = state[1].dest->y;

@@ -134,6 +134,7 @@ import hu.reelee81.reepdf.core.PdfOperationScreen
 import hu.reelee81.reepdf.core.PdfOperationState
 import hu.reelee81.reepdf.core.PrefsXmlFile
 import hu.reelee81.reepdf.core.ProfileLoadRebuild
+import hu.reelee81.reepdf.core.ProgressMath
 import hu.reelee81.reepdf.core.ProgressNotifyPacing
 import hu.reelee81.reepdf.core.ScaleMode
 import hu.reelee81.reepdf.core.SignatureGeometry
@@ -267,7 +268,7 @@ class MainActivity : AppCompatActivity() {
         private const val MAX_IMG_W = 8411
         private const val MAX_IMG_H = 8411
         private const val PROGRESS_TICK_MS = 500L
-        private const val PROGRESS_IDLE_MS = 1_000L
+        private const val PROGRESS_IDLE_MS = 5_000L
         private const val PENDING_INTENT_RETRY_MS = 500L
         private const val OPEN_WITH_COLUMNS = 4
         private const val OPEN_WITH_ROWS = 2
@@ -370,6 +371,7 @@ class MainActivity : AppCompatActivity() {
     private var progressMessage = ""
     private var progressNotified = PdfProcessingForegroundService.PROGRESS_NONE
     private var progressNotifiedAt = 0L
+    private var thumbnailPercent: Int? = null
     private val progressTicker = object : Runnable {
         override fun run() {
             if (renderProgress()) binding.root.postDelayed(this, PROGRESS_TICK_MS)
@@ -1015,6 +1017,7 @@ class MainActivity : AppCompatActivity() {
                         restorePrevious = false,
                         indicesToSelect = indicesToSelect,
                         releaseUiAtStart = false,
+                        thumbnailsFrom = 0,
                         onStarted = {
                             hideInProgressIfShownUpdateUI()
                             unlockScreenOrientation()
@@ -1042,6 +1045,7 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 reloadThumbnailsFromNup(
+                    thumbnailsFrom = 0,
                     onStarted = {
                         hideInProgressIfShownUpdateUI()
                         unlockScreenOrientation()
@@ -1069,6 +1073,7 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 reloadThumbnailsFromNup(
+                    thumbnailsFrom = 0,
                     onStarted = {
                         hideInProgressIfShownUpdateUI()
                         unlockScreenOrientation()
@@ -4005,6 +4010,7 @@ class MainActivity : AppCompatActivity() {
             restorePrevious = true,
             indicesToSelect = saved.selected,
             releaseUiAtStart = false,
+            thumbnailsFrom = 0,
             onStarted = {
                 unlockScreenOrientation()
                 hideInProgressIfShownUpdateUI()
@@ -4069,6 +4075,7 @@ class MainActivity : AppCompatActivity() {
         progressMessage = message
         progressNotified = PdfProcessingForegroundService.PROGRESS_NONE
         progressNotifiedAt = 0L
+        thumbnailPercent = null
         binding.root.removeCallbacks(progressTicker)
         binding.root.postDelayed(progressTicker, PROGRESS_TICK_MS)
     }
@@ -4087,7 +4094,8 @@ class MainActivity : AppCompatActivity() {
             (PdfOperations.runner(this).state.value as? PdfOperationState.Running)?.percent
                 ?: PdfProcessingForegroundService.PROGRESS_INDETERMINATE
         } else {
-            progressTracker.percent(now, PROGRESS_IDLE_MS)
+            thumbnailPercent
+                ?: progressTracker.percent(now, PROGRESS_IDLE_MS)?.takeIf { it < 100 }
                 ?: PdfProcessingForegroundService.PROGRESS_INDETERMINATE
         }
 
@@ -4312,9 +4320,11 @@ class MainActivity : AppCompatActivity() {
             var passwordBytes: ByteArray? = null
             var attempt = 0
             var openFailure: Exception? = null
+            var pages: Int
 
             while (true) {
                 val probe = PdfImportOperation.probe(tempSrc, passwordBytes)
+                pages = probe.pages
                 if (probe.noPages) openFailure = IOException(getString(R.string.no_source_pages))
                 probe.failure?.let { openFailure = it }
 
@@ -4333,7 +4343,7 @@ class MainActivity : AppCompatActivity() {
                 attempt++
             }
 
-            return PdfImportOperation.Source(tempSrc, passwordBytes, openFailure, name = fileName)
+            return PdfImportOperation.Source(tempSrc, passwordBytes, openFailure, name = fileName, pages = pages)
         } catch (e: CancellationException) {
             discardIncomingFile(tempSrc)
             throw e
@@ -4367,7 +4377,7 @@ class MainActivity : AppCompatActivity() {
                 batchSize = PageBatch.PAGES,
                 selected = selected
             ),
-            progress = operationProgress(),
+            progress = operationProgress(ProgressMath.THUMBNAIL_PHASE_START),
             imageToPdf = ::createTempPdfFromImageFile,
             warn = { warning, error -> Log.w("PdfMuPdfFitBounds", warning, error) }
         )
@@ -4807,9 +4817,13 @@ class MainActivity : AppCompatActivity() {
         indicesToSelect: Set<Int>? = null,
         releaseUiAtStart: Boolean = false,
         onStarted: (() -> Unit)? = null,
-        pageSizes: PageSizes? = null
+        pageSizes: PageSizes? = null,
+        thumbnailsFrom: Int? = null
     ) {
         val myGen = ++reloadThumbnailsGeneration
+        if (thumbnailsFrom != null) {
+            thumbnailPercent = if (thumbnailsFrom > 0) thumbnailsFrom else PdfProcessingForegroundService.PROGRESS_INDETERMINATE
+        }
 
         if (releaseUiAtStart) {
             hideInProgressIfShown()
@@ -4833,6 +4847,13 @@ class MainActivity : AppCompatActivity() {
         var watchdogRunnable: Runnable? = null
         var waitRange: IntRange? = null
         val pendingKeys = LinkedHashSet<String>()
+        var thumbnailsWaited = 0
+
+        fun countFinishedThumbnails() {
+            val from = thumbnailsFrom ?: return
+            if (thumbnailsWaited == 0 || myGen != reloadThumbnailsGeneration) return
+            thumbnailPercent = ProgressMath.thumbnailPercent(from, thumbnailsWaited, thumbnailsWaited - pendingKeys.size)
+        }
 
         fun cleanupWaitersIfOwner() {
             try {
@@ -4873,6 +4894,7 @@ class MainActivity : AppCompatActivity() {
 
             releasedUiOnce = true
             cleanupWaitersIfOwner()
+            if (thumbnailsFrom != null) thumbnailPercent = null
 
             if (shouldDeferUnlock) {
                 deferOrientationUnlockUntilThumbnailsReady = false
@@ -5066,6 +5088,7 @@ class MainActivity : AppCompatActivity() {
                             while (it.hasNext()) {
                                 if (adapter.isThumbnailCachedByKey(it.next())) it.remove()
                             }
+                            countFinishedThumbnails()
                             if (pendingKeys.isEmpty()) {
                                 releaseDeferredUnlockAndInvokeOnStarted()
                                 return
@@ -5137,12 +5160,15 @@ class MainActivity : AppCompatActivity() {
                             releaseDeferredUnlockAndInvokeOnStarted()
                             return true
                         }
+                        thumbnailsWaited = pendingKeys.size
+                        countFinishedThumbnails()
 
                         adapter.setOnThumbnailFinishedListener { key ->
                             if (releasedUiOnce) return@setOnThumbnailFinishedListener
                             if (myGen != reloadThumbnailsGeneration) return@setOnThumbnailFinishedListener
 
                             if (pendingKeys.remove(key)) {
+                                countFinishedThumbnails()
                                 if (pendingKeys.isEmpty()) {
                                     binding.rvThumbnails.post {
                                         releaseDeferredUnlockAndInvokeOnStarted()
@@ -5158,6 +5184,7 @@ class MainActivity : AppCompatActivity() {
                                 if (adapter.isThumbnailCachedByKey(k)) it.remove()
                             }
                         }
+                        countFinishedThumbnails()
                         if (pendingKeys.isEmpty()) {
                             releaseDeferredUnlockAndInvokeOnStarted()
                         }
@@ -5481,7 +5508,7 @@ class MainActivity : AppCompatActivity() {
                 batchSize = PageBatch.PAGES,
                 selected = selectedIdxBefore
             ),
-            progress = operationProgress(),
+            progress = operationProgress(ProgressMath.THUMBNAIL_PHASE_START),
             warn = { warning, error -> Log.w("PdfMuPdfFitBounds", warning, error) }
         )
 
@@ -5511,8 +5538,8 @@ class MainActivity : AppCompatActivity() {
     private fun operationFiles(): PdfLayoutChangeOperation.Files =
         PdfLayoutChangeOperation.Files(cacheDir, sourceDir(), nupTempFile(), workFileBackup())
 
-    private fun operationProgress(): PdfLayoutChangeOperation.Progress =
-        PdfLayoutChangeOperation.Progress(SystemClock::uptimeMillis, PROGRESS_TICK_MS, PROGRESS_IDLE_MS)
+    private fun operationProgress(share: Int = 100): PdfLayoutChangeOperation.Progress =
+        PdfLayoutChangeOperation.Progress(SystemClock::uptimeMillis, PROGRESS_TICK_MS, PROGRESS_IDLE_MS, share)
 
     private fun startOperation(
         kind: PdfOperationKind,
@@ -5524,7 +5551,10 @@ class MainActivity : AppCompatActivity() {
         lockScreenOrientation()
         if (::adapter.isInitialized) runCatching { adapter.pausePrefetchAndCancel() }
 
-        val id =PdfOperations.runner(this).start(kind, message, onCancelled, work)
+        val id =PdfOperations.runner(this).start(kind, message, onCancelled) { report ->
+            OpenViewerDocuments.awaitClosing()
+            work(report)
+        }
         if (id == null) {
             isNupRebuilding = false
             operationOverlay = false
@@ -5607,6 +5637,9 @@ class MainActivity : AppCompatActivity() {
         val id = handoverId ?: return
         handoverId = null
         PdfOperations.runner(this).acknowledge(id)
+        if (!lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED) && ::adapter.isInitialized) {
+            adapter.stopRendering()
+        }
     }
 
     private fun attachOperation(message: String, updateUi: Boolean) {
@@ -5683,7 +5716,8 @@ class MainActivity : AppCompatActivity() {
             indicesToSelect = if (kind == PdfOperationKind.DELETE_SELECTED || kind == PdfOperationKind.SIGN) null else result.selected.toSet(),
             releaseUiAtStart = false,
             onStarted = onReloadStarted,
-            pageSizes = result.pageSizes
+            pageSizes = result.pageSizes,
+            thumbnailsFrom = ProgressMath.THUMBNAIL_PHASE_START
         )
 
         updateButtonsState()
@@ -5870,6 +5904,11 @@ class MainActivity : AppCompatActivity() {
 
         PdfOperations.runner(this).screenStarted()
 
+        if (::adapter.isInitialized) {
+            adapter.resumeRendering()
+            prefetchVisibleThumbnails()
+        }
+
         lastConfigSnapshotForDiff = Configuration(resources.configuration)
 
         startFoldableLayoutTracking()
@@ -5974,23 +6013,20 @@ class MainActivity : AppCompatActivity() {
 
         PdfOperations.runner(this).screenStopped()
 
+        if (handoverId == null && ::adapter.isInitialized) adapter.stopRendering()
+
         super.onStop()
     }
 
-    private fun isAndroidxPdfAvailable(): Boolean =
-        try {
-            Class.forName("androidx.pdf.viewer.fragment.PdfViewerFragment")
-            true
-        } catch (_: Throwable) { false }
-
-    private fun isPdfViewerDeclared(): Boolean =
-        try {
-            packageManager.getActivityInfo(
-                ComponentName(this, PdfViewer::class.java),
-                0
-            )
-            true
-        } catch (_: Exception) { false }
+    private fun prefetchVisibleThumbnails() {
+        val lm = binding.rvThumbnails.layoutManager as? GridLayoutManager ?: return
+        val first = lm.findFirstVisibleItemPosition()
+        val last = lm.findLastVisibleItemPosition()
+        if (first == RecyclerView.NO_POSITION || last == RecyclerView.NO_POSITION) return
+        val start = (first - 4).coerceAtLeast(0)
+        val end = (last + 4).coerceAtMost(adapter.itemCount - 1)
+        adapter.prefetchAroundVisible(this, start..end)
+    }
 
     private fun cleanupCacheExceptTemps() {
         if (PdfOperations.runner(this).state.value.isBusy) return
@@ -6021,7 +6057,7 @@ class MainActivity : AppCompatActivity() {
                 batchSize = PageBatch.PAGES,
                 selected = selected
             ),
-            progress = operationProgress(),
+            progress = operationProgress(ProgressMath.THUMBNAIL_PHASE_START),
             copyEdited = { work -> copyEditedFromViewer(uri, namedExport, work) },
             warn = { warning, error -> Log.w("PdfMuPdfFitBounds", warning, error) }
         )
@@ -6057,42 +6093,43 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun openPdfWithDriveOrOther(initialPageIndex: Int) {
-        val operation = outputOperation(password = null)
+        val inViewer = runCatching {
+            val prefs = getSharedPreferences(PREFS_NAME_FRAGMENT, MODE_PRIVATE)
+            synchronized(prefsBackupLock) {
+                prefs.getBoolean(KEY_LAST_INNER_PDF_READER, true)
+            }
+        }.getOrDefault(true)
+        val operation = outputOperation(password = null, packed = false, direct = inViewer)
         startOperation(
             PdfOperationKind.OPEN,
             getString(R.string.in_progress_pdf_reading),
             onCancelled = operation::discard,
-            work = { report -> OpenResult(operation.execute(report).file, initialPageIndex) }
+            work = { report ->
+                val opened = operation.execute(report)
+                OpenResult(opened.file, initialPageIndex, opened.name, inViewer)
+            }
         )
     }
 
-    private fun openExported(named: File, initialPageIndex: Int) {
+    private fun openInViewer(result: OpenResult) {
+        try {
+            pdfViewerLauncher.launch(
+                Intent(this, PdfViewer::class.java).apply {
+                    putExtra(PdfViewer.EXTRA_PATH, result.file.absolutePath)
+                    putExtra(PdfViewer.EXTRA_TITLE, result.name)
+                    putExtra(PdfViewer.EXTRA_INITIAL_PAGE_INDEX, result.pageIndex)
+                }
+            )
+        } catch (e: Exception) {
+            Toast.makeText(this, getString(R.string.failed_to_open_pdf_with_msg, e.message), Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun openExported(named: File) {
         val job = lifecycleScope.launch {
             try {
                 val uri = withContext(Dispatchers.IO) {
                     FileProvider.getUriForFile(this@MainActivity, "${packageName}.provider", named)
-                }
-
-                val shouldUseInternal: Boolean =
-                    Build.VERSION.SDK_INT >= VERSION_CODES.P &&
-                        runCatching {
-                            val prefs = getSharedPreferences(PREFS_NAME_FRAGMENT, MODE_PRIVATE)
-                            synchronized(prefsBackupLock) {
-                                prefs.getBoolean(KEY_LAST_INNER_PDF_READER, true)
-                            }
-                        }.getOrDefault(true)
-
-                if (shouldUseInternal && isAndroidxPdfAvailable() && isPdfViewerDeclared()) {
-                    try {
-                        val i = Intent(this@MainActivity, PdfViewer::class.java).apply {
-                            putExtra(PdfViewer.EXTRA_URI, uri.toString())
-                            putExtra(PdfViewer.EXTRA_INITIAL_PAGE_INDEX, initialPageIndex)
-                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                        }
-                        pdfViewerLauncher.launch(i)
-                        return@launch
-                    } catch (_: Exception) {
-                    }
                 }
 
                 val apps = withContext(Dispatchers.IO) { pdfViewerApps(uri) }
@@ -6303,9 +6340,9 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private class OpenResult(val file: File, val pageIndex: Int) : PdfOperationResult
+    private class OpenResult(val file: File, val pageIndex: Int, val name: String, val inViewer: Boolean) : PdfOperationResult
 
-    private fun outputOperation(password: ByteArray?): PdfOutputOperation =
+    private fun outputOperation(password: ByteArray?, packed: Boolean, direct: Boolean = false): PdfOutputOperation =
         PdfOutputOperation(
             files = PdfOutputOperation.Files(
                 cacheDir,
@@ -6316,19 +6353,21 @@ class MainActivity : AppCompatActivity() {
             input = PdfOutputOperation.Input(
                 baseName = buildOutputFileName().ifBlank { OutputFileName.defaultDate() },
                 password = password,
+                packed = packed,
                 batchSize = PageBatch.PAGES,
                 messages = PdfOutputOperation.Messages(
                     layoutMissing = getString(R.string.temporary_pdf_not_found),
                     nameReserved = getString(R.string.output_name_reserved),
                     replaceFailed = getString(R.string.failed_to_replace_original_pdf_with_encrypted_version),
                     renameFailed = getString(R.string.failed_to_rename_encrypted_pdf)
-                )
+                ),
+                direct = direct
             ),
             progress = operationProgress()
         )
 
     private fun startOutput(kind: PdfOperationKind, message: String, password: ByteArray?) {
-        val operation = outputOperation(password)
+        val operation = outputOperation(password, packed = kind == PdfOperationKind.SAVE_EXPORT || kind == PdfOperationKind.SEND)
         startOperation(kind, message, onCancelled = operation::discard, work = operation::execute)
     }
 
@@ -6343,6 +6382,12 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
+        if (result is OpenResult && result.inViewer) {
+            lastNamedExport = null
+            openInViewer(result)
+            return
+        }
+
         val file = when (result) {
             is OpenResult -> result.file
             is PdfOutputOperation.Result -> result.file
@@ -6353,7 +6398,7 @@ class MainActivity : AppCompatActivity() {
         when (kind) {
             PdfOperationKind.PRINT -> printExported(file)
             PdfOperationKind.SEND -> shareExported(file)
-            PdfOperationKind.OPEN -> openExported(file, (result as? OpenResult)?.pageIndex ?: 0)
+            PdfOperationKind.OPEN -> openExported(file)
             PdfOperationKind.SAVE_EXPORT -> askSaveLocation(file)
             else -> Unit
         }
@@ -6854,7 +6899,7 @@ class MainActivity : AppCompatActivity() {
                 defaultPosition = defaultPosition,
                 batchSize = PageBatch.PAGES
             ),
-            progress = operationProgress(),
+            progress = operationProgress(ProgressMath.THUMBNAIL_PHASE_START),
             renderer = MuPdfSignedPageRenderer(warn = { warning, error -> Log.w("MainActivity", warning, error) }),
             warn = { warning, error -> Log.w("PdfMuPdfFitBounds", warning, error) }
         )
@@ -6930,7 +6975,6 @@ class MainActivity : AppCompatActivity() {
                 }
                 item.isCheckable = true
                 item.isChecked = enabled
-                item.isEnabled = Build.VERSION.SDK_INT >= VERSION_CODES.P
             }
         }
 

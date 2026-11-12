@@ -158,6 +158,11 @@ Typical build commands:
 
 In Android Studio, simply open the project directory.
 
+MuPDF does not come from Maven: the app uses its own build of MuPDF with eighteen patches (the `mupdf` folder).
+Gradle downloads the built AAR from the GitHub release `mupdf` of this repository automatically. To build it
+yourself (Android NDK needed), run `bash mupdf/build.sh`; `mupdf/README.md` describes the patches, the build and
+how to check for a newer MuPDF release (`bash mupdf/check_update.sh`).
+
 Some unit tests use real-world PDF files: regression tests for earlier fixes look up specific files by name,
 and the form and annotation import test uses every PDF in a `Forms_and_annotations` folder.
 Put them into the `work/00_test_PDFs` folder, in any subfolders; `work/00_test_PDFs/README.md` lists the needed
@@ -216,8 +221,8 @@ The entire project (unless otherwise noted) is available under the terms of the
 available under AGPL-3.0 or a commercial license:
 
 - **iText Core for Android (9.x)** – PDF processing and generation, password protection
-- **MuPDF (Android/Java bindings)** – content bounds measurement, repair of damaged PDFs
-  and password checking
+- **MuPDF (Android/Java bindings, own build with patches, see `mupdf/`)** – content bounds measurement,
+  repair of damaged PDFs and password checking
 
 If the AGPL terms are not suitable for the given project,
 then you will need your own commercial licenses (iText: Apryse, MuPDF: Artifex).

@@ -1,0 +1,633 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: reelee81 <reelee81@gmail.com>
+Date: Wed, 11 Nov 2026 19:02:16 +0100
+Subject: [PATCH 9/18] fitz: Decode only the needed area of a JPX image.
+
+Drawing a zoomed part of a JPEG 2000 image always decoded the whole
+image, because the JPX branch of compressed_image_get_pixmap() could not
+return a subarea. Each zoomed tile of a 10200x14031 image needed about
+2 GB and several seconds.
+
+The JPX branch now asks OpenJPEG to decode only the requested area
+(opj_set_decode_area), at the same reduced resolution as before. The
+area is widened so that it starts on a sample of every component and on
+the grid of the l2factor; an image whose origin is not on that grid is
+decoded whole as before, and so is an image whose area fails to decode.
+
+So that tiles drawn from areas of an image match each other and the
+whole image:
+- the 90% rule of the image decode tuning is not applied to JPX images,
+  so a partly visible image is drawn from an area;
+- an area is placed on the pixel grid of the whole image, which spreads
+  its pixels evenly over the image size, so an area and the whole image
+  have the same geometry, also when the area comes from the store;
+- an area that still needs subsampling averages exactly the blocks that
+  fz_subsample_pixmap() uses for the whole image; the area is widened by
+  one block to the left and top for this;
+- an area is not snapped to whole pixels again when it is scaled,
+  because its edges lie inside the image.
+
+The OpenJPEG stream skip callback now returns the number of bytes
+skipped instead of the new position. Decoding an area skips the unused
+tiles, which failed with "Stream too short" once a skip went past the
+stream buffer.
+
+Without an area request the output is unchanged. It needs 0010 for an
+exact area decode of 9/7 images.
+
+Modified for ReePDF on 2026-11-11.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ source/fitz/draw-device.c |  24 ++++-
+ source/fitz/image-imp.h   |   1 +
+ source/fitz/image.c       | 202 ++++++++++++++++++++++++++++++++++++--
+ source/fitz/load-jpx.c    | 130 +++++++++++++++++++++++-
+ 4 files changed, 343 insertions(+), 14 deletions(-)
+
+diff --git a/source/fitz/draw-device.c b/source/fitz/draw-device.c
+index d8d3546..72c45fd 100644
+--- a/source/fitz/draw-device.c
++++ b/source/fitz/draw-device.c
+@@ -1820,6 +1820,18 @@ convert_pixmap_for_painting(fz_context *ctx, fz_pixmap *pixmap, fz_colorspace *m
+ 	return converted;
+ }
+ 
++static int
++is_jpx_window(fz_context *ctx, fz_image *image, fz_matrix image_ctm, fz_matrix local_ctm)
++{
++	fz_compressed_buffer *buffer;
++
++	if (image_ctm.a == local_ctm.a && image_ctm.b == local_ctm.b && image_ctm.c == local_ctm.c &&
++		image_ctm.d == local_ctm.d && image_ctm.e == local_ctm.e && image_ctm.f == local_ctm.f)
++		return 0;
++	buffer = fz_compressed_image_buffer(ctx, image);
++	return buffer && buffer->params.type == FZ_IMAGE_JPX;
++}
++
+ static fz_irect
+ find_src_area_required(fz_matrix local_ctm, fz_image *image, fz_irect clip)
+ {
+@@ -1874,6 +1886,7 @@ fz_draw_fill_image(fz_context *ctx, fz_device *devp, fz_image *image, fz_matrix
+ 	fz_colorspace *model;
+ 	fz_irect clip;
+ 	fz_irect src_area;
++	fz_matrix image_ctm;
+ 	fz_colorspace *src_cs;
+ 	fz_overprint op = { { 0 } };
+ 	fz_overprint *eop = &op;
+@@ -1904,6 +1917,7 @@ fz_draw_fill_image(fz_context *ctx, fz_device *devp, fz_image *image, fz_matrix
+ 	if (fz_is_empty_irect(src_area))
+ 		return;
+ 
++	image_ctm = local_ctm;
+ 	pixmap = fz_get_pixmap_from_image(ctx, image, &src_area, &local_ctm, &dx, &dy);
+ 	src_cs = fz_default_colorspace(ctx, dev->default_cs, pixmap->colorspace);
+ 
+@@ -1941,7 +1955,7 @@ fz_draw_fill_image(fz_context *ctx, fz_device *devp, fz_image *image, fz_matrix
+ 
+ 		if (!(devp->hints & FZ_DONT_INTERPOLATE_IMAGES) && ctx->tuning->image_scale(ctx->tuning->image_scale_arg, dx, dy, pixmap->w, pixmap->h))
+ 		{
+-			int gridfit = alpha == 1.0f && !(dev->flags & FZ_DRAWDEV_FLAGS_TYPE3);
++			int gridfit = alpha == 1.0f && !(dev->flags & FZ_DRAWDEV_FLAGS_TYPE3) && !is_jpx_window(ctx, image, image_ctm, local_ctm);
+ 			fz_pixmap *scaled = fz_transform_pixmap(ctx, dev, pixmap, &local_ctm, state->dest->x, state->dest->y, dx, dy, gridfit, &clip);
+ 			if (!scaled)
+ 			{
+@@ -1996,6 +2010,7 @@ fz_draw_fill_image_mask(fz_context *ctx, fz_device *devp, fz_image *image, fz_ma
+ 	fz_draw_state *state = &dev->stack[dev->top];
+ 	fz_irect clip;
+ 	fz_irect src_area;
++	fz_matrix image_ctm;
+ 	fz_colorspace *colorspace = NULL;
+ 	fz_overprint op = { { 0 } };
+ 	fz_overprint *eop;
+@@ -2026,6 +2041,7 @@ fz_draw_fill_image_mask(fz_context *ctx, fz_device *devp, fz_image *image, fz_ma
+ 	if (fz_is_empty_irect(src_area))
+ 		return;
+ 
++	image_ctm = local_ctm;
+ 	pixmap = fz_get_pixmap_mask_from_image(ctx, image, &src_area, &local_ctm, &dx, &dy, state->in_smask);
+ 
+ 	fz_var(pixmap);
+@@ -2037,7 +2053,7 @@ fz_draw_fill_image_mask(fz_context *ctx, fz_device *devp, fz_image *image, fz_ma
+ 
+ 		if (!(devp->hints & FZ_DONT_INTERPOLATE_IMAGES) && ctx->tuning->image_scale(ctx->tuning->image_scale_arg, dx, dy, pixmap->w, pixmap->h))
+ 		{
+-			int gridfit = alpha == 1.0f && !(dev->flags & FZ_DRAWDEV_FLAGS_TYPE3);
++			int gridfit = alpha == 1.0f && !(dev->flags & FZ_DRAWDEV_FLAGS_TYPE3) && !is_jpx_window(ctx, image, image_ctm, local_ctm);
+ 			scaled = fz_transform_pixmap(ctx, dev, pixmap, &local_ctm, state->dest->x, state->dest->y, dx, dy, gridfit, &clip);
+ 			if (!scaled)
+ 			{
+@@ -2080,6 +2096,7 @@ fz_draw_clip_image_mask(fz_context *ctx, fz_device *devp, fz_image *image, fz_ma
+ 	fz_colorspace *model = state->dest->colorspace;
+ 	fz_irect clip;
+ 	fz_irect src_area;
++	fz_matrix image_ctm;
+ 
+ 	fz_var(pixmap);
+ 
+@@ -2136,6 +2153,7 @@ fz_draw_clip_image_mask(fz_context *ctx, fz_device *devp, fz_image *image, fz_ma
+ 
+ 	fz_try(ctx)
+ 	{
++		image_ctm = local_ctm;
+ 		pixmap = fz_get_pixmap_mask_from_image(ctx, image, &src_area, &local_ctm, &dx, &dy, state->in_smask);
+ 
+ 		state[1].mask = fz_new_pixmap_with_bbox(ctx, NULL, bbox, NULL, 1);
+@@ -2159,7 +2177,7 @@ fz_draw_clip_image_mask(fz_context *ctx, fz_device *devp, fz_image *image, fz_ma
+ 
+ 		if (!(devp->hints & FZ_DONT_INTERPOLATE_IMAGES) && ctx->tuning->image_scale(ctx->tuning->image_scale_arg, dx, dy, pixmap->w, pixmap->h))
+ 		{
+-			int gridfit = !(dev->flags & FZ_DRAWDEV_FLAGS_TYPE3);
++			int gridfit = !(dev->flags & FZ_DRAWDEV_FLAGS_TYPE3) && !is_jpx_window(ctx, image, image_ctm, local_ctm);
+ 			scaled = fz_transform_pixmap(ctx, dev, pixmap, &local_ctm, state->dest->x, state->dest->y, dx, dy, gridfit, &clip);
+ 			if (!scaled)
+ 			{
+diff --git a/source/fitz/image-imp.h b/source/fitz/image-imp.h
+index 8cc18f2..3cde18c 100644
+--- a/source/fitz/image-imp.h
++++ b/source/fitz/image-imp.h
+@@ -56,5 +56,6 @@ void fz_load_jbig2_info(fz_context *ctx, const unsigned char *data, size_t size,
+ void fz_load_jpx_info(fz_context *ctx, const unsigned char *data, size_t size, int *wp, int *hp, int *xresp, int *yresp, fz_colorspace **cspacep, fz_colorspace *defcs);
+ 
+ fz_pixmap *fz_load_jpx_reduced(fz_context *ctx, const unsigned char *data, size_t size, fz_colorspace *defcs, int reduce, int *applied);
++fz_pixmap *fz_load_jpx_area(fz_context *ctx, const unsigned char *data, size_t size, fz_colorspace *defcs, int reduce, int l2factor, fz_irect *area, int *applied);
+ 
+ #endif
+diff --git a/source/fitz/image.c b/source/fitz/image.c
+index 7b394d8..c811bc5 100644
+--- a/source/fitz/image.c
++++ b/source/fitz/image.c
+@@ -391,6 +391,131 @@ static void fz_adjust_image_subarea(fz_context *ctx, fz_image *image, fz_irect *
+ 		subarea->y1 = image->h;
+ }
+ 
++static int
++is_jpx_image(fz_context *ctx, fz_image *image)
++{
++	fz_compressed_buffer *buffer = fz_compressed_image_buffer(ctx, image);
++	return buffer && buffer->params.type == FZ_IMAGE_JPX;
++}
++
++static int
++is_jpx_window(fz_context *ctx, fz_image *image, const fz_irect *rect)
++{
++	return is_jpx_image(ctx, image) && (rect->x0 > 0 || rect->y0 > 0 || rect->x1 < image->w || rect->y1 < image->h);
++}
++
++static void
++block_starts(int *out, int k0, int k1, int size, int f)
++{
++	int sub = size % f ? f - size % f : 0;
++	int d = (size + sub) / f - 1;
++	int e = d - ((d + 1) >> 1);
++	int s = 0;
++	int k;
++
++	for (k = 0; k < k1; k++)
++	{
++		if (k >= k0)
++			out[k - k0] = s;
++		s += f;
++		e -= sub;
++		while (e < 0)
++		{
++			s--;
++			e += d;
++		}
++	}
++}
++
++static void
++subsample_jpx_window(fz_context *ctx, fz_pixmap *tile, int factor, const fz_irect *rect, int w, int h, int reduce)
++{
++	int f = 1 << factor;
++	int l2 = reduce + factor;
++	int wr = (w + (1 << reduce) - 1) >> reduce;
++	int hr = (h + (1 << reduce) - 1) >> reduce;
++	int kx0 = rect->x0 >> l2;
++	int ky0 = rect->y0 >> l2;
++	int ow = ((rect->x1 + (1 << l2) - 1) >> l2) - kx0;
++	int oh = ((rect->y1 + (1 << l2) - 1) >> l2) - ky0;
++	int n = tile->n;
++	int *sx = NULL;
++	int *sy = NULL;
++	unsigned char *out = NULL;
++	int covered = 1;
++	int i, j, c, xx, yy;
++
++	if (!((wr % f || hr % f) && wr >= f && hr >= f))
++	{
++		fz_subsample_pixblock(tile->samples, tile->w, tile->h, n, factor, tile->stride);
++		tile->w = (tile->w + f - 1) >> factor;
++		tile->h = (tile->h + f - 1) >> factor;
++		tile->stride = tile->w * (size_t)n;
++		tile->samples = fz_realloc(ctx, tile->samples, (size_t)tile->h * tile->w * n);
++		return;
++	}
++
++	fz_var(sx);
++	fz_var(sy);
++	fz_var(out);
++	fz_try(ctx)
++	{
++		sx = fz_malloc_array(ctx, ow, int);
++		sy = fz_malloc_array(ctx, oh, int);
++		block_starts(sx, kx0, kx0 + ow, wr, f);
++		block_starts(sy, ky0, ky0 + oh, hr, f);
++		for (i = 0; i < ow; i++)
++		{
++			sx[i] -= tile->x;
++			if (sx[i] < 0 || sx[i] + f > tile->w)
++				covered = 0;
++		}
++		for (j = 0; j < oh; j++)
++		{
++			sy[j] -= tile->y;
++			if (sy[j] < 0 || sy[j] + f > tile->h)
++				covered = 0;
++		}
++		if (covered)
++		{
++			out = fz_malloc(ctx, (size_t)ow * oh * n);
++			for (j = 0; j < oh; j++)
++				for (i = 0; i < ow; i++)
++					for (c = 0; c < n; c++)
++					{
++						int v = 0;
++						for (yy = 0; yy < f; yy++)
++						{
++							const unsigned char *src = tile->samples + (size_t)(sy[j] + yy) * tile->stride + (size_t)sx[i] * n + c;
++							for (xx = 0; xx < f; xx++)
++								v += src[(size_t)xx * n];
++						}
++						out[((size_t)j * ow + i) * n + c] = v >> (2 * factor);
++					}
++		}
++	}
++	fz_always(ctx)
++	{
++		fz_free(ctx, sx);
++		fz_free(ctx, sy);
++	}
++	fz_catch(ctx)
++	{
++		fz_free(ctx, out);
++		fz_rethrow(ctx);
++	}
++	if (!out)
++	{
++		fz_subsample_pixmap(ctx, tile, factor);
++		return;
++	}
++	fz_free(ctx, tile->samples);
++	tile->samples = out;
++	tile->w = ow;
++	tile->h = oh;
++	tile->stride = ow * (size_t)n;
++}
++
+ static void fz_compute_image_key(fz_context *ctx, fz_image *image, fz_matrix *ctm,
+ 	fz_image_key *key, const fz_irect *subarea, int l2factor, int *w, int *h, int *dw, int *dh)
+ {
+@@ -408,7 +533,8 @@ static void fz_compute_image_key(fz_context *ctx, fz_image *image, fz_matrix *ct
+ 	else
+ 	{
+ 		key->rect = *subarea;
+-		ctx->tuning->image_decode(ctx->tuning->image_decode_arg, image->w, image->h, key->l2factor, &key->rect);
++		if (!is_jpx_image(ctx, image))
++			ctx->tuning->image_decode(ctx->tuning->image_decode_arg, image->w, image->h, key->l2factor, &key->rect);
+ 		fz_adjust_image_subarea(ctx, image, &key->rect, key->l2factor);
+ 	}
+ 
+@@ -859,13 +985,36 @@ compressed_image_get_pixmap(fz_context *ctx, fz_image *image_, fz_irect *subarea
+ 		tile = fz_load_jxr(ctx, image->buffer->buffer->data, image->buffer->buffer->len);
+ 		break;
+ 	case FZ_IMAGE_JPX:
+-		if (l2factor && *l2factor > 0 && !image->super.use_colorkey)
++		tile = NULL;
++		if (subarea && (subarea->x0 > 0 || subarea->y0 > 0 || subarea->x1 < image->super.w || subarea->y1 < image->super.h))
++		{
++			fz_irect area = *subarea;
++			int applied = 0;
++			int request = l2factor ? *l2factor : 0;
++			fz_try(ctx)
++				tile = fz_load_jpx_area(ctx, image->buffer->buffer->data, image->buffer->buffer->len, image->super.colorspace, image->super.use_colorkey ? 0 : request, request, &area, &applied);
++			fz_catch(ctx)
++			{
++				fz_rethrow_if(ctx, FZ_ERROR_SYSTEM);
++				fz_rethrow_if(ctx, FZ_ERROR_ABORT);
++				fz_report_error(ctx);
++				fz_warn(ctx, "JPX window decode failed; decoding the whole image");
++			}
++			if (tile)
++			{
++				*subarea = area;
++				can_sub = 1;
++				if (l2factor)
++					*l2factor -= applied;
++			}
++		}
++		if (!tile && l2factor && *l2factor > 0 && !image->super.use_colorkey)
+ 		{
+ 			int applied = 0;
+ 			tile = fz_load_jpx_reduced(ctx, image->buffer->buffer->data, image->buffer->buffer->len, image->super.colorspace, *l2factor, &applied);
+ 			*l2factor -= applied;
+ 		}
+-		else
++		else if (!tile)
+ 			tile = fz_load_jpx(ctx, image->buffer->buffer->data, image->buffer->buffer->len, image->super.colorspace);
+ 		if (image->super.use_colorkey)
+ 		{
+@@ -882,6 +1031,8 @@ compressed_image_get_pixmap(fz_context *ctx, fz_image *image_, fz_irect *subarea
+ 			{
+ 				indexed = fz_colorspace_is_indexed(ctx, image->super.colorspace);
+ 				keyed = fz_new_pixmap(ctx, tile->colorspace, tile->w, tile->h, NULL, 1);
++				keyed->x = tile->x;
++				keyed->y = tile->y;
+ 				sample_stream = fz_open_memory(ctx, tile->samples, tile->stride * tile->h);
+ 				unpstream = fz_unpack_stream(ctx, sample_stream, 8, tile->w, tile->h, tile->n, indexed, 1, 0);
+ 
+@@ -1001,6 +1152,27 @@ update_ctm_for_subarea(fz_matrix *ctm, const fz_irect *subarea, int w, int h)
+ 	*ctm = fz_concat(m, *ctm);
+ }
+ 
++static void
++update_ctm_for_jpx_window(fz_matrix *ctm, const fz_irect *rect, int w, int h, int l2factor)
++{
++	int f = 1 << l2factor;
++	int fw = (w + f - 1) >> l2factor;
++	int fh = (h + f - 1) >> l2factor;
++	int x0 = rect->x0 >> l2factor;
++	int y0 = rect->y0 >> l2factor;
++	int x1 = (rect->x1 + f - 1) >> l2factor;
++	int y1 = (rect->y1 + f - 1) >> l2factor;
++	fz_matrix m;
++
++	m.a = (float) (x1 - x0) / fw;
++	m.b = 0;
++	m.c = 0;
++	m.d = (float) (y1 - y0) / fh;
++	m.e = (float) x0 / fw;
++	m.f = (float) y0 / fh;
++	*ctm = fz_concat(m, *ctm);
++}
++
+ void fz_default_image_decode(void *arg, int w, int h, int l2factor, fz_irect *subarea)
+ {
+ 	(void)arg;
+@@ -1039,7 +1211,10 @@ fz_find_image_tile(fz_context *ctx, fz_image *image, fz_image_key *key, fz_matri
+ 		tile = fz_find_item(ctx, fz_drop_pixmap_imp, key, &fz_image_store_type);
+ 		if (tile)
+ 		{
+-			update_ctm_for_subarea(ctm, &key->rect, image->w, image->h);
++			if (is_jpx_window(ctx, image, &key->rect))
++				update_ctm_for_jpx_window(ctm, &key->rect, image->w, image->h, key->l2factor);
++			else
++				update_ctm_for_subarea(ctm, &key->rect, image->w, image->h);
+ 			return tile;
+ 		}
+ 		if (ctx->tuning->image_rendering != FZ_IMAGE_RENDERING_SPEED)
+@@ -1059,6 +1234,7 @@ fz_get_pixmap_from_image(fz_context *ctx, fz_image *image, const fz_irect *subar
+ 	fz_image_key *keyp = NULL;
+ 	int w;
+ 	int h;
++	int jpx_window;
+ 
+ 	fz_var(keyp);
+ 	fz_var(tile);
+@@ -1141,20 +1317,34 @@ fz_get_pixmap_from_image(fz_context *ctx, fz_image *image, const fz_irect *subar
+ 	tile = image->get_pixmap(ctx, image, &key.rect, w, h, &l2factor_remaining);
+ 
+ 	/* Update the ctm to allow for subareas. */
+-	update_ctm_for_subarea(ctm, &key.rect, image->w, image->h);
++	jpx_window = is_jpx_window(ctx, image, &key.rect);
++	if (jpx_window)
++		update_ctm_for_jpx_window(ctm, &key.rect, image->w, image->h, l2factor);
++	else
++		update_ctm_for_subarea(ctm, &key.rect, image->w, image->h);
+ 
+ 	/* l2factor_remaining is updated to the amount of subscaling left to do */
+ 	assert(l2factor_remaining >= 0 && l2factor_remaining <= 6);
+ 	if (l2factor_remaining)
+ 	{
+ 		fz_try(ctx)
+-			fz_subsample_pixmap(ctx, tile, l2factor_remaining);
++		{
++			if (jpx_window)
++				subsample_jpx_window(ctx, tile, l2factor_remaining, &key.rect, image->w, image->h, l2factor - l2factor_remaining);
++			else
++				fz_subsample_pixmap(ctx, tile, l2factor_remaining);
++		}
+ 		fz_catch(ctx)
+ 		{
+ 			fz_drop_pixmap(ctx, tile);
+ 			fz_rethrow(ctx);
+ 		}
+ 	}
++	if (jpx_window)
++	{
++		tile->x = 0;
++		tile->y = 0;
++	}
+ 
+ 	fz_try(ctx)
+ 	{
+diff --git a/source/fitz/load-jpx.c b/source/fitz/load-jpx.c
+index c8eff42..572e051 100644
+--- a/source/fitz/load-jpx.c
++++ b/source/fitz/load-jpx.c
+@@ -69,6 +69,8 @@ typedef struct
+ 	fz_colorspace *cs;
+ 	int xres;
+ 	int yres;
++	int ox;
++	int oy;
+ } fz_jpxd;
+ 
+ typedef struct
+@@ -258,7 +260,7 @@ static OPJ_OFF_T fz_opj_stream_skip(OPJ_OFF_T skip, void * p_user_data)
+ 	if (skip > (OPJ_OFF_T)(sb->size - sb->pos))
+ 		skip = (OPJ_OFF_T)(sb->size - sb->pos);
+ 	sb->pos += skip;
+-	return sb->pos;
++	return skip;
+ }
+ 
+ static OPJ_BOOL fz_opj_stream_seek(OPJ_OFF_T seek_pos, void * p_user_data)
+@@ -511,8 +513,87 @@ jpx_reduce_coord(OPJ_UINT32 v, int reduce)
+ 	return (OPJ_UINT32)(((uint64_t)v + (((uint64_t)1 << reduce) - 1)) >> reduce);
+ }
+ 
++static int64_t
++jpx_lcm(int64_t a, int64_t b)
++{
++	int64_t x = a, y = b;
++	while (y)
++	{
++		int64_t t = x % y;
++		x = y;
++		y = t;
++	}
++	return a / x * b;
++}
++
++static int
++jpx_set_area(opj_codec_t *codec, opj_image_t *jpx, int reduce, int l2factor, fz_irect *area, int *ox, int *oy)
++{
++	int64_t f = (int64_t)1 << l2factor;
++	int64_t ax = (int64_t)1 << reduce;
++	int64_t ay = ax;
++	int64_t ix0 = jpx->x0, iy0 = jpx->y0, ix1 = jpx->x1, iy1 = jpx->y1;
++	int64_t x0, y0, x1, y1, dx0, dy0;
++	OPJ_UINT32 k;
++
++	if (ix0 % f != 0 || iy0 % f != 0)
++		return 0;
++	for (k = 0; k < jpx->numcomps; k++)
++	{
++		ax = jpx_lcm(ax, (int64_t)jpx->comps[k].dx << reduce);
++		ay = jpx_lcm(ay, (int64_t)jpx->comps[k].dy << reduce);
++		if (ax > 4096 || ay > 4096)
++			return 0;
++	}
++	ax = jpx_lcm(ax, f);
++	ay = jpx_lcm(ay, f);
++
++	x0 = (ix0 + area->x0) / ax * ax;
++	y0 = (iy0 + area->y0) / ay * ay;
++	x1 = (ix0 + area->x1 + ax - 1) / ax * ax;
++	y1 = (iy0 + area->y1 + ay - 1) / ay * ay;
++	if (x0 < ix0)
++		x0 = ix0;
++	if (y0 < iy0)
++		y0 = iy0;
++	if (x1 > ix1)
++		x1 = ix1;
++	if (y1 > iy1)
++		y1 = iy1;
++	if (x1 <= x0 || y1 <= y0)
++		return 0;
++	if (x0 == ix0 && y0 == iy0 && x1 == ix1 && y1 == iy1)
++		return 0;
++
++	dx0 = x0;
++	dy0 = y0;
++	if (l2factor > reduce)
++	{
++		int64_t m = (int64_t)1 << (l2factor - reduce);
++		int64_t wr = (int64_t)jpx_reduce_coord(jpx->x1, reduce) - jpx_reduce_coord(jpx->x0, reduce);
++		int64_t hr = (int64_t)jpx_reduce_coord(jpx->y1, reduce) - jpx_reduce_coord(jpx->y0, reduce);
++		if ((wr % m != 0 || hr % m != 0) && wr >= m && hr >= m)
++		{
++			if (wr % m != 0)
++				dx0 = fz_maxi(x0 - ax, ix0);
++			if (hr % m != 0)
++				dy0 = fz_maxi(y0 - ay, iy0);
++		}
++	}
++	if (!opj_set_decode_area(codec, jpx, (OPJ_INT32)dx0, (OPJ_INT32)dy0, (OPJ_INT32)x1, (OPJ_INT32)y1))
++		return 0;
++
++	*ox = (int)((dx0 - ix0) >> reduce);
++	*oy = (int)((dy0 - iy0) >> reduce);
++	area->x0 = (int)(x0 - ix0);
++	area->y0 = (int)(y0 - iy0);
++	area->x1 = (int)(x1 - ix0);
++	area->y1 = (int)(y1 - iy0);
++	return 1;
++}
++
+ static fz_pixmap *
+-jpx_read_image(fz_context *ctx, fz_jpxd *state, const unsigned char *data, size_t size, fz_colorspace *defcs, int onlymeta, int reduce, int *applied)
++jpx_read_image(fz_context *ctx, fz_jpxd *state, const unsigned char *data, size_t size, fz_colorspace *defcs, int onlymeta, int reduce, int l2factor, fz_irect *area, int *applied)
+ {
+ 	fz_pixmap *img = NULL;
+ 	opj_dparameters_t params;
+@@ -573,6 +654,14 @@ jpx_read_image(fz_context *ctx, fz_jpxd *state, const unsigned char *data, size_
+ 	if (!onlymeta)
+ 	{
+ 		*applied = jpx_set_reduction(ctx, codec, format, data, size, defcs, reduce);
++		if (area && !jpx_set_area(codec, jpx, *applied, l2factor, area, &state->ox, &state->oy))
++		{
++			opj_stream_destroy(stream);
++			opj_destroy_codec(codec);
++			opj_image_destroy(jpx);
++			*applied = 0;
++			return NULL;
++		}
+ 		if (!opj_decode(codec, stream, jpx))
+ 		{
+ 			opj_stream_destroy(stream);
+@@ -745,6 +834,11 @@ jpx_read_image(fz_context *ctx, fz_jpxd *state, const unsigned char *data, size_
+ 	{
+ 		a = !!a; /* ignore any superfluous alpha channels */
+ 		img = fz_new_pixmap(ctx, state->cs, w, h, NULL, a);
++		if (area)
++		{
++			img->x = state->ox;
++			img->y = state->oy;
++		}
+ 		fz_clear_pixmap_with_value(ctx, img, 0);
+ 		copy_jpx_to_pixmap(ctx, img, jpx);
+ 
+@@ -777,7 +871,27 @@ fz_load_jpx(fz_context *ctx, const unsigned char *data, size_t size, fz_colorspa
+ 	fz_try(ctx)
+ 	{
+ 		fz_opj_lock(ctx);
+-		pix = jpx_read_image(ctx, &state, data, size, defcs, 0, 0, &applied);
++		pix = jpx_read_image(ctx, &state, data, size, defcs, 0, 0, 0, NULL, &applied);
++	}
++	fz_always(ctx)
++		fz_opj_unlock(ctx);
++	fz_catch(ctx)
++		fz_rethrow(ctx);
++
++	return pix;
++}
++
++fz_pixmap *
++fz_load_jpx_area(fz_context *ctx, const unsigned char *data, size_t size, fz_colorspace *defcs, int reduce, int l2factor, fz_irect *area, int *applied)
++{
++	fz_jpxd state = { 0 };
++	fz_pixmap *pix = NULL;
++
++	*applied = 0;
++	fz_try(ctx)
++	{
++		fz_opj_lock(ctx);
++		pix = jpx_read_image(ctx, &state, data, size, defcs, 0, reduce, l2factor, area, applied);
+ 	}
+ 	fz_always(ctx)
+ 		fz_opj_unlock(ctx);
+@@ -797,7 +911,7 @@ fz_load_jpx_reduced(fz_context *ctx, const unsigned char *data, size_t size, fz_
+ 	fz_try(ctx)
+ 	{
+ 		fz_opj_lock(ctx);
+-		pix = jpx_read_image(ctx, &state, data, size, defcs, 0, reduce, applied);
++		pix = jpx_read_image(ctx, &state, data, size, defcs, 0, reduce, 0, NULL, applied);
+ 	}
+ 	fz_always(ctx)
+ 		fz_opj_unlock(ctx);
+@@ -825,7 +939,7 @@ fz_load_jpx_info(fz_context *ctx, const unsigned char *data, size_t size, int *w
+ 	fz_try(ctx)
+ 	{
+ 		fz_opj_lock(ctx);
+-		jpx_read_image(ctx, &state, data, size, defcs, 1, 0, &applied);
++		jpx_read_image(ctx, &state, data, size, defcs, 1, 0, 0, NULL, &applied);
+ 	}
+ 	fz_always(ctx)
+ 		fz_opj_unlock(ctx);
+@@ -853,6 +967,12 @@ fz_load_jpx_reduced(fz_context *ctx, const unsigned char *data, size_t size, fz_
+ 	fz_throw(ctx, FZ_ERROR_UNSUPPORTED, "JPX support disabled");
+ }
+ 
++fz_pixmap *
++fz_load_jpx_area(fz_context *ctx, const unsigned char *data, size_t size, fz_colorspace *defcs, int reduce, int l2factor, fz_irect *area, int *applied)
++{
++	fz_throw(ctx, FZ_ERROR_UNSUPPORTED, "JPX support disabled");
++}
++
+ void
+ fz_load_jpx_info(fz_context *ctx, const unsigned char *data, size_t size, int *wp, int *hp, int *xresp, int *yresp, fz_colorspace **cspacep)
+ {

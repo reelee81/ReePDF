@@ -1,18 +1,13 @@
 package hu.reelee81.reepdf
 
-import android.content.ContentResolver
 import android.content.Context
 import android.content.res.ColorStateList
 import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.Bitmap.createBitmap
-import android.graphics.Canvas
-import android.graphics.Color
-import android.graphics.pdf.PdfRenderer
-import android.net.Uri
+import android.os.Debug
 import android.os.Handler
 import android.os.Looper
-import android.os.ParcelFileDescriptor
 import android.util.Log
 import android.util.LruCache
 import android.view.LayoutInflater
@@ -25,26 +20,15 @@ import android.widget.TextView
 import androidx.appcompat.content.res.AppCompatResources
 import androidx.appcompat.widget.AppCompatCheckBox
 import androidx.core.content.ContextCompat
-import androidx.core.net.toUri
 import androidx.core.widget.CompoundButtonCompat
 import androidx.core.widget.ImageViewCompat
 import androidx.recyclerview.widget.RecyclerView
-import java.io.File
+import hu.reelee81.reepdf.pdf.MuPdfViewerEngine
+import hu.reelee81.reepdf.pdf.PdfThumbnailScheduler
+import hu.reelee81.reepdf.pdf.PdfViewerDocument
 import java.lang.ref.WeakReference
 import java.util.Locale
-import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.Future
-import java.util.concurrent.FutureTask
-import java.util.concurrent.LinkedBlockingDeque
-import java.util.concurrent.LinkedBlockingQueue
-import java.util.concurrent.RejectedExecutionException
-import java.util.concurrent.Semaphore
-import java.util.concurrent.ThreadPoolExecutor
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.locks.ReentrantLock
-import kotlin.math.max
-import kotlin.math.min
 
 class ThumbnailAdapter(
     private val items: MutableList<PageItem>,
@@ -60,33 +44,6 @@ class ThumbnailAdapter(
 
     @Volatile private var docKey: String = "init"
 
-    private val bindExecutor: ThreadPoolExecutor = ThreadPoolExecutor(
-        2,
-        3,
-        3L, TimeUnit.SECONDS,
-        LinkedBlockingDeque(32)
-    ) { task, executor ->
-        if (!executor.isShutdown) {
-            executor.queue.poll()?.let { dropped ->
-                (dropped as? KeyedFutureTask)?.let { keyed ->
-                    keyed.cancel(true)
-                    inFlight.remove(keyed.key, keyed)
-                }
-            }
-            executor.execute(task)
-        }
-    }
-
-    private val prefetchExecutor: ThreadPoolExecutor = ThreadPoolExecutor(
-        2,
-        2,
-        0L, TimeUnit.MILLISECONDS,
-        LinkedBlockingDeque(16),
-        ThreadPoolExecutor.DiscardOldestPolicy()
-    )
-
-    private val inFlight = ConcurrentHashMap<String, Future<*>>()
-
     private val waiters = ConcurrentHashMap<String, MutableList<WeakReference<ImageView>>>()
 
     private val cacheMaxBytes = 32 * 1024 * 1024
@@ -96,28 +53,23 @@ class ThumbnailAdapter(
             try { value.allocationByteCount } catch (_: Throwable) { value.byteCount }
     }
 
-    private class RendererEntry(val renderer: PdfRenderer) {
-        val lock = ReentrantLock(true)
-    }
-
-    private val renderers = ConcurrentHashMap<String, RendererEntry>()
-    private val closeExecutor: ThreadPoolExecutor = ThreadPoolExecutor(
-        0,
-        1,
-        3L, TimeUnit.SECONDS,
-        LinkedBlockingQueue()
+    private val scheduler = PdfThumbnailScheduler(
+        open = { path ->
+            PdfViewerDocument.open({ Debug.getNativeHeapAllocatedSize() - cache.size() }) {
+                MuPdfViewerEngine.open(path, pageTreeCache = false)
+            }
+        },
+        newTarget = { width, height -> AndroidBitmapRasterTarget(createBitmap(width, height, Bitmap.Config.ARGB_8888)) },
+        release = { target -> target.bitmap.recycle() },
+        finished = ::onThumbnailRendered
     )
-    private val prefetchLimiter = Semaphore(2, true)
+
     private val mainHandler = Handler(Looper.getMainLooper())
 
     @Volatile private var onThumbnailFinishedListener: ((String) -> Unit)? = null
     @Volatile private var prefetchPaused = false
+    @Volatile private var renderingStopped = false
     @Volatile private var lastScrollNanos: Long = 0L
-
-    private class KeyedFutureTask(
-        val key: String,
-        r: Runnable
-    ) : FutureTask<Unit>(r, Unit)
 
     init { setHasStableIds(true) }
 
@@ -153,56 +105,64 @@ class ThumbnailAdapter(
         }
     }
 
-    private fun closeRendererAsync(entry: RendererEntry) {
-        try {
-            closeExecutor.execute {
-                while (true) {
-                    if (Thread.currentThread().isInterrupted) return@execute
-                    val ok = try { entry.lock.tryLock(200, TimeUnit.MILLISECONDS) } catch (_: Exception) { false }
-                    if (ok) {
-                        try {
-                            runCatching { entry.renderer.close() }
-                        } finally {
-                            try { entry.lock.unlock() } catch (_: Exception) {}
-                        }
-                        return@execute
-                    }
-                }
-            }
-        } catch (_: RejectedExecutionException) {
-            runCatching { entry.renderer.close() }
+    private fun onThumbnailRendered(key: String, result: Result<AndroidBitmapRasterTarget>) {
+        result.onSuccess { target ->
+            val bmp = target.bitmap
+            cache.put(key, bmp)
+            dispatchToWaiters(key, bmp)
+        }.onFailure { t ->
+            Log.e("ThumbnailAdapter", "Thumbnail render error: ${t.message}")
         }
+        notifyThumbnailFinished(key)
     }
 
     fun pausePrefetchAndCancel() {
         prefetchPaused = true
-        for ((_, fut) in inFlight) {
-            fut.cancel(true)
-        }
-        inFlight.clear()
-        prefetchExecutor.queue.clear()
+        scheduler.cancelAll()
     }
 
     fun resumePrefetch() {
         prefetchPaused = false
     }
 
-    private fun getOrCreateRenderer(context: Context, filePath: String): RendererEntry {
-        return renderers.computeIfAbsent(filePath) {
-            val uri: Uri = if (filePath.startsWith("content://") || filePath.startsWith("file://")) {
-                filePath.toUri()
-            } else {
-                File(filePath).toUri()
-            }
-            val pfd: ParcelFileDescriptor =
-                if (uri.scheme == ContentResolver.SCHEME_FILE) {
-                    ParcelFileDescriptor.open(File(uri.path!!), ParcelFileDescriptor.MODE_READ_ONLY)
-                } else {
-                    context.contentResolver.openFileDescriptor(uri, "r")
-                        ?: throw IllegalArgumentException(context.getString(R.string.cannot_open_uri, uri))
+    fun stopRendering() {
+        renderingStopped = true
+        scheduler.closeDocuments()
+    }
+
+    fun resumeRendering() {
+        renderingStopped = false
+    }
+
+    private fun request(key: String, filePath: String, pageIndex: Int, density: Float) {
+        if (renderingStopped) return
+        val boxW = (112f * density).toInt().coerceAtLeast(1)
+        val boxH = (158f * density).toInt().coerceAtLeast(1)
+        scheduler.request(key, filePath, pageIndex, boxW, boxH)
+    }
+
+    private fun showCached(iv: ImageView, key: String): Boolean {
+        val cached = cache.get(key)
+        if (cached == null || cached.isRecycled) return false
+        iv.safeSetBitmap(cached)
+        return true
+    }
+
+    private fun checkAgainLater(holder: ViewHolder, key: String) {
+        holder.iv.postDelayed({
+            if (holder.iv.tag != key) return@postDelayed
+            when {
+                showCached(holder.iv, key) -> Unit
+                scheduler.isPending(key) -> checkAgainLater(holder, key)
+                scheduler.hasFailed(key) -> Unit
+                else -> {
+                    val pNow = holder.bindingAdapterPosition
+                    if (pNow != RecyclerView.NO_POSITION && pNow in 0 until itemCount) {
+                        runCatching { notifyItemChanged(pNow, "retry") }
+                    }
                 }
-            RendererEntry(PdfRenderer(pfd))
-        }
+            }
+        }, 1000L)
     }
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
@@ -309,6 +269,7 @@ class ThumbnailAdapter(
         val key = "$docKey|${item.pageIndex}"
         holder.iv.tag = key
 
+        val pending = scheduler.isPending(key)
         val cached = cache.get(key)
         if (cached != null && !cached.isRecycled) {
             holder.iv.safeSetBitmap(cached)
@@ -317,81 +278,13 @@ class ThumbnailAdapter(
             cache.remove(key)
         }
 
-        inFlight[key]?.let { existing ->
-            if (existing.isDone || existing.isCancelled) {
-                inFlight.remove(key)
-            } else {
-                registerWaiter(key, holder.iv)
-                holder.iv.postDelayed({
-                    val f = inFlight[key]
-                    if (f != null && !f.isDone && !f.isCancelled && holder.iv.tag == key) {
-                        inFlight.remove(key)
-                        val pNow = holder.bindingAdapterPosition
-                        if (pNow != RecyclerView.NO_POSITION && pNow in 0 until itemCount) {
-                            runCatching { notifyItemChanged(pNow, "retry") }
-                        }
-                    }
-                }, 1000L)
-                return
-            }
+        registerWaiter(key, holder.iv)
+        if (pending) {
+            if (!showCached(holder.iv, key)) checkAgainLater(holder, key)
+            return
         }
 
-        val context = holder.itemView.context
-        val density = holder.iv.resources.displayMetrics.density
-        val targetW = (112f * density).toInt().coerceAtLeast(1)
-
-        inFlight[key] = CompletableFuture.completedFuture(Unit)
-
-        val task = KeyedFutureTask(key) {
-            try {
-                val entry = getOrCreateRenderer(context, filePath)
-
-                var produced: Bitmap?
-                entry.lock.lock()
-                try {
-                    var page: PdfRenderer.Page? = null
-                    try {
-                        page = entry.renderer.openPage(item.pageIndex)
-                        val pageW = page.width.toFloat()
-                        val pageH = page.height.toFloat()
-                        val targetH = max(1, (targetW * (pageH / pageW)).toInt())
-
-                        val b = createBitmap(targetW, targetH, Bitmap.Config.ARGB_8888)
-                        Canvas(b).apply { drawColor(Color.WHITE) }
-                        page.render(b, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-                        produced = b
-                    } finally {
-                        runCatching { page?.close() }
-                    }
-                } finally {
-                    entry.lock.unlock()
-                }
-
-                produced.let { bmp ->
-                    cache.put(key, bmp)
-                    dispatchToWaiters(key, bmp)
-
-                    holder.iv.post {
-                        val posNow = holder.bindingAdapterPosition
-                        if (posNow != RecyclerView.NO_POSITION &&
-                            posNow in items.indices &&
-                            items[posNow] === item &&
-                            holder.iv.tag == key &&
-                            !bmp.isRecycled
-                        ) {
-                            holder.iv.safeSetBitmap(bmp)
-                        }
-                    }
-                }
-            } catch (t: Throwable) {
-                Log.e("ThumbnailAdapter", "Bind render (112dp) error: ${t.message}")
-            } finally {
-                inFlight.remove(key)
-                notifyThumbnailFinished(key)
-            }
-        }
-        bindExecutor.execute(task)
-        inFlight[key] = task
+        request(key, filePath, item.pageIndex, holder.iv.resources.displayMetrics.density)
     }
 
     override fun onViewRecycled(holder: ViewHolder) {
@@ -406,18 +299,10 @@ class ThumbnailAdapter(
     fun resetForNewDocument(newDocKey: String) {
         prefetchPaused = true
 
-        runCatching { inFlight.values.forEach { f -> runCatching { f.cancel(true) } } }
-        inFlight.clear()
-
-        runCatching { bindExecutor.queue.clear() }
-        runCatching { prefetchExecutor.queue.clear() }
+        scheduler.closeDocuments()
 
         waiters.clear()
         cache.evictAll()
-
-        val toClose = renderers.values.toList()
-        renderers.clear()
-        toClose.forEach(::closeRendererAsync)
 
         docKey = newDocKey
         prefetchPaused = false
@@ -425,25 +310,7 @@ class ThumbnailAdapter(
 
     fun close() {
         prefetchPaused = true
-        runCatching { inFlight.values.forEach { f -> runCatching { f.cancel(true) } } }
-        inFlight.clear()
-
-        runCatching { bindExecutor.queue.clear() }
-        runCatching { prefetchExecutor.queue.clear() }
-
-        renderers.values.forEach { entry ->
-            val locked = try { entry.lock.tryLock(500, TimeUnit.MILLISECONDS) } catch (_: Exception) { false }
-            if (locked) {
-                try { runCatching { entry.renderer.close() } } finally { runCatching { entry.lock.unlock() } }
-            } else {
-                runCatching { entry.renderer.close() }
-            }
-        }
-        renderers.clear()
-
-        bindExecutor.shutdownNow()
-        prefetchExecutor.shutdownNow()
-        closeExecutor.shutdown()
+        scheduler.shutdown()
     }
 
     fun clearAllSelections() {
@@ -496,128 +363,21 @@ class ThumbnailAdapter(
             allowedKeys += "$docKey|${it.pageIndex}"
         }
 
-        try {
-            (bindExecutor.queue as? LinkedBlockingDeque<Runnable>)?.let { dq ->
-                val it = dq.iterator()
-                while (it.hasNext()) {
-                    val r = it.next()
-                    val keyed = r as? KeyedFutureTask
-                    if (keyed != null && keyed.key !in allowedKeys) {
-                        keyed.cancel(true)
-                        it.remove()
-                    }
-                }
-            }
-            (prefetchExecutor.queue as? LinkedBlockingDeque<Runnable>)?.let { dq ->
-                val it = dq.iterator()
-                while (it.hasNext()) {
-                    val r = it.next()
-                    val keyed = r as? KeyedFutureTask
-                    if (keyed != null && keyed.key !in allowedKeys) {
-                        keyed.cancel(true)
-                        it.remove()
-                    }
-                }
-            }
-            val itIn = inFlight.entries.iterator()
-            while (itIn.hasNext()) {
-                val e = itIn.next()
-                if (e.key !in allowedKeys) {
-                    e.value.cancel(true)
-                    itIn.remove()
-                }
-            }
-        } catch (_: Exception) {}
+        scheduler.retainOnly(allowedKeys)
+        scheduler.focus((start..end).mapNotNull { i -> items.getOrNull(i)?.let { "$docKey|${it.pageIndex}" } })
 
-        val toSchedule = mutableListOf<Pair<String, PrefetchInfo>>()
+        val density = context.resources.displayMetrics.density
         for (i in start..end) {
+            if (prefetchPaused) break
             val it = items.getOrNull(i) ?: continue
             val fp = it.filePath ?: continue
             val key = "$docKey|${it.pageIndex}"
+            if (scheduler.isPending(key) || scheduler.hasFailed(key)) continue
             val inCache = cache.get(key)?.takeIf { b -> !b.isRecycled } != null
-            if (inCache || inFlight.containsKey(key)) continue
-            toSchedule += key to PrefetchInfo(filePath = fp, pageIndex = it.pageIndex)
-        }
-
-        val density = context.resources.displayMetrics.density
-        val targetWpx = (112f * density).toInt().coerceAtLeast(1)
-        val targetHpx = (158f * density).toInt().coerceAtLeast(1)
-
-        val remainingCap = (prefetchExecutor.queue as? LinkedBlockingDeque<Runnable>)
-            ?.remainingCapacity()?.coerceAtLeast(0)
-            ?: prefetchExecutor.queue.remainingCapacity().coerceAtLeast(0)
-        val budget = min(remainingCap, toSchedule.size)
-
-        for ((key, info) in toSchedule.take(budget)) {
-            if (prefetchPaused) break
-
-            inFlight[key] = CompletableFuture.completedFuture(Unit)
-
-            try {
-                val fut = KeyedFutureTask(key, Runnable {
-                    prefetchLimiter.acquire()
-                    try {
-                        if (prefetchPaused || Thread.currentThread().isInterrupted) return@Runnable
-
-                        val entry = getOrCreateRenderer(context, info.filePath)
-
-                        var producedBmp: Bitmap?
-                        entry.lock.lock()
-                        try {
-                            var pg: PdfRenderer.Page? = null
-                            try {
-                                pg = entry.renderer.openPage(info.pageIndex)
-
-                                val pageW = pg.width.toFloat()
-                                val pageH = pg.height.toFloat()
-                                val aspect = pageH / pageW
-
-                                var bmpW = targetWpx
-                                var bmpH = (bmpW * aspect).toInt()
-
-                                if (bmpH > targetHpx) {
-                                    bmpH = targetHpx
-                                    bmpW = (bmpH / aspect).toInt()
-                                }
-
-                                val b = createBitmap(
-                                    bmpW.coerceAtLeast(1),
-                                    bmpH.coerceAtLeast(1),
-                                    Bitmap.Config.ARGB_8888
-                                )
-                                Canvas(b).apply { drawColor(Color.WHITE) }
-                                pg.render(b, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-                                producedBmp = b
-                            } finally {
-                                try { pg?.close() } catch (_: Exception) {}
-                            }
-                        } finally {
-                            entry.lock.unlock()
-                        }
-
-                        producedBmp.let { bmp ->
-                            cache.put(key, bmp)
-                            dispatchToWaiters(key, bmp)
-                        }
-                    } catch (_: InterruptedException) {
-                    } catch (e: RejectedExecutionException) {
-                        Log.w("ThumbnailAdapter", "Prefetch rejected: ${e.message}")
-                    } catch (e: Exception) {
-                        Log.e("ThumbnailAdapter", "Error while preloading: ${e.message}")
-                    } finally {
-                        prefetchLimiter.release()
-                        inFlight.remove(key)
-                        notifyThumbnailFinished(key)
-                    }
-                })
-                prefetchExecutor.execute(fut)
-                inFlight[key] = fut
-            } catch (_: RejectedExecutionException) {
-            }
+            if (inCache) continue
+            request(key, fp, it.pageIndex, density)
         }
     }
-
-    private data class PrefetchInfo(val filePath: String, val pageIndex: Int)
 
     private fun registerWaiter(key: String, iv: ImageView) {
         waiters.compute(key) { _, list ->

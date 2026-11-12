@@ -12,8 +12,11 @@ itextpdf = "9.8.0"
 pdfviewer = "1.0.0-beta01"
 desugar = "2.1.5"
 window = "1.5.1"
-mupdf = "1.28.5"
+mupdf = "1.28.6-reepdf"
 coroutines = "1.11.0"
+kotlin = "2.4.21"
+composeMultiplatform = "1.12.2"
+lifecycle = "2.11.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -33,10 +36,18 @@ androidx-pdf-viewer = { group = "androidx.pdf", name = "pdf-viewer-fragment", ve
 androidx-pdf-ink = { group = "androidx.pdf", name = "pdf-ink", version.ref = "pdfviewer" }
 desugar-jdk-libs-nio = { module = "com.android.tools:desugar_jdk_libs_nio", version.ref = "desugar" }
 androidx-window = { module = "androidx.window:window", version.ref = "window" }
-mupdf-fitz = { group = "com.artifex.mupdf", name = "fitz", version.ref = "mupdf" }
+mupdf-fitz = { group = "hu.reelee81.reepdf", name = "mupdf-fitz", version.ref = "mupdf" }
 kotlinx-coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "coroutines" }
 kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutines" }
+compose-runtime = { group = "org.jetbrains.compose.runtime", name = "runtime", version.ref = "composeMultiplatform" }
+compose-foundation = { group = "org.jetbrains.compose.foundation", name = "foundation", version.ref = "composeMultiplatform" }
+compose-ui = { group = "org.jetbrains.compose.ui", name = "ui", version.ref = "composeMultiplatform" }
+compose-components-resources = { group = "org.jetbrains.compose.components", name = "components-resources", version.ref = "composeMultiplatform" }
+androidx-lifecycle-runtime = { group = "androidx.lifecycle", name = "lifecycle-runtime", version.ref = "lifecycle" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 android-library = { id = "com.android.library", version.ref = "agp" }
+android-kotlin-multiplatform-library = { id = "com.android.kotlin.multiplatform.library", version.ref = "agp" }
+kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+compose-multiplatform = { id = "org.jetbrains.compose", version.ref = "composeMultiplatform" }

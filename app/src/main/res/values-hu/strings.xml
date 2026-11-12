@@ -74,7 +74,6 @@
     <string name="pdf_wait_reading_pages">Oldal(ak) olvasása…</string>
     <string name="pdf_wait_editing_pages">Oldal(ak) szerkesztése…</string>
     <string name="pdf_wait_reading_edited_pages">Szerkesztett oldal(ak) olvasása…</string>
-    <string name="pdf_wait_reading_unedited_pages">Nem szerkesztett oldalak olvasása…</string>
     <string name="pdf_wait_erasing_visible">Látható szerkesztés(ek) törlése…</string>
     <string name="pdf_wait_erasing_all">Összes szerkesztés törlése…</string>
     <string name="pdf_wait_searching_edits">Szerkesztések keresése…</string>
@@ -108,6 +107,7 @@
     <string name="reorder_failed_with_msg">Átrendezés sikertelen: %1$s</string>
     <string name="failed_to_delete_page_group_with_msg">Oldalcsoport törlése sikertelen: %1$s</string>
     <string name="temporary_pdf_not_found">Átmeneti PDF nem található</string>
+    <string name="pdf_clipboard_label">Tartalom másolva PDF-ből</string>
     <string name="no_source_pages">Nincsenek forrásoldalak</string>
     <string name="import_warnings_title">Hiányos megnyitás</string>
     <plurals name="import_warning_skipped_pages">
@@ -116,9 +116,7 @@
     </plurals>
     <string name="import_warning_missing_content">%1$s: egyes űrlapmezők vagy megjegyzések hiányoznak.</string>
     <string name="import_warning_earlier_revision">%1$s: csak egy korábban mentett változat nyílt meg, a későbbi módosítások hiányoznak.</string>
-    <string name="cannot_open_uri">Nem nyitható meg: %1$s</string>
     <string name="page_size_cm_by_cm">%1$.2fcm x %2$.2fcm</string>
-    <string name="pdf_viewer_requires">A beépített PDF-megjelenítőhöz Android 9 vagy újabb szükséges.</string>
     <string name="file_name_optional">A fájlnév megadása nem kötelező</string>
     <string name="enter_value_0_209">Adj meg 0 és 209 közötti értéket (mm)</string>
     <string name="enter_value_0_296">Adj meg 0 és 296 közötti értéket (mm)</string>
@@ -156,7 +154,6 @@
     <string name="crop_title">Szabad vágás</string>
     <string name="crop_all_pages">Alkalmazás minden oldalon</string>
     <string name="crop_full_page">VISSZAÁLLÍTÁS</string>
-    <string name="search_pdf">KERESÉS</string>
     <string name="edit_pdf">Szerkesztés</string>
     <string name="save_pdf_edits">MENTÉS</string>
     <string name="pdf_editor_requires_s_ext_18">A PDF-szerkesztőhöz Android 12 (S) Extension 18 vagy újabb szükséges.</string>

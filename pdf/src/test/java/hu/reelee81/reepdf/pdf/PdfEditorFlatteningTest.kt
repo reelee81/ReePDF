@@ -48,6 +48,17 @@ class PdfEditorFlatteningTest {
     }
 
     @Test
+    fun theFlattenedFileIsAWorkFileEvenFromAPackedEdit() {
+        val annotated = annotate(buildNup(makeSource()), withHighlight = true)
+        TestPdfs.assertPacked(annotated)
+        val flattened = temporary.newFile()
+
+        PdfEditorFlattening.flatten(annotated, flattened, { NoProgress }) {}
+
+        TestPdfs.assertWorkFile(flattened)
+    }
+
+    @Test
     fun editsDrawnOverTheLayoutAreProjectedFromTheFlattenedFile() {
         val source = makeSource()
         val flattened = temporary.newFile()
