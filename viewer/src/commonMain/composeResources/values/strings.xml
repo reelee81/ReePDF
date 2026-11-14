@@ -20,4 +20,13 @@
     <string name="selection_too_large">The selection is too large to copy.</string>
     <string name="page_description_text">Page %1$d: %2$s</string>
     <string name="page_description">Page %1$d</string>
+    <string name="signature_position">Signature position</string>
+    <string name="viewer_save">Save</string>
+    <string name="signature_position_question">Save the changed signature position?</string>
+    <string name="crop_title">Free crop</string>
+    <string name="crop_all_pages">Apply to all pages</string>
+    <string name="crop_reset">Reset</string>
+    <string name="crop_question">Save the changed crop?</string>
+    <string name="discard_text">DISCARD</string>
+    <string name="save_text">SAVE</string>
 </resources>

@@ -23,14 +23,17 @@ object SignatureGeometry {
 
     fun pageHeightMm(isLandscape: Boolean): Float = if (isLandscape) 210f else 297f
 
-    fun maxPositionMm(pxW: Int, pxH: Int, refPx: Float, isLandscape: Boolean): Pair<Float, Float> {
+    fun signatureSizeMm(pxW: Int, pxH: Int, refPx: Float, isLandscape: Boolean): Pair<Float, Float> {
         val a4Wmm = pageWidthMm(isLandscape)
         val a4Hmm = pageHeightMm(isLandscape)
         val refAxisMm = if (isLandscape) a4Hmm else a4Wmm
         val mmPerSigPx = refAxisMm / refPx
-        val imgWmm = pxW * mmPerSigPx
-        val imgHmm = pxH * mmPerSigPx
-        return (a4Wmm - imgWmm) to (a4Hmm - imgHmm)
+        return pxW * mmPerSigPx to pxH * mmPerSigPx
+    }
+
+    fun maxPositionMm(pxW: Int, pxH: Int, refPx: Float, isLandscape: Boolean): Pair<Float, Float> {
+        val (imgWmm, imgHmm) = signatureSizeMm(pxW, pxH, refPx, isLandscape)
+        return (pageWidthMm(isLandscape) - imgWmm) to (pageHeightMm(isLandscape) - imgHmm)
     }
 
     fun pageRaster(pageWidth: Int, pageHeight: Int, refPx: Float, isLandscape: Boolean): PageRaster {

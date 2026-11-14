@@ -7,6 +7,8 @@ import com.artifex.mupdf.fitz.Font
 import com.artifex.mupdf.fitz.Image
 import com.artifex.mupdf.fitz.Matrix
 import com.artifex.mupdf.fitz.PDFDocument
+import com.artifex.mupdf.fitz.PDFPage
+import com.artifex.mupdf.fitz.Page
 import com.artifex.mupdf.fitz.Point
 import com.artifex.mupdf.fitz.Quad
 import com.artifex.mupdf.fitz.Rect
@@ -17,12 +19,14 @@ import java.io.IOException
 class MuPdfViewerEngine private constructor(
     private val document: Document,
     override val pageCount: Int,
-    private val emptiesStoreOnClose: Boolean
+    private val emptiesStoreOnClose: Boolean,
+    private val views: Map<Int, PdfPageView>
 ) : PdfViewerEngine<PdfRasterTarget> {
     private val pdf = document as? PDFDocument
     private val texts = LinkedHashMap<Int, PageText>(TEXT_PAGES + 1, 0.75f, true)
 
     override fun pageSize(pageIndex: Int): PdfViewerEngine.PageSize {
+        views[pageIndex]?.let { return PdfViewerEngine.PageSize(it.width, it.height) }
         val page = document.loadPage(pageIndex)
         try {
             val bounds = page.bounds
@@ -42,8 +46,7 @@ class MuPdfViewerEngine private constructor(
     ) {
         val page = document.loadPage(pageIndex)
         try {
-            val bounds = page.bounds
-            val ctm = Matrix(zoom, 0f, 0f, zoom, -bounds.x0 * zoom, -bounds.y0 * zoom)
+            val ctm = views[pageIndex]?.let { viewMatrix(page, it, zoom) } ?: boundsMatrix(page, zoom)
             val device = target.whiteDevice(left, top)
             try {
                 val cookie = Cookie()
@@ -171,6 +174,17 @@ class MuPdfViewerEngine private constructor(
         Context.releaseFreeMemory()
     }
 
+    private fun boundsMatrix(page: Page, zoom: Float): Matrix {
+        val bounds = page.bounds
+        return Matrix(zoom, 0f, 0f, zoom, -bounds.x0 * zoom, -bounds.y0 * zoom)
+    }
+
+    private fun viewMatrix(page: Page, view: PdfPageView, zoom: Float): Matrix {
+        val shown = view.matrix(zoom)
+        val toUser = (page as? PDFPage)?.let { Matrix.Inverted(it.transform) } ?: Matrix.Identity()
+        return toUser.concat(Matrix(shown[0], shown[1], shown[2], shown[3], shown[4], shown[5]))
+    }
+
     private fun pageText(pageIndex: Int): PageText {
         texts[pageIndex]?.let { return it }
         val page = document.loadPage(pageIndex)
@@ -247,12 +261,17 @@ class MuPdfViewerEngine private constructor(
     companion object {
         private const val TEXT_PAGES = 2
 
-        fun open(path: String, pageTreeCache: Boolean = true, emptiesStoreOnClose: Boolean = true): MuPdfViewerEngine {
+        fun open(
+            path: String,
+            pageTreeCache: Boolean = true,
+            emptiesStoreOnClose: Boolean = true,
+            views: Map<Int, PdfPageView> = emptyMap()
+        ): MuPdfViewerEngine {
             val document = Document.openDocument(path)
             try {
                 if (document.needsPassword()) throw IOException("The document needs a password")
                 if (!pageTreeCache) (document as? PDFDocument)?.setPageTreeCache(false)
-                return MuPdfViewerEngine(document, document.countPages(), emptiesStoreOnClose)
+                return MuPdfViewerEngine(document, document.countPages(), emptiesStoreOnClose, views)
             } catch (e: Throwable) {
                 document.destroy()
                 releaseMemory()

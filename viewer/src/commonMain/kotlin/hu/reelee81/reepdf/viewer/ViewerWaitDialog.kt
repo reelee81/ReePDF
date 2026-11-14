@@ -83,7 +83,7 @@ internal fun ViewerWaitDialog(
 }
 
 @Composable
-private fun ViewerTextButton(
+internal fun ViewerTextButton(
     label: String,
     colors: ReeColors,
     fontFamily: FontFamily,

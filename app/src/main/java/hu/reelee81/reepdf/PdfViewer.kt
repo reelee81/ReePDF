@@ -16,12 +16,9 @@ import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.runtime.snapshotFlow
-import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
-import androidx.core.graphics.drawable.toDrawable
 import androidx.core.net.toUri
 import androidx.core.view.ViewCompat
-import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
@@ -279,12 +276,7 @@ class PdfViewer : AppCompatActivity(), ViewerActions {
     }
 
     private fun applySystemBars() {
-        val night = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
-        val background = ContextCompat.getColor(this, R.color.pdf_viewer_sb_bg_color)
-        WindowCompat.getInsetsController(window, window.decorView).isAppearanceLightStatusBars = !night
-        window.setBackgroundDrawable(background.toDrawable())
-        SystemBarsCompat.applyStatusBarColor(this, background)
-        SystemBarsCompat.applyNavBarColor(this, background)
+        SystemBarsCompat.applyViewerBars(this)
     }
 
     private fun supportsPdfEditing(): Boolean =

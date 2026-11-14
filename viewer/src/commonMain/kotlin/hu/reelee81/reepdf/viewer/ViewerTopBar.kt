@@ -9,11 +9,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
@@ -26,20 +29,24 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import hu.reelee81.reepdf.viewer.resources.Res
-import hu.reelee81.reepdf.viewer.resources.edit_pdf
 import hu.reelee81.reepdf.viewer.resources.viewer_back
-import hu.reelee81.reepdf.viewer.resources.viewer_search
 import org.jetbrains.compose.resources.stringResource
+
+internal class ViewerBarAction(
+    val icon: ImageVector,
+    val label: String,
+    val tint: Color? = null,
+    val checked: Boolean? = null,
+    val onClick: () -> Unit
+)
 
 @Composable
 internal fun ViewerTopBar(
     title: String,
-    canEdit: Boolean,
+    actions: List<ViewerBarAction>,
     colors: ReeColors,
     fontFamily: FontFamily,
     onBack: () -> Unit,
-    onSearch: () -> Unit,
-    onEdit: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val density = LocalDensity.current
@@ -71,26 +78,22 @@ internal fun ViewerTopBar(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
-        val searchLabel = stringResource(Res.string.viewer_search)
-        Box(
-            Modifier.padding(end = if (canEdit) SEARCH_END_MARGIN else EDIT_END_MARGIN)
-                .size(EDIT_SIZE)
-                .clickable(interactionSource = null, indication = null, role = Role.Button, onClick = onSearch)
-                .semantics { contentDescription = searchLabel },
-            contentAlignment = Alignment.Center
-        ) {
-            Image(rememberVectorPainter(ViewerIcons.search), null, Modifier.size(ICON_SIZE), colorFilter = iconTint)
-        }
-        if (canEdit) {
-            val editLabel = stringResource(Res.string.edit_pdf)
+        actions.forEachIndexed { index, action ->
+            val checked = action.checked
+            val press = if (checked == null) {
+                Modifier.clickable(interactionSource = null, indication = null, role = Role.Button, onClick = action.onClick)
+            } else {
+                Modifier.toggleable(checked, interactionSource = null, indication = null, role = Role.Switch) { action.onClick() }
+            }
             Box(
-                Modifier.padding(end = EDIT_END_MARGIN)
-                    .size(EDIT_SIZE)
-                    .clickable(interactionSource = null, indication = null, role = Role.Button, onClick = onEdit)
-                    .semantics { contentDescription = editLabel },
+                Modifier.padding(end = if (index == actions.lastIndex) LAST_ACTION_END_MARGIN else ACTION_END_MARGIN)
+                    .size(ACTION_SIZE)
+                    .then(press)
+                    .semantics { contentDescription = action.label },
                 contentAlignment = Alignment.Center
             ) {
-                Image(rememberVectorPainter(ViewerIcons.edit), null, Modifier.size(ICON_SIZE), colorFilter = iconTint)
+                val tint = action.tint?.let(ColorFilter::tint) ?: iconTint
+                Image(rememberVectorPainter(action.icon), null, Modifier.size(ICON_SIZE), colorFilter = tint)
             }
         }
     }
@@ -103,6 +106,6 @@ private val TITLE_MARGIN = 4.dp
 private val TITLE_SIZE = 20.dp
 private val TITLE_LINE_HEIGHT = 24.dp
 private val TITLE_LETTER_SPACING = 0.009375.em
-private val EDIT_SIZE = 32.dp
-private val EDIT_END_MARGIN = 16.dp
-private val SEARCH_END_MARGIN = 4.dp
+private val ACTION_SIZE = 32.dp
+private val LAST_ACTION_END_MARGIN = 16.dp
+private val ACTION_END_MARGIN = 4.dp

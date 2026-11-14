@@ -84,6 +84,26 @@ class PdfSourcePartsTest {
     }
 
     @Test
+    fun everyWrittenPartKeepsItsObjectsOutOfObjectStreams() {
+        val parts = imported(listOf(pdf("a.pdf", 101..105)))
+        val replaced = parts.write(
+            SourcePartPlan.replaceGroups(parts.layout, perGroup = 2, groups = setOf(0)),
+            2,
+            NoProgress,
+            PdfSourceParts.Inputs(replacements = mapOf(0 to pdf("signed.pdf", 900..900)))
+        )
+        val withEmpty = replaced.write(
+            SourcePartPlan.append(replaced.layout, listOf(EmptyPage), partPages = PART_PAGES),
+            2,
+            NoProgress,
+            PdfSourceParts.Inputs(emptyPage = PageSize(777f, 500f))
+        )
+
+        assertEquals(listOf(900, 103, 104, 105, 777), partWidths(withEmpty).flatten())
+        for (part in 0 until withEmpty.layout.parts) TestPdfs.assertWorkFile(withEmpty.file(part))
+    }
+
+    @Test
     fun aReplacedGroupAndAnEmptyPageLandWhereThePlanSays() {
         val parts = imported(listOf(pdf("a.pdf", 101..108)))
         val signed = pdf("signed.pdf", 900..900)

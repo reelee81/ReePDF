@@ -37,6 +37,26 @@ class SignatureGeometryTest {
     }
 
     @Test
+    fun theSignatureSizeFollowsTheReferenceAxisOfThePage() {
+        val (portraitW, portraitH) = SignatureGeometry.signatureSizeMm(595, 297, 1190f, isLandscape = false)
+        assertEquals(105f, portraitW, tolerance)
+        assertEquals(297 * 210f / 1190f, portraitH, tolerance)
+        val (landscapeW, landscapeH) = SignatureGeometry.signatureSizeMm(2480, 1240, 2480f, isLandscape = true)
+        assertEquals(210f, landscapeW, tolerance)
+        assertEquals(105f, landscapeH, tolerance)
+    }
+
+    @Test
+    fun theLimitIsThePageMinusTheSignatureSize() {
+        for (landscape in listOf(false, true)) {
+            val (width, height) = SignatureGeometry.signatureSizeMm(777, 333, 2480f, landscape)
+            val (maxX, maxY) = SignatureGeometry.maxPositionMm(777, 333, 2480f, landscape)
+            assertEquals(SignatureGeometry.pageWidthMm(landscape) - width, maxX, 0f)
+            assertEquals(SignatureGeometry.pageHeightMm(landscape) - height, maxY, 0f)
+        }
+    }
+
+    @Test
     fun aSignatureAsLargeAsThePageLeavesNoRoom() {
         val (maxX, maxY) = SignatureGeometry.maxPositionMm(1190, 1683, 1190f, isLandscape = false)
         assertEquals(0f, maxX, tolerance)

@@ -4,7 +4,6 @@ import com.itextpdf.kernel.geom.PageSize
 import com.itextpdf.kernel.pdf.PdfDocument
 import com.itextpdf.kernel.pdf.PdfPage
 import com.itextpdf.kernel.pdf.PdfReader
-import com.itextpdf.kernel.pdf.PdfWriter
 import hu.reelee81.reepdf.core.SourcePartLayout
 import hu.reelee81.reepdf.core.SourcePartPlan
 import hu.reelee81.reepdf.core.WorkFiles
@@ -161,7 +160,7 @@ class PdfSourceParts private constructor(val dir: File, private val files: List<
         onCopied: ((first: Int, last: Int, dest: PdfDocument) -> Unit)?
     ) {
         if (out.exists()) out.delete()
-        PdfDocument(PdfWriter(out.absolutePath, PdfIo.writerProperties())).use { dest ->
+        PdfDocument(PdfIo.workFileWriter(out.absolutePath)).use { dest ->
             dest.setFlushUnusedObjects(true)
             for (piece in pieces) {
                 when (piece) {

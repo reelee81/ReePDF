@@ -15,6 +15,9 @@ class ViewerColors private constructor(night: Boolean) {
     val searchCurrentHit = p.teal100
     val selection = p.cropGridColor
     val selectionHandle = p.gummy150
+    val cropFrame = p.cropFrameColor
+    val cropShade = p.cropShadeColor
+    val cropGrid = p.cropGridColor
 
     companion object {
         val light = ViewerColors(night = false)

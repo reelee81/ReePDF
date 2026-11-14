@@ -67,7 +67,15 @@ class ViewerStringsTest {
             "selection_select_all",
             "selection_too_large",
             "page_description_text",
-            "page_description"
+            "page_description",
+            "signature_position",
+            "viewer_save",
+            "signature_position_question",
+            "save_text",
+            "crop_title",
+            "crop_all_pages",
+            "crop_reset",
+            "crop_question"
         )
     }
 }

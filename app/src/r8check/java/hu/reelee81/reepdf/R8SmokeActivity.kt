@@ -40,6 +40,7 @@ import hu.reelee81.reepdf.pdf.PdfImportOperation
 import hu.reelee81.reepdf.pdf.PdfIo
 import hu.reelee81.reepdf.pdf.PdfLayoutChangeOperation
 import hu.reelee81.reepdf.pdf.PdfOutputOperation
+import hu.reelee81.reepdf.pdf.PdfPageView
 import hu.reelee81.reepdf.pdf.PdfRasterTarget
 import hu.reelee81.reepdf.pdf.PdfRenderAbort
 import hu.reelee81.reepdf.pdf.PdfRenderResult
@@ -52,6 +53,10 @@ import hu.reelee81.reepdf.pdf.PdfThumbnailScheduler
 import hu.reelee81.reepdf.pdf.PdfViewerDocument
 import hu.reelee81.reepdf.pdf.PdfViewerPageSizes
 import hu.reelee81.reepdf.pdf.SignedPageRenderer
+import hu.reelee81.reepdf.viewer.ViewerPageLayout
+import hu.reelee81.reepdf.viewer.ViewerRender
+import hu.reelee81.reepdf.viewer.ViewerTile
+import hu.reelee81.reepdf.viewer.ViewerTilesRender
 import hu.reelee81.reepdf.viewer.ViewerViewport
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -143,6 +148,8 @@ class R8SmokeActivity : Activity() {
                         import(file)
                         viewer()
                         thumbnails()
+                        placer()
+                        cropper()
                     }
                 }
         }
@@ -433,6 +440,60 @@ class R8SmokeActivity : Activity() {
             }
         } finally {
             scheduler.shutdown()
+        }
+    }
+
+    private fun placer() {
+        val expected = nupPages()
+        runBlocking {
+            for (index in if (expected > 1) listOf(0, expected - 1) else listOf(0)) {
+                val page = AndroidSinglePage.open(nup.absolutePath, index)
+                try {
+                    fitAndZoom(page, "placer page ${index + 1}", 0.0)
+                } finally {
+                    page.close()
+                    OpenViewerDocuments.awaitClosing()
+                }
+            }
+        }
+    }
+
+    private fun cropper() {
+        val parts = PdfSourceParts.open(sourceDir)
+        val total = parts.total
+        check(total > 0) { "crop: no source pages" }
+        val gutter = (CROP_GUTTER_DP * resources.displayMetrics.density).toDouble()
+        val pages = if (total > 1) listOf(0 to 0, total - 1 to 1) else listOf(0 to 1)
+        runBlocking {
+            for ((sourcePage, turns) in pages) {
+                val location = parts.locate(sourcePage)
+                val view = PdfPageView.read(location.file, location.page, turns)
+                val page = AndroidSinglePage.open(location.file.absolutePath, location.page, view)
+                try {
+                    fitAndZoom(page, "crop page ${sourcePage + 1}, $turns quarter turns", gutter)
+                } finally {
+                    page.close()
+                    OpenViewerDocuments.awaitClosing()
+                }
+            }
+        }
+    }
+
+    private suspend fun fitAndZoom(page: AndroidSinglePage, label: String, gutter: Double) {
+        val sizes = page.pageSizes()
+        val width = resources.displayMetrics.widthPixels
+        val fit = ViewerViewport.fitWidthZoom(width, ViewerPageLayout(sizes.widths, sizes.heights, 0.0), gutter)
+        val fitted = page.render(0, fit, 0, 0, pixels(sizes.widths[0] * fit), pixels(sizes.heights[0] * fit))
+        check(fitted is ViewerRender.Done) { "$label: $fitted" }
+        page.release(fitted.image)
+        val zoom = fit * ViewerViewport.DOUBLE_TAP_FIT_FACTOR
+        val left = ((pixels(sizes.widths[0] * zoom) - 2 * ZOOMED_TILE_PX) / 2).coerceAtLeast(0)
+        val top = ((pixels(sizes.heights[0] * zoom) - ZOOMED_TILE_PX) / 2).coerceAtLeast(0)
+        val first = ViewerTile(0, zoom, left, top, ZOOMED_TILE_PX, ZOOMED_TILE_PX)
+        for (tiles in listOf(listOf(first), listOf(first, first.copy(left = left + ZOOMED_TILE_PX)))) {
+            val drawn = page.renderTiles(tiles)
+            check(drawn is ViewerTilesRender.Done && drawn.images.size == tiles.size) { "$label zoomed: $drawn" }
+            drawn.images.forEach(page::release)
         }
     }
 
@@ -815,6 +876,7 @@ class R8SmokeActivity : Activity() {
         const val CANCEL_AFTER_MS = 3_000L
         const val SMALL_SIDE_PX = 100f
         const val ZOOMED_TILE_PX = 512
+        const val CROP_GUTTER_DP = 24f
         const val HEAVY_ZOOM = 2f
         const val HEAVY_FILLS = 8_000
         const val CLOSE_AFTER_MS = 50L

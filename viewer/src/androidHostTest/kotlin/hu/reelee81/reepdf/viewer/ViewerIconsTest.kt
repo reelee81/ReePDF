@@ -25,6 +25,21 @@ class ViewerIconsTest {
     fun nextMatchesItsDesign() = assertMatchesDesign("ic_next_24", ViewerIcons.NEXT_PATH, ViewerIcons.STEP_VIEWPORT)
 
     @Test
+    fun saveMatchesItsDesign() = assertMatchesDesign("ic_save_24", ViewerIcons.SAVE_PATH, ViewerIcons.LARGE_VIEWPORT)
+
+    @Test
+    fun allPagesOffMatchesItsDesign() =
+        assertMatchesDesign("ic_use_all_pages_off_24", ViewerIcons.ALL_PAGES_OFF_PATH, ViewerIcons.LARGE_VIEWPORT)
+
+    @Test
+    fun allPagesOnMatchesItsDesign() =
+        assertMatchesDesign("ic_use_all_pages_on_24", ViewerIcons.ALL_PAGES_ON_PATH, ViewerIcons.LARGE_VIEWPORT)
+
+    @Test
+    fun restoreCropMatchesItsDesign() =
+        assertMatchesDesign("ic_restore_cut_24", ViewerIcons.RESTORE_CROP_PATH, ViewerIcons.LARGE_VIEWPORT)
+
+    @Test
     fun everyPathParses() {
         val paths = listOf(
             ViewerIcons.ARROW_BACK_PATH,
@@ -32,7 +47,11 @@ class ViewerIconsTest {
             ViewerIcons.FAST_SCROLL_PATH,
             ViewerIcons.SEARCH_PATH,
             ViewerIcons.PREVIOUS_PATH,
-            ViewerIcons.NEXT_PATH
+            ViewerIcons.NEXT_PATH,
+            ViewerIcons.SAVE_PATH,
+            ViewerIcons.ALL_PAGES_OFF_PATH,
+            ViewerIcons.ALL_PAGES_ON_PATH,
+            ViewerIcons.RESTORE_CROP_PATH
         )
         for (path in paths) {
             assertTrue(addPathNodes(path).isNotEmpty())

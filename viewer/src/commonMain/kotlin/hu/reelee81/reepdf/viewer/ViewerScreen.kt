@@ -25,9 +25,11 @@ import androidx.compose.ui.unit.dp
 import hu.reelee81.reepdf.viewer.resources.Res
 import hu.reelee81.reepdf.viewer.resources.back_to_main_screen
 import hu.reelee81.reepdf.viewer.resources.cancel_text
+import hu.reelee81.reepdf.viewer.resources.edit_pdf
 import hu.reelee81.reepdf.viewer.resources.pdf_wait_reading_edited_pages
 import hu.reelee81.reepdf.viewer.resources.pdf_wait_reading_pages
 import hu.reelee81.reepdf.viewer.resources.selection_too_large
+import hu.reelee81.reepdf.viewer.resources.viewer_search
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 
@@ -54,14 +56,18 @@ fun ViewerScreen(state: ViewerState, actions: ViewerActions, fontFamily: FontFam
                     onBack = actions::onBack
                 )
             } else {
+                val search = ViewerBarAction(ViewerIcons.search, stringResource(Res.string.viewer_search), onClick = state::startSearch)
+                val bar = if (state.canEdit) {
+                    listOf(search, ViewerBarAction(ViewerIcons.edit, stringResource(Res.string.edit_pdf)) { if (!state.isWaiting) actions.onEdit() })
+                } else {
+                    listOf(search)
+                }
                 ViewerTopBar(
                     title = state.title,
-                    canEdit = state.canEdit,
+                    actions = bar,
                     colors = colors,
                     fontFamily = fontFamily,
-                    onBack = actions::onBack,
-                    onSearch = state::startSearch,
-                    onEdit = { if (!state.isWaiting) actions.onEdit() }
+                    onBack = actions::onBack
                 )
             }
             ViewerPages(

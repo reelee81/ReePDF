@@ -56,6 +56,15 @@ class PdfViewerDocument<T> private constructor(
         }
     }
 
+    suspend fun pageSize(pageIndex: Int): PdfViewerEngine.PageSize? {
+        require(pageIndex in 0 until pageCount) { "Page $pageIndex is outside 0 until $pageCount" }
+        checkOpen()
+        return onDocumentThread(null) {
+            checkOpen()
+            readableSize(pageIndex)
+        }
+    }
+
     suspend fun render(
         pageIndex: Int,
         zoom: Float,

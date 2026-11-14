@@ -5,7 +5,6 @@ class ReeColors private constructor(night: Boolean) {
 
     val aboutLinkColor = ReeColor(if (night) p.gummy150 else p.gummy100)
     val alertdialogBackgroundColor = ReeColor(if (night) p.darkLight025 else p.darkLight100)
-    val alertdialogSignaturePositionBackgroundColor = ReeColor(if (night) p.darkLight025 else p.darkLight090)
     val appControlActivatedBgColor = ReeColor(if (night) p.teal050 else p.teal150)
     val appControlActivatedOtherColor = ReeColor(p.teal100)
     val appControlNormalColor = ReeColor(if (night) p.darkLight100 else p.darkLight000)
@@ -113,7 +112,6 @@ class ReeColors private constructor(night: Boolean) {
     val signPositionBgColor = ReeColor(if (night) p.darkLight025 else p.darkLight090)
     val signatureChooserTitleTextColor = ReeColor(if (night) p.darkLight100 else p.darkLight000)
     val signatureDividerColor = ReeColor(if (night) p.white.copy(alpha = 0.12f) else p.black.copy(alpha = 0.12f))
-    val signaturePositionPdfBg = ReeColor(p.darkLight100)
     val switchMarkColor = ReeColor(
         if (night) p.darkLight038 else p.darkLight065,
         ReeColorState.CHECKED to (if (night) p.teal025 else p.teal100)

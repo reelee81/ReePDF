@@ -901,6 +901,51 @@ class PdfViewerDocumentTest {
     }
 
     @Test
+    fun aSinglePageSizeIsReadWithoutTheOtherPages() = runBlocking {
+        val engine = FakeEngine(pageCount = 30_000)
+        val document = open(engine)
+
+        val size = document.pageSize(14_999)
+        document.shut()
+
+        assertEquals(15_099f, size?.width)
+        assertEquals(15_199f, size?.height)
+        assertEquals(listOf("size 14999", "close"), engine.events)
+    }
+
+    @Test
+    fun anUnreadableSinglePageHasNoSize() = runBlocking {
+        val engine = FakeEngine()
+        engine.sizes = { page ->
+            when (page) {
+                0 -> throw IllegalStateException("broken page")
+                1 -> PdfViewerEngine.PageSize(0f, 200f)
+                else -> PdfViewerEngine.PageSize(Float.NaN, 200f)
+            }
+        }
+        val document = open(engine)
+
+        val sizes = (0 until 3).map { document.pageSize(it) }
+        document.shut()
+
+        assertEquals(listOf(null, null, null), sizes)
+    }
+
+    @Test
+    fun aSinglePageSizeNeedsAPageOfTheDocument() = runBlocking {
+        val engine = FakeEngine(pageCount = 2)
+        val document = open(engine)
+
+        val below = runCatching { document.pageSize(-1) }.exceptionOrNull()
+        val above = runCatching { document.pageSize(2) }.exceptionOrNull()
+        document.shut()
+
+        assertTrue(below is IllegalArgumentException)
+        assertTrue(above is IllegalArgumentException)
+        assertEquals(listOf("close"), engine.events)
+    }
+
+    @Test
     fun searchHitsCountTheirHitsAndRejectStartsThatDoNotMatchTheRectangles() {
         val hits = PdfTextHits(FloatArray(12), intArrayOf(0, 2, 3))
 

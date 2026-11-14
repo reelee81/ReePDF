@@ -2,7 +2,7 @@ package hu.reelee81.reepdf.viewer
 
 import androidx.compose.ui.graphics.ImageBitmap
 
-interface ViewerDocument {
+interface ViewerPageSource {
     val pageCount: Int
 
     suspend fun pageSizes(): ViewerPageSizes
@@ -11,6 +11,14 @@ interface ViewerDocument {
 
     suspend fun renderTiles(tiles: List<ViewerTile>): ViewerTilesRender
 
+    fun release(image: ViewerImage)
+
+    fun trimMemory()
+
+    fun close()
+}
+
+interface ViewerDocument : ViewerPageSource {
     suspend fun search(page: Int, query: String): ViewerTextHits
 
     suspend fun count(page: Int, query: String): Int
@@ -26,12 +34,6 @@ interface ViewerDocument {
     suspend fun copy(page: Int, from: ViewerTextPoint?, to: ViewerTextPoint?): String
 
     suspend fun text(page: Int): String
-
-    fun release(image: ViewerImage)
-
-    fun trimMemory()
-
-    fun close()
 }
 
 class ViewerPageSizes(val widths: FloatArray, val heights: FloatArray)

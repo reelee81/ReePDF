@@ -20,4 +20,13 @@
     <string name="selection_too_large">A kijelölés túl nagy a másoláshoz.</string>
     <string name="page_description_text">%1$d. oldal: %2$s</string>
     <string name="page_description">%1$d. oldal</string>
+    <string name="signature_position">Aláírás pozíciója</string>
+    <string name="viewer_save">Mentés</string>
+    <string name="signature_position_question">Mented az aláírás módosított pozícióját?</string>
+    <string name="crop_title">Szabad vágás</string>
+    <string name="crop_all_pages">Alkalmazás minden oldalon</string>
+    <string name="crop_reset">Visszaállítás</string>
+    <string name="crop_question">Mented a módosított vágást?</string>
+    <string name="discard_text">ELDOBÁS</string>
+    <string name="save_text">MENTÉS</string>
 </resources>

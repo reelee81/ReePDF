@@ -78,6 +78,32 @@ class ProgressMathTest {
     }
 
     @Test
+    fun theScreensOwnMeasurementHidesTheFinishedHundredPercent() {
+        assertEquals(0, ProgressMath.screenPercent(0, null))
+        assertEquals(99, ProgressMath.screenPercent(99, null))
+        assertNull(ProgressMath.screenPercent(100, null))
+        assertNull(ProgressMath.screenPercent(null, null))
+    }
+
+    @Test
+    fun pageSizeReadingBeforeAThumbnailWaitFillsOnlyItsShareOfTheBar() {
+        val share = ProgressMath.THUMBNAIL_PHASE_START
+        assertEquals(0, ProgressMath.screenPercent(0, share))
+        assertEquals(45, ProgressMath.screenPercent(50, share))
+        assertEquals(89, ProgressMath.screenPercent(99, share))
+        assertEquals(90, ProgressMath.screenPercent(100, share))
+        assertNull(ProgressMath.screenPercent(null, share))
+    }
+
+    @Test
+    fun aThumbnailWaitOnItsOwnContinuesFromNinetyOnlyAfterAPercentWasShown() {
+        assertEquals(0, ProgressMath.thumbnailPhaseStart(0, percentShown = false))
+        assertEquals(90, ProgressMath.thumbnailPhaseStart(0, percentShown = true))
+        assertEquals(90, ProgressMath.thumbnailPhaseStart(90, percentShown = false))
+        assertEquals(90, ProgressMath.thumbnailPhaseStart(90, percentShown = true))
+    }
+
+    @Test
     fun withoutWorkOrDoneUnitsThePercentIsIndeterminate() {
         assertNull(ProgressMath.measuredPercent(0, 0, 0, 5_000, -1, 1_000))
         assertNull(ProgressMath.measuredPercent(100, 0, 0, 5_000, -1, 1_000))

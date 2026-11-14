@@ -9,6 +9,12 @@ object ProgressMath {
 
     fun sharedPercent(percent: Int?, share: Int): Int? = percent?.let { it * share / 100 }
 
+    fun screenPercent(percent: Int?, share: Int?): Int? =
+        if (share == null) percent?.takeIf { it < 100 } else sharedPercent(percent, share)
+
+    fun thumbnailPhaseStart(from: Int, percentShown: Boolean): Int =
+        if (from == 0 && percentShown) THUMBNAIL_PHASE_START else from
+
     fun thumbnailPercent(from: Int, waited: Int, done: Int): Int =
         if (waited <= 0) 100
         else from + (100 - from) * done.coerceIn(0, waited) / waited

@@ -2,20 +2,10 @@ package hu.reelee81.reepdf.viewer
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationVector1D
-import androidx.compose.animation.core.DecayAnimationSpec
-import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.rememberSplineBasedDecay
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.calculateCentroid
-import androidx.compose.foundation.gestures.calculateCentroidSize
-import androidx.compose.foundation.gestures.calculatePan
-import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -36,7 +26,6 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -48,23 +37,16 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.input.pointer.AwaitPointerEventScope
 import androidx.compose.ui.input.pointer.PointerInputChange
-import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.input.pointer.positionChanged
-import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.layout.findRootCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.IntSize
-import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import hu.reelee81.reepdf.viewer.ViewerSelectionHandles.drawHandles
@@ -74,16 +56,10 @@ import hu.reelee81.reepdf.viewer.resources.page_description
 import hu.reelee81.reepdf.viewer.resources.page_description_text
 import hu.reelee81.reepdf.viewer.resources.page_indicator_range
 import hu.reelee81.reepdf.viewer.resources.page_indicator_single
-import hu.reelee81.reepdf.viewer.resources.page_render_failed
-import kotlin.math.abs
-import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.CoroutineStart
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 
 @Composable
@@ -97,7 +73,6 @@ internal fun ViewerPages(
     modifier: Modifier = Modifier
 ) {
     val density = LocalDensity.current
-    val spacing = with(density) { PAGE_SPACING.toPx() }.toDouble()
     val fastScroll = remember(density) {
         with(density) { ViewerFastScroll(SCROLLER_MARGIN.roundToPx(), SCROLLER_MARGIN.roundToPx(), THUMB_HEIGHT.roundToPx()) }
     }
@@ -115,7 +90,6 @@ internal fun ViewerPages(
         }
     }
     val scope = rememberCoroutineScope()
-    val decay = rememberSplineBasedDecay<Offset>()
     val motion = remember { ViewerMotion() }
     val scrollerAlpha = remember { Animatable(0f) }
     val tap by rememberUpdatedState(onTap)
@@ -133,10 +107,13 @@ internal fun ViewerPages(
         state.setUncoveredHeight((frame.rootHeight - keyboardCover - frame.top).roundToInt())
     }
 
-    Box(
-        modifier
-            .clipToBounds()
-            .onSizeChanged { state.onSize(it.width, it.height, spacing) }
+    ViewerSurfaceView(
+        surface = state.surface,
+        colors = colors,
+        fontFamily = fontFamily,
+        motion = motion,
+        modifier = modifier,
+        inputs = Modifier
             .onGloballyPositioned { coordinates ->
                 val next = PagesFrame(coordinates.positionInRoot().y, coordinates.findRootCoordinates().size.height)
                 if (next != frame) frame = next
@@ -147,20 +124,11 @@ internal fun ViewerPages(
                     onLongPress = { position -> selectWord(state, position, touch.wordTolerance) },
                     onTap = { tap() }
                 )
-            }
-            .pointerInput(state, fastScroll, touch) {
-                viewerGestures(
-                    state = state,
-                    thumbTop = { position -> thumbHit(state, fastScroll, scrollerAlpha, position, thumbWidth, thumbHeight) },
-                    fastScroll = fastScroll,
-                    touch = touch,
-                    motion = motion,
-                    onFling = { velocity -> motion.fling(state, scope, decay, velocity) }
-                )
-            }
+            },
+        grab = { position -> grabAt(state, fastScroll, scrollerAlpha, position, thumbWidth, thumbHeight, touch) },
+        drawPage = { page, x, y, zoom -> drawTexts(state, colors, page, x, y, zoom) },
+        drawOver = { drawHandles(state, touch.handleRadius, colors.selectionHandle) }
     ) {
-        Canvas(Modifier.matchParentSize()) { drawPages(state, colors, touch.handleRadius) }
-        FailedPages(state, colors, fontFamily)
         PageDescriptions(state)
         FastScroller(state, fastScroll, colors, fontFamily) { scrollerAlpha.value }
         if (state.selection.isActive && state.selection.dragged == null && !motion.busy) {
@@ -179,62 +147,19 @@ private class ViewerTouch(
     val edgeStep: Float
 )
 
-private class ViewerMotion {
-    private var job: Job? = null
-    private var animating by mutableStateOf(false)
-    var touching by mutableStateOf(false)
-
-    val busy: Boolean
-        get() = touching || animating
-
-    fun stop() {
-        job?.cancel()
-        job = null
-        animating = false
-    }
-
-    fun fling(state: ViewerState, scope: CoroutineScope, decay: DecayAnimationSpec<Offset>, velocity: Velocity) {
-        start(scope) {
-            var last = Offset.Zero
-            Animatable(Offset.Zero, Offset.VectorConverter).animateDecay(Offset(-velocity.x, -velocity.y), decay) {
-                val delta = value - last
-                last = value
-                state.scrollBy(delta.x.toDouble(), delta.y.toDouble())
+private fun ViewerMotion.doubleTap(state: ViewerState, scope: CoroutineScope, tap: Offset) {
+    val start = state.viewport ?: return
+    val pages = state.layout ?: return
+    if (state.isWaiting) return
+    val target = start.doubleTapZoom(pages) ?: return
+    start(scope) {
+        try {
+            animate(start.zoom, target, animationSpec = tween(ViewerViewport.DOUBLE_TAP_ANIMATION_MS.toInt())) { value, _ ->
+                state.zoomFrom(start, value, tap.x.toDouble(), tap.y.toDouble())
             }
+        } finally {
+            state.endZoom()
         }
-    }
-
-    fun doubleTap(state: ViewerState, scope: CoroutineScope, tap: Offset) {
-        val start = state.viewport ?: return
-        val pages = state.layout ?: return
-        if (state.isWaiting) return
-        val target = start.doubleTapZoom(pages) ?: return
-        start(scope) {
-            try {
-                animate(start.zoom, target, animationSpec = tween(ViewerViewport.DOUBLE_TAP_ANIMATION_MS.toInt())) { value, _ ->
-                    state.zoomFrom(start, value, tap.x.toDouble(), tap.y.toDouble())
-                }
-            } finally {
-                state.endZoom()
-            }
-        }
-    }
-
-    private fun start(scope: CoroutineScope, block: suspend () -> Unit) {
-        stop()
-        val launched = scope.launch(start = CoroutineStart.LAZY) {
-            try {
-                block()
-            } finally {
-                if (job === coroutineContext[Job]) {
-                    job = null
-                    animating = false
-                }
-            }
-        }
-        job = launched
-        animating = true
-        launched.start()
     }
 }
 
@@ -262,87 +187,50 @@ private fun thumbHit(
     return if (inside) top.toDouble() else null
 }
 
-private suspend fun PointerInputScope.viewerGestures(
+private fun grabAt(
     state: ViewerState,
-    thumbTop: (Offset) -> Double?,
     fastScroll: ViewerFastScroll,
-    touch: ViewerTouch,
-    motion: ViewerMotion,
-    onFling: (Velocity) -> Unit
-) {
-    awaitEachGesture {
-        val down = awaitFirstDown(requireUnconsumed = false)
-        motion.stop()
-        try {
-            val thumbStart = thumbTop(down.position)
-            if (thumbStart != null) {
-                down.consume()
-                motion.touching = true
-                while (true) {
-                    val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
-                    change.consume()
-                    if (!change.pressed) break
-                    val pages = state.layout ?: continue
-                    val view = state.viewport ?: continue
-                    val top = thumbStart + (change.position.y - down.position.y)
-                    state.scrollToY(fastScroll.scrollFor(top, view.height, pages.totalHeight * view.zoom))
-                }
-                return@awaitEachGesture
-            }
-            val grab = ViewerSelectionHandles.grab(state, down.position, touch.handleRadius, touch.handleSlop)
-            if (grab != null && state.selection.beginDrag(grab.handle)) {
-                down.consume()
-                motion.touching = true
-                try {
-                    dragHandle(state, down, grab, touch)
-                } finally {
-                    state.selection.endDrag()
-                }
-                return@awaitEachGesture
-            }
-            val tracker = VelocityTracker()
-            tracker.addPosition(down.uptimeMillis, down.position)
-            var zoomTotal = 1f
-            var panTotal = Offset.Zero
-            var moving = false
-            var zoomed = false
-            var cancelled: Boolean
-            do {
-                val event = awaitPointerEvent()
-                cancelled = event.changes.any { it.isConsumed }
-                if (!cancelled) {
-                    val zoomChange = event.calculateZoom()
-                    val panChange = event.calculatePan()
-                    if (!moving) {
-                        zoomTotal *= zoomChange
-                        panTotal += panChange
-                        val zoomMotion = abs(1 - zoomTotal) * event.calculateCentroidSize(useCurrent = false)
-                        if (zoomMotion > viewConfiguration.touchSlop || panTotal.getDistance() > viewConfiguration.touchSlop) {
-                            moving = true
-                            motion.touching = true
-                        }
-                    }
-                    if (moving) {
-                        val centroid = event.calculateCentroid(useCurrent = false)
-                        if (zoomChange != 1f) {
-                            zoomed = true
-                            state.zoomBy(zoomChange, centroid.x.toDouble(), centroid.y.toDouble())
-                        }
-                        if (panChange != Offset.Zero) state.scrollBy(-panChange.x.toDouble(), -panChange.y.toDouble())
-                        event.changes.forEach { if (it.positionChanged()) it.consume() }
-                    }
-                    event.changes.firstOrNull { it.id == down.id }?.let { tracker.addPosition(it.uptimeMillis, it.position) }
-                }
-            } while (!cancelled && event.changes.any { it.pressed })
-            if (zoomed) {
-                state.endZoom()
-            } else if (moving && !cancelled) {
-                val limit = viewConfiguration.maximumFlingVelocity
-                onFling(tracker.calculateVelocity(Velocity(limit, limit)))
-            }
-        } finally {
-            motion.touching = false
+    alpha: Animatable<Float, AnimationVector1D>,
+    position: Offset,
+    thumbWidth: Float,
+    thumbHeight: Int,
+    touch: ViewerTouch
+): ViewerDrag? {
+    val thumbStart = thumbHit(state, fastScroll, alpha, position, thumbWidth, thumbHeight)
+    if (thumbStart != null) {
+        return { down ->
+            dragThumb(state, fastScroll, down, thumbStart)
+            false
         }
+    }
+    val grab = ViewerSelectionHandles.grab(state, position, touch.handleRadius, touch.handleSlop)
+    if (grab != null && state.selection.beginDrag(grab.handle)) {
+        return { down ->
+            try {
+                dragHandle(state, down, grab, touch)
+            } finally {
+                state.selection.endDrag()
+            }
+            false
+        }
+    }
+    return null
+}
+
+private suspend fun AwaitPointerEventScope.dragThumb(
+    state: ViewerState,
+    fastScroll: ViewerFastScroll,
+    down: PointerInputChange,
+    thumbStart: Double
+) {
+    while (true) {
+        val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
+        change.consume()
+        if (!change.pressed) break
+        val pages = state.layout ?: continue
+        val view = state.viewport ?: continue
+        val top = thumbStart + (change.position.y - down.position.y)
+        state.scrollToY(fastScroll.scrollFor(top, view.height, pages.totalHeight * view.zoom))
     }
 }
 
@@ -377,51 +265,19 @@ private suspend fun AwaitPointerEventScope.dragHandle(
     }
 }
 
-private fun edgeStep(position: Float, length: Int, edge: Float, maxStep: Float): Float = when {
-    position < edge -> -maxStep * min(1f, (edge - position) / edge)
-    position > length - edge -> maxStep * min(1f, (position - (length - edge)) / edge)
-    else -> 0f
-}
-
-private fun DrawScope.drawPages(state: ViewerState, colors: ViewerColors, handleRadius: Float) {
-    val pages = state.layout ?: return
-    val view = state.viewport ?: return
-    val zoom = view.zoom
-    val top = view.contentTop
+private fun DrawScope.drawTexts(state: ViewerState, colors: ViewerColors, page: Int, x: Double, y: Double, zoom: Float) {
     val search = state.search
-    val selection = state.selection
     val current = search.current
-    for (page in pages.visiblePages(top, top + view.contentHeight)) {
-        val x = pages.left(page, view.contentLeft, view.contentWidth) * zoom - view.scrollX
-        val y = pages.top(page) * zoom - view.scrollY
-        val width = pages.width(page) * zoom
-        val height = pages.height(page) * zoom
-        drawRect(colors.page, Offset(x.toFloat(), y.toFloat()), Size(width.toFloat(), height.toFloat()))
-        state.pageImage(page)?.let { image ->
-            drawPiece(image, x, y, x + width, y + height)
-        }
-        for ((tile, image) in state.tilesOf(page)) {
-            val scale = zoom / tile.zoom.toDouble()
-            drawPiece(
-                image,
-                x + tile.left * scale,
-                y + tile.top * scale,
-                x + (tile.left + tile.width) * scale,
-                y + (tile.top + tile.height) * scale
-            )
-        }
-        search.hitsOf(page)?.let { hits ->
-            val chosen = if (current?.page == page) current.index else -1
-            for (hit in 0 until hits.count) {
-                val color = if (hit == chosen) colors.searchCurrentHit else colors.searchHit
-                drawTextRects(hits.rects, hits.starts[hit], hits.starts[hit + 1], x, y, zoom, color)
-            }
-        }
-        selection.rectsOf(page)?.let { rects ->
-            drawTextRects(rects, 0, ViewerTextRects.count(rects), x, y, zoom, colors.selection)
+    search.hitsOf(page)?.let { hits ->
+        val chosen = if (current?.page == page) current.index else -1
+        for (hit in 0 until hits.count) {
+            val color = if (hit == chosen) colors.searchCurrentHit else colors.searchHit
+            drawTextRects(hits.rects, hits.starts[hit], hits.starts[hit + 1], x, y, zoom, color)
         }
     }
-    drawHandles(state, handleRadius, colors.selectionHandle)
+    state.selection.rectsOf(page)?.let { rects ->
+        drawTextRects(rects, 0, ViewerTextRects.count(rects), x, y, zoom, colors.selection)
+    }
 }
 
 private fun DrawScope.drawTextRects(
@@ -440,48 +296,6 @@ private fun DrawScope.drawTextRects(
         val right = (x + rects[offset + 2] * zoom).toFloat()
         val bottom = (y + rects[offset + 3] * zoom).toFloat()
         drawRect(color, Offset(left, top), Size(right - left, bottom - top), blendMode = BlendMode.Multiply)
-    }
-}
-
-private fun DrawScope.drawPiece(image: ViewerImage, left: Double, top: Double, right: Double, bottom: Double) {
-    val x0 = left.roundToInt()
-    val y0 = top.roundToInt()
-    drawImage(
-        image = image.bitmap,
-        dstOffset = IntOffset(x0, y0),
-        dstSize = IntSize(right.roundToInt() - x0, bottom.roundToInt() - y0)
-    )
-}
-
-@Composable
-private fun FailedPages(state: ViewerState, colors: ViewerColors, fontFamily: FontFamily) {
-    val failed = state.failedPages
-    if (failed.isEmpty()) return
-    val pages = state.layout ?: return
-    val view = state.viewport ?: return
-    val density = LocalDensity.current
-    val text = stringResource(Res.string.page_render_failed)
-    val top = view.contentTop
-    for (page in pages.visiblePages(top, top + view.contentHeight)) {
-        if (page !in failed) continue
-        val x = (pages.left(page, view.contentLeft, view.contentWidth) * view.zoom - view.scrollX).roundToInt()
-        val y = (pages.top(page) * view.zoom - view.scrollY).roundToInt()
-        val width = with(density) { (pages.width(page) * view.zoom).toFloat().toDp() }
-        val height = with(density) { (pages.height(page) * view.zoom).toFloat().toDp() }
-        Box(
-            Modifier.offset { IntOffset(x, y) }.size(width, height).padding(FAILED_PADDING),
-            contentAlignment = Alignment.Center
-        ) {
-            BasicText(
-                text = text,
-                style = TextStyle(
-                    color = colors.pageText,
-                    fontSize = with(density) { FAILED_TEXT_SIZE.toSp() },
-                    fontFamily = fontFamily,
-                    textAlign = TextAlign.Center
-                )
-            )
-        }
     }
 }
 
@@ -558,7 +372,6 @@ private fun BoxScope.FastScroller(
     }
 }
 
-private val PAGE_SPACING = 8.dp
 private val SCROLLER_MARGIN = 2.dp
 private val THUMB_WIDTH = 36.dp
 private val THUMB_HEIGHT = 48.dp
@@ -570,9 +383,4 @@ private val INDICATOR_HEIGHT = 24.dp
 private val INDICATOR_RADIUS = 16.dp
 private val INDICATOR_PADDING = 12.dp
 private val INDICATOR_TEXT_SIZE = 12.sp
-private val FAILED_PADDING = 16.dp
-private val FAILED_TEXT_SIZE = 14.dp
 private val WORD_TOLERANCE = 8.dp
-private val AUTO_SCROLL_EDGE = 40.dp
-private val AUTO_SCROLL_STEP = 10.dp
-private const val AUTO_SCROLL_FRAME_MS = 16L

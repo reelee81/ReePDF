@@ -122,7 +122,6 @@
     <string name="enter_value_0_296">Adj meg 0 és 296 közötti értéket (mm)</string>
     <string name="open_with">Megnyitás ezzel:</string>
     <string name="scan_effect">Szkennelt hatás</string>
-    <string name="signature_position">Aláírás pozíciója</string>
     <string name="dpi_144">144 dpi (1190 x 1683)</string>
     <string name="dpi_300">300 dpi (2480 x 3507)</string>
     <string name="unsupported_image">Nem támogatott képformátum</string>
@@ -151,9 +150,6 @@
     <string name="allow_notifications">Értesítések engedélyezése</string>
     <string name="allow_notifications_text">Hosszú PDF-műveleteknél az app értesítésben mutatja a feldolgozás haladását, hang nélkül. Ha az értesítések ki vannak kapcsolva, a feldolgozás így is fut, de a haladás csak az appban látszik.\n\nAz OK gomb megnyitja az app értesítési beállításait, ahol bekapcsolhatod őket.</string>
     <string name="position_on_page">Pozicionálás az oldal(ak)on</string>
-    <string name="crop_title">Szabad vágás</string>
-    <string name="crop_all_pages">Alkalmazás minden oldalon</string>
-    <string name="crop_full_page">VISSZAÁLLÍTÁS</string>
     <string name="edit_pdf">Szerkesztés</string>
     <string name="save_pdf_edits">MENTÉS</string>
     <string name="pdf_editor_requires_s_ext_18">A PDF-szerkesztőhöz Android 12 (S) Extension 18 vagy újabb szükséges.</string>

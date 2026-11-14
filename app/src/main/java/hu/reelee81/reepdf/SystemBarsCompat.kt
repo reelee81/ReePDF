@@ -3,6 +3,8 @@ package hu.reelee81.reepdf
 import android.app.Activity
 import android.content.res.Configuration
 import android.os.Build
+import androidx.core.content.ContextCompat
+import androidx.core.graphics.drawable.toDrawable
 import androidx.core.view.WindowCompat
 
 object SystemBarsCompat {
@@ -36,6 +38,15 @@ object SystemBarsCompat {
 
     fun keyboardAboveNavigation(keyboardBottom: Int, navigationBottom: Int): Int =
         (keyboardBottom - navigationBottom).coerceAtLeast(0)
+
+    fun applyViewerBars(activity: Activity) {
+        val night = (activity.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+        val background = ContextCompat.getColor(activity, R.color.pdf_viewer_sb_bg_color)
+        WindowCompat.getInsetsController(activity.window, activity.window.decorView).isAppearanceLightStatusBars = !night
+        activity.window.setBackgroundDrawable(background.toDrawable())
+        applyStatusBarColor(activity, background)
+        applyNavBarColor(activity, background)
+    }
 
     fun applyStatusBarColor(activity: Activity, statusColor: Int) {
         if (Build.VERSION.SDK_INT < 35) {
