@@ -3,6 +3,7 @@ package hu.reelee81.reepdf.pdf
 import com.itextpdf.kernel.font.PdfFontFactory
 import com.itextpdf.kernel.geom.PageSize
 import com.itextpdf.kernel.geom.Rectangle
+import com.itextpdf.kernel.pdf.CompressionConstants
 import com.itextpdf.kernel.pdf.PdfArray
 import com.itextpdf.kernel.pdf.PdfBoolean
 import com.itextpdf.kernel.pdf.PdfDictionary
@@ -52,6 +53,24 @@ class PdfVisibleAppearanceCopierTest {
                 assertEquals(source.getPage(1).cropBox.toString(), result.getPage(1).cropBox.toString())
                 assertEquals(90, result.getPage(1).rotation)
             }
+        }
+    }
+
+    @Test
+    fun theRestoreAfterTheOriginalContentIsNotGluedToItsLastOperator() {
+        val original = makePdf { pdf ->
+            pdf.getPage(1).getContentStream(0).apply {
+                setData("0 0 m 100 100 l S".toByteArray(Charsets.ISO_8859_1))
+                setCompressionLevel(CompressionConstants.NO_COMPRESSION)
+            }
+            addWidget(pdf, PdfName.Tx, "FORM VALUE")
+        }
+        PdfDocument(PdfReader(ByteArrayInputStream(import(original)))).use { result ->
+            val page = result.getPage(1)
+            val scan = PdfCopySupport.scanContent(page.contentBytes, page.resources.pdfObject)
+            assertFalse(scan.broken)
+            assertEquals(0, scan.unclosed)
+            assertTrue(PdfTextExtractor.getTextFromPage(page).contains("FORM VALUE"))
         }
     }
 

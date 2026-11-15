@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: reelee81 <reelee81@gmail.com>
 Date: Wed, 11 Nov 2026 19:02:16 +0100
-Subject: [PATCH 10/18] openjpeg: Decode a requested area exactly like the
+Subject: [PATCH 10/20] openjpeg: Decode a requested area exactly like the
  whole image.
 
 opj_tcd_is_subband_area_of_interest() kept a code-block margin of 3

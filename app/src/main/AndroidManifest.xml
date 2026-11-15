@@ -131,12 +131,6 @@
             android:exported="false"
             android:theme="@style/Theme.ReePDF.PdfViewer" />
 
-        <activity
-            android:name="hu.reelee81.reepdf.PdfEditorActivity"
-            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|density|uiMode|locale|fontScale|fontWeightAdjustment|colorMode|keyboard|navigation|touchscreen|layoutDirection|mcc|mnc|grammaticalGender"
-            android:exported="false"
-            android:theme="@style/Theme.ReePDF.PdfViewer" />
-
         <service
             android:name=".PdfProcessingForegroundService"
             android:exported="false"

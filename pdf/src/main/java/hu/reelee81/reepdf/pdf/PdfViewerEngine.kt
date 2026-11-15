@@ -21,6 +21,10 @@ interface PdfViewerEngine<T> {
 
     fun text(pageIndex: Int): String
 
+    fun pageMarks(pageIndex: Int): PdfPageMarks
+
+    fun editStreams(edits: Map<Int, PdfStreamEdit>)
+
     fun emptyStore()
 
     fun dropLoadedObjects()

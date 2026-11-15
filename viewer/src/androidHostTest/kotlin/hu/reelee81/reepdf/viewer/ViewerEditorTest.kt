@@ -1,0 +1,468 @@
+package hu.reelee81.reepdf.viewer
+
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import org.junit.After
+import org.junit.Assert.assertArrayEquals
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class ViewerEditorTest {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+    private val refreshed = mutableListOf<Set<Int>?>()
+    private val editor = ViewerEditor(scope) { refreshed += it }
+    private val document = FakeMarkDocument()
+
+    @After
+    fun tearDown() {
+        scope.cancel()
+    }
+
+    private fun editing(visible: IntRange = 0..0) {
+        editor.attach(document)
+        editor.onVisible(visible)
+        editor.start()
+    }
+
+    private fun draw(page: Int, vararg points: Pair<Float, Float>) {
+        editor.beginStroke(page, ViewerTextPoint(points[0].first, points[0].second), 1f, 5f)
+        for ((x, y) in points.drop(1)) editor.extendStroke(ViewerTextPoint(x, y))
+        editor.endStroke()
+    }
+
+    private fun erase(from: Pair<Float, Float>, to: Pair<Float, Float>) {
+        editor.selectTool(ViewerEditTool.ERASER)
+        editor.beginErase(0, ViewerTextPoint(from.first, from.second), 2f)
+        editor.extendErase(0, ViewerTextPoint(to.first, to.second))
+        editor.endErase()
+    }
+
+    private fun savedLine(id: String, stream: Int, x: Float) = ViewerSavedMark(
+        id, stream, ViewerMarkKind.PEN, 2f,
+        ViewerMarkPath(byteArrayOf(ViewerMarkPath.MOVE, ViewerMarkPath.LINE), floatArrayOf(x, 50f, x + 20f, 50f))
+    )
+
+    @Test
+    fun nothingIsDrawnBeforeEditingStartsAndStartingReadsTheVisiblePages() {
+        editor.attach(document)
+        editor.onVisible(0..1)
+
+        draw(0, 1f to 1f, 9f to 9f)
+
+        assertTrue(editor.addedMarks(0).isEmpty())
+        assertTrue(document.reads.isEmpty())
+        editor.start()
+        assertTrue(editor.isActive)
+        assertEquals(listOf("marks 0 false", "marks 1 false"), document.reads)
+    }
+
+    @Test
+    fun aPenStrokeBecomesAMarkWithTheChosenColorAndWidth() {
+        val stored = mutableListOf<ViewerEditSettings>()
+        editor.onSettingsChanged = { stored += it }
+        editing()
+        editor.chooseColor(2)
+        editor.chooseWidth(4)
+        editor.chooseWidth(4)
+
+        editor.beginStroke(0, ViewerTextPoint(10f, 10f), 1f, 5f)
+        val wet = editor.wet
+        editor.extendStroke(ViewerTextPoint(20f, 10f))
+        editor.extendStroke(ViewerTextPoint(30f, 15f))
+        editor.endStroke()
+
+        assertEquals(ViewerMarkKind.PEN, wet?.kind)
+        assertNull(editor.wet)
+        val mark = editor.addedMarks(0).single()
+        assertEquals(0xDD0000, mark.color)
+        assertEquals(10f, mark.width, 0f)
+        assertArrayEquals(floatArrayOf(30f, 15f), mark.path.points.copyOfRange(mark.path.points.size - 2, mark.path.points.size), 0f)
+        assertEquals(2, stored.size)
+        assertTrue(editor.state.canUndo)
+        editor.undo()
+        assertTrue(editor.addedMarks(0).isEmpty())
+        editor.redo()
+        assertEquals(1, editor.addedMarks(0).size)
+    }
+
+    @Test
+    fun theHighlighterFollowsTheTextWhenItStartsOnAWord() {
+        document.words = { _, point -> ViewerTextSpan(point, point, FloatArray(0)) }
+        editing()
+        editor.selectTool(ViewerEditTool.HIGHLIGHTER)
+
+        draw(0, 10f to 15f, 40f to 16f)
+
+        val mark = editor.addedMarks(0).single()
+        assertEquals(ViewerMarkKind.TEXT_HIGHLIGHT, mark.kind)
+        assertEquals(0xFFED45, mark.color)
+        assertEquals(0f, mark.width, 0f)
+        assertArrayEquals(floatArrayOf(10f, 10f, 40f, 10f, 40f, 20f, 10f, 20f), mark.path.points, 0f)
+    }
+
+    @Test
+    fun theHighlighterDrawsFreelyAwayFromTextAndATapOnTextLeavesNothing() {
+        editing()
+        editor.selectTool(ViewerEditTool.HIGHLIGHTER)
+
+        draw(0, 10f to 15f, 40f to 30f)
+        document.words = { _, point -> ViewerTextSpan(point, point, FloatArray(0)) }
+        draw(0, 50f to 50f)
+
+        val mark = editor.addedMarks(0).single()
+        assertEquals(ViewerMarkKind.HIGHLIGHTER, mark.kind)
+        assertEquals(24f, mark.width, 0f)
+    }
+
+    @Test
+    fun theEraserRemovesNewMarksInOneUndoableStep() {
+        editing()
+        draw(0, 0f to 0f, 100f to 0f)
+        draw(0, 0f to 30f, 100f to 30f)
+        draw(0, 0f to 90f, 100f to 90f)
+
+        erase(50f to -5f, 50f to 35f)
+
+        assertEquals(1, editor.addedMarks(0).size)
+        editor.undo()
+        assertEquals(3, editor.addedMarks(0).size)
+        assertTrue(document.edits.isEmpty())
+    }
+
+    @Test
+    fun erasingASavedMarkEditsEveryStreamItIsInAndRefreshesThePage() {
+        document.marks[0] = ViewerPageMarks(listOf(savedLine("a", 7, 10f), savedLine("a", 8, 10f), savedLine("b", 7, 60f)), intArrayOf(7, 8))
+        editing()
+
+        erase(15f to 50f, 16f to 50f)
+
+        val erased = ViewerStreamEdit(false, setOf("a"))
+        assertEquals(listOf(mapOf(7 to erased, 8 to erased)), document.edits)
+        assertEquals(listOf<Set<Int>?>(setOf(0)), refreshed)
+        assertEquals(mapOf(7 to setOf("a"), 8 to setOf("a")), editor.plan().erased)
+        editor.undo()
+        assertEquals(mapOf(7 to ViewerStreamEdit.ORIGINAL, 8 to ViewerStreamEdit.ORIGINAL), document.edits.last())
+        editor.redo()
+        assertEquals(mapOf(7 to erased, 8 to erased), document.edits.last())
+    }
+
+    @Test
+    fun aCancelledEraseBringsTheSavedMarkBackWithoutAStep() {
+        document.marks[0] = ViewerPageMarks(listOf(savedLine("a", 7, 10f)), intArrayOf(7))
+        editing()
+        editor.selectTool(ViewerEditTool.ERASER)
+
+        editor.beginErase(0, ViewerTextPoint(15f, 50f), 2f)
+        editor.cancelGesture()
+
+        assertEquals(2, document.edits.size)
+        assertEquals(mapOf(7 to ViewerStreamEdit.ORIGINAL), document.edits.last())
+        assertFalse(editor.state.canUndo)
+    }
+
+    @Test
+    fun erasingTheVisiblePagesBlanksOnlyTheirStreams() {
+        document.marks[0] = ViewerPageMarks(listOf(savedLine("a", 7, 10f)), intArrayOf(7))
+        document.marks[1] = ViewerPageMarks(emptyList(), intArrayOf(9))
+        editing(0..1)
+        draw(1, 5f to 5f, 25f to 5f)
+
+        editor.eraseVisible(setOf(0))
+
+        assertEquals(mapOf(7 to ViewerStreamEdit.BLANK), document.edits.single())
+        assertEquals(setOf(0), refreshed.last())
+        assertEquals(1, editor.addedMarks(1).size)
+        assertEquals(setOf(0), editor.plan().blankPages)
+        editor.undo()
+        assertEquals(mapOf(7 to ViewerStreamEdit.ORIGINAL), document.edits.last())
+    }
+
+    @Test
+    fun erasingPagesWithNothingOnThemIsNoStep() {
+        editing(0..1)
+
+        editor.eraseVisible(setOf(0, 1))
+
+        assertFalse(editor.state.canUndo)
+        assertTrue(document.edits.isEmpty())
+    }
+
+    @Test
+    fun marksDrawnAfterErasingThePageCanBeErasedAgain() {
+        editing()
+        draw(0, 0f to 0f, 100f to 0f)
+        editor.eraseVisible(setOf(0))
+        draw(0, 0f to 30f, 100f to 30f)
+
+        editor.eraseVisible(setOf(0))
+        editor.eraseVisible(setOf(0))
+
+        assertTrue(editor.addedMarks(0).isEmpty())
+        editor.undo()
+        assertEquals(1, editor.addedMarks(0).size)
+    }
+
+    @Test
+    fun marksDrawnAfterErasingEveryPageCanBeErasedAgain() {
+        editing()
+        draw(0, 0f to 0f, 100f to 0f)
+        editor.eraseAll()
+        draw(0, 0f to 30f, 100f to 30f)
+
+        editor.eraseAll()
+        editor.eraseAll()
+
+        assertTrue(editor.addedMarks(0).isEmpty())
+        editor.undo()
+        assertEquals(1, editor.addedMarks(0).size)
+    }
+
+    @Test
+    fun erasingEveryPageRefreshesAllAndBlanksPagesAsTheyAppear() {
+        document.marks[0] = ViewerPageMarks(listOf(savedLine("a", 7, 10f)), intArrayOf(7))
+        document.marks[5] = ViewerPageMarks(listOf(savedLine("c", 11, 10f)), intArrayOf(11))
+        editing()
+
+        editor.eraseAll()
+        editor.onVisible(5..5)
+
+        assertEquals(mapOf(7 to ViewerStreamEdit.BLANK), document.edits.single())
+        assertEquals(listOf("marks 0 false", "marks 5 true"), document.reads)
+        assertEquals(listOf(null, setOf(5)), refreshed)
+        assertTrue(editor.plan().blankAll)
+        editor.undo()
+        assertEquals(mapOf(7 to ViewerStreamEdit.ORIGINAL, 11 to ViewerStreamEdit.ORIGINAL), document.edits.last())
+        assertNull(refreshed.last())
+    }
+
+    @Test
+    fun discardingRestoresTheStreamsAndLeavesEditing() {
+        document.marks[0] = ViewerPageMarks(listOf(savedLine("a", 7, 10f)), intArrayOf(7))
+        editing()
+        erase(15f to 50f, 16f to 50f)
+
+        editor.discard()
+
+        assertFalse(editor.isActive)
+        assertEquals(mapOf(7 to ViewerStreamEdit.ORIGINAL), document.edits.last())
+        assertTrue(editor.plan().isEmpty)
+        assertFalse(editor.state.canUndo)
+    }
+
+    @Test
+    fun aFailedEditIsReportedAndNothingIsRefreshed() {
+        val failures = mutableListOf<String>()
+        editor.onFailure = { failures += it }
+        document.marks[0] = ViewerPageMarks(listOf(savedLine("a", 7, 10f)), intArrayOf(7))
+        document.failEdits = true
+        editing()
+
+        erase(15f to 50f, 16f to 50f)
+
+        assertEquals(listOf("broken"), failures)
+        assertTrue(refreshed.isEmpty())
+    }
+
+    @Test
+    fun anotherDocumentStartsFromNothing() {
+        editing()
+        draw(0, 1f to 1f, 9f to 9f)
+        editor.beginStroke(0, ViewerTextPoint(1f, 1f), 1f, 5f)
+
+        editor.attach(FakeMarkDocument())
+
+        assertFalse(editor.isActive)
+        assertNull(editor.wet)
+        assertTrue(editor.addedMarks(0).isEmpty())
+        assertFalse(editor.state.canUndo)
+    }
+
+    @Test
+    fun savingEndsEditingWithoutTouchingTheStreams() {
+        document.marks[0] = ViewerPageMarks(listOf(savedLine("a", 7, 10f)), intArrayOf(7))
+        editing()
+        erase(15f to 50f, 16f to 50f)
+        val edits = document.edits.size
+
+        editor.saved()
+
+        assertFalse(editor.isActive)
+        assertEquals(edits, document.edits.size)
+        assertTrue(editor.plan().isEmpty)
+    }
+
+    @Test
+    fun theFirstTapChoosesAToolAndTheSecondOpensItsPanel() {
+        editing()
+
+        editor.tapTool(ViewerEditTool.PEN)
+        val penWidths = editor.panel
+        editor.tapTool(ViewerEditTool.PEN)
+        val closed = editor.panel
+        editor.tapSwatch()
+        val colors = editor.panel
+        editor.tapTool(ViewerEditTool.HIGHLIGHTER)
+
+        assertEquals(ViewerEditPanel.WIDTH, penWidths)
+        assertNull(closed)
+        assertEquals(ViewerEditPanel.COLORS, colors)
+        assertNull(editor.panel)
+        assertEquals(ViewerEditTool.HIGHLIGHTER, editor.settings.tool)
+    }
+
+    @Test
+    fun theToolRowStaysOpenWhileChoosingAndSettingTheWidth() {
+        editing()
+
+        editor.tapGroup()
+        val opened = editor.rowOpen
+        editor.tapTool(ViewerEditTool.HIGHLIGHTER)
+        val stillOpen = editor.rowOpen
+        val chosenPanel = editor.panel
+        editor.tapTool(ViewerEditTool.HIGHLIGHTER)
+        val widths = editor.panel
+        val rowWithWidths = editor.rowOpen
+        editor.tapGroup()
+
+        assertTrue(opened)
+        assertTrue(stillOpen)
+        assertNull(chosenPanel)
+        assertEquals(ViewerEditTool.HIGHLIGHTER, editor.settings.tool)
+        assertEquals(ViewerEditPanel.WIDTH, widths)
+        assertTrue(rowWithWidths)
+        assertFalse(editor.rowOpen)
+        assertNull(editor.panel)
+    }
+
+    @Test
+    fun theEraserTheSwatchAndOutsideTouchesCloseTheToolRow() {
+        editing()
+
+        editor.tapGroup()
+        editor.tapTool(ViewerEditTool.ERASER)
+        val afterEraser = editor.rowOpen
+        editor.tapGroup()
+        val toolFromEraser = editor.settings.tool
+        val rowFromEraser = editor.rowOpen
+        editor.tapGroup()
+        val secondTap = editor.rowOpen
+        editor.tapSwatch()
+        val afterSwatch = editor.rowOpen
+        editor.tapGroup()
+        editor.closePanel()
+
+        assertFalse(afterEraser)
+        assertEquals(ViewerEditTool.PEN, toolFromEraser)
+        assertFalse(rowFromEraser)
+        assertTrue(secondTap)
+        assertFalse(afterSwatch)
+        assertFalse(editor.rowOpen)
+        assertNull(editor.panel)
+    }
+
+    @Test
+    fun scrollingPausesDrawingUntilTheUserTurnsItOff() {
+        editing()
+        editor.tapSwatch()
+
+        editor.togglePause()
+        val panel = editor.panel
+        draw(0, 1f to 1f, 9f to 9f)
+        editor.tapTool(ViewerEditTool.ERASER)
+        editor.tapGroup()
+        val stillPaused = editor.paused
+        editor.togglePause()
+
+        assertNull(panel)
+        assertTrue(editor.addedMarks(0).isEmpty())
+        assertTrue(stillPaused)
+        assertEquals(ViewerEditTool.PEN, editor.settings.tool)
+        assertFalse(editor.paused)
+    }
+
+    @Test
+    fun theEraserAndTheDisabledToolsOpenNothing() {
+        editing()
+
+        editor.tapTool(ViewerEditTool.TEXT)
+        editor.tapTool(ViewerEditTool.SIGNATURE)
+        val tool = editor.settings.tool
+        editor.tapTool(ViewerEditTool.ERASER)
+        editor.tapTool(ViewerEditTool.ERASER)
+        editor.tapSwatch()
+
+        assertEquals(ViewerEditTool.PEN, tool)
+        assertEquals(ViewerEditTool.ERASER, editor.settings.tool)
+        assertNull(editor.panel)
+    }
+
+    @Test
+    fun restoredSettingsAreCheckedAndNotStoredAgain() {
+        val stored = mutableListOf<ViewerEditSettings>()
+        editor.onSettingsChanged = { stored += it }
+
+        editor.restore(ViewerEditSettings(tool = ViewerEditTool.SIGNATURE, penColor = 50, undoPanelTop = true))
+        editor.placeUndoPanel(true)
+        editor.selectTool(ViewerEditTool.HIGHLIGHTER)
+
+        assertEquals(ViewerEditTool.HIGHLIGHTER, editor.settings.tool)
+        assertEquals(0, editor.settings.penColor)
+        assertEquals(listOf(ViewerEditSettings(tool = ViewerEditTool.HIGHLIGHTER, drawingTool = ViewerEditTool.HIGHLIGHTER, undoPanelTop = true)), stored)
+        assertNotNull(editor.settings)
+    }
+
+    private class FakeMarkDocument : ViewerDocument, ViewerMarkSource {
+        val marks = HashMap<Int, ViewerPageMarks>()
+        val reads = mutableListOf<String>()
+        val edits = mutableListOf<Map<Int, ViewerStreamEdit>>()
+        var failEdits = false
+        var words: (Int, ViewerTextPoint) -> ViewerTextSpan? = { _, _ -> null }
+
+        override val pageCount = 10
+
+        override suspend fun pageMarks(page: Int, blank: Boolean): ViewerPageMarks {
+            reads += "marks $page $blank"
+            return marks[page] ?: ViewerPageMarks.NONE
+        }
+
+        override suspend fun editStreams(edits: Map<Int, ViewerStreamEdit>) {
+            if (failEdits) throw IllegalStateException("broken")
+            this.edits += edits
+        }
+
+        override suspend fun pageSizes() = ViewerPageSizes(FloatArray(pageCount) { 100f }, FloatArray(pageCount) { 100f })
+
+        override suspend fun render(page: Int, zoom: Float, left: Int, top: Int, width: Int, height: Int) = ViewerRender.Aborted
+
+        override suspend fun renderTiles(tiles: List<ViewerTile>) = ViewerTilesRender.Aborted
+
+        override fun release(image: ViewerImage) = Unit
+
+        override fun trimMemory() = Unit
+
+        override fun close() = Unit
+
+        override suspend fun search(page: Int, query: String) = ViewerTextHits.NONE
+
+        override suspend fun count(page: Int, query: String) = 0
+
+        override fun releaseCount() = Unit
+
+        override suspend fun word(page: Int, point: ViewerTextPoint, tolerance: Float) = words(page, point)
+
+        override suspend fun caret(page: Int, point: ViewerTextPoint): ViewerTextPoint = point
+
+        override suspend fun highlight(page: Int, from: ViewerTextPoint?, to: ViewerTextPoint?) =
+            floatArrayOf(from?.x ?: 0f, 10f, to?.x ?: 0f, 20f)
+
+        override suspend fun copy(page: Int, from: ViewerTextPoint?, to: ViewerTextPoint?) = ""
+
+        override suspend fun text(page: Int) = ""
+    }
+}

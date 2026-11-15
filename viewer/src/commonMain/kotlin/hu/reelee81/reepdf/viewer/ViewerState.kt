@@ -31,6 +31,16 @@ class ViewerState(val title: String, val canEdit: Boolean, private val scope: Co
 
     val search = ViewerSearch(scope) { page, bounds -> reveal(page, bounds) }
     val selection = ViewerSelection(scope)
+    val editor = ViewerEditor(scope) { pages -> surface.refresh(pages) }
+    private var saveJob: Job? = null
+
+    var editSaver: (suspend (ViewerEditPlan) -> ViewerEditSaveResult)? = null
+    var editMessage by mutableStateOf<ViewerEditMessage?>(null)
+        private set
+
+    init {
+        editor.onFailure = { text -> editMessage = ViewerEditMessage.EraseFailed(text) }
+    }
 
     internal val surface: ViewerSurface = ViewerSurface(
         scope,
@@ -38,6 +48,7 @@ class ViewerState(val title: String, val canEdit: Boolean, private val scope: Co
             visibleRange = range
             search.onVisible(range)
             selection.onVisible(range)
+            editor.onVisible(range)
             readTexts(range)
         },
         onLayout = { stopWait() }
@@ -79,9 +90,6 @@ class ViewerState(val title: String, val canEdit: Boolean, private val scope: Co
     val isWaiting: Boolean
         get() = waitReason != null
 
-    val leavesOnCancel: Boolean
-        get() = waitReason == ViewerWait.Reason.OPENING_EDITED
-
     val currentPage: Int
         get() = surface.currentPage
 
@@ -105,6 +113,7 @@ class ViewerState(val title: String, val canEdit: Boolean, private val scope: Co
                 surface.attach(created, pageSizes)
                 search.attach(created)
                 selection.attach(created)
+                editor.attach(created)
                 surface.applyLayout()
             } catch (e: CancellationException) {
                 if (document !== opened) opened?.close()
@@ -141,10 +150,6 @@ class ViewerState(val title: String, val canEdit: Boolean, private val scope: Co
         surface.endZoom()
     }
 
-    fun scrollToPage(page: Int) {
-        surface.scrollToPage(page)
-    }
-
     fun onShown() {
         search.resume()
         surface.plan()
@@ -161,6 +166,7 @@ class ViewerState(val title: String, val canEdit: Boolean, private val scope: Co
     }
 
     fun close() {
+        saveJob?.cancel()
         openJob?.cancel()
         openJob = null
         closeDocument()
@@ -173,7 +179,67 @@ class ViewerState(val title: String, val canEdit: Boolean, private val scope: Co
         search.start()
     }
 
+    fun startEditing() {
+        if (!canEdit || isWaiting || document == null || editor.isActive) return
+        selection.clear()
+        if (search.isActive) search.stop()
+        editor.start()
+    }
+
+    fun saveEdits() {
+        val saver = editSaver ?: return
+        if (isWaiting || saveJob != null || !editor.isActive) return
+        editor.closePanel()
+        editor.question = null
+        val plan = editor.plan()
+        if (plan.isEmpty) {
+            editMessage = ViewerEditMessage.NothingToSave
+            return
+        }
+        editor.cancelGesture()
+        startWait(ViewerWait.Reason.SAVING_EDITS)
+        val page = currentPage
+        saveJob = scope.launch {
+            try {
+                when (val result = saver(plan)) {
+                    is ViewerEditSaveResult.Saved -> open(ViewerWait.Reason.OPENING_EDITED, page, result.opener)
+                    ViewerEditSaveResult.Unchanged -> {
+                        stopWait()
+                        editor.discard()
+                        editMessage = ViewerEditMessage.NothingToSave
+                    }
+                    is ViewerEditSaveResult.Failed -> {
+                        stopWait()
+                        editMessage = ViewerEditMessage.SaveFailed(result.message)
+                    }
+                }
+            } catch (e: CancellationException) {
+                if (waitReason == ViewerWait.Reason.SAVING_EDITS) stopWait()
+                throw e
+            } finally {
+                saveJob = null
+            }
+        }
+    }
+
+    fun cancelSave() {
+        saveJob?.cancel()
+    }
+
+    fun messageShown() {
+        editMessage = null
+    }
+
     fun handleBack(): Boolean = when {
+        editor.isActive -> {
+            when {
+                editor.question != null -> editor.question = null
+                editor.panel != null || editor.rowOpen -> editor.closePanel()
+                editor.state.hasChanges -> editor.question = ViewerEditQuestion.EXIT
+                else -> editor.discard()
+            }
+            true
+        }
         selection.isActive -> {
             selection.clear()
             true
@@ -215,6 +281,16 @@ class ViewerState(val title: String, val canEdit: Boolean, private val scope: Co
 
     fun pagePoint(x: Float, y: Float): Pair<Int, ViewerTextPoint>? = surface.pagePoint(x, y)
 
+    fun labeledPages(): Set<Int> {
+        val pages = layout ?: return emptySet()
+        val view = viewport ?: return emptySet()
+        return pages.labelPages(view.contentTop, view.contentTop + view.contentHeight).toSet()
+    }
+
+    fun pageHit(x: Float, y: Float): Pair<Int, ViewerTextPoint>? = surface.pageHit(x, y)
+
+    fun pointOn(page: Int, x: Float, y: Float): ViewerTextPoint? = surface.pointOn(page, x, y)
+
     fun reveal(page: Int, box: Rect) {
         surface.reveal(page, box, uncoveredHeight)
     }
@@ -224,6 +300,7 @@ class ViewerState(val title: String, val canEdit: Boolean, private val scope: Co
         document = null
         search.attach(null)
         selection.attach(null)
+        editor.attach(null)
         dropTexts()
         visibleRange = IntRange.EMPTY
         doc?.close()
@@ -283,4 +360,20 @@ class ViewerState(val title: String, val canEdit: Boolean, private val scope: Co
         waitReason = null
         waitRevealed = false
     }
+}
+
+sealed interface ViewerEditSaveResult {
+    class Saved(val opener: suspend () -> ViewerDocument) : ViewerEditSaveResult
+
+    data object Unchanged : ViewerEditSaveResult
+
+    class Failed(val message: String) : ViewerEditSaveResult
+}
+
+sealed interface ViewerEditMessage {
+    data object NothingToSave : ViewerEditMessage
+
+    class SaveFailed(val text: String) : ViewerEditMessage
+
+    class EraseFailed(val text: String) : ViewerEditMessage
 }

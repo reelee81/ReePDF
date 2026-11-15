@@ -35,6 +35,7 @@ object PdfEditProjection {
     private val PIECE_NAME = PdfName("hureelee81reepdf")
     private val BASE = PdfName("Base")
     private val LAYER_FORM = PdfName("LayerForm")
+    private val CONTENT_FORM = PdfName("ContentForm")
     private val WRAP = PdfName("Wrap")
     private val LAYER = PdfName("Layer")
     private val SOURCE = PdfName("Source")
@@ -42,6 +43,17 @@ object PdfEditProjection {
     private val STREAMS = PdfName("Streams")
     private val LENGTH = PdfName("Length")
     private val CELLS = PdfName("Cells")
+    internal val EDITED = PdfName("Edited")
+    private val RESOURCE_KEYS = listOf(
+        PdfName.ExtGState,
+        PdfName.ColorSpace,
+        PdfName.Pattern,
+        PdfName.Shading,
+        PdfName.XObject,
+        PdfName.Font,
+        PdfName.ProcSet,
+        PdfName.Properties
+    )
     private const val NAME_PREFIX = "NUE"
     private const val MAX_DEPTH = 8
     private const val SCAN_BATCH_FACTOR = 10
@@ -187,6 +199,7 @@ object PdfEditProjection {
     ): Projection {
         val bySource = HashMap<Int, MutableList<Edit>>()
         val removals = HashSet<Int>()
+        val replacements = HashMap<Int, ByteArray>()
         val nupPages = PdfDocument(PdfReader(editedNup).setMemorySavingMode(true)).use { it.numberOfPages }
         val batch = batchSize.coerceAtLeast(1)
         val scanBatch = batch * SCAN_BATCH_FACTOR
@@ -200,8 +213,14 @@ object PdfEditProjection {
                     val base = pageBase(page)
                         ?: throw NotProjectableException("page $number has no layout record")
                     for (layer in layersOf(page)) {
-                        val sourceIndex = privateData(layer)?.getAsNumber(SOURCE)?.intValue() ?: continue
-                        if (layer.bytes.isEmpty()) removals += sourceIndex
+                        val data = privateData(layer)
+                        val sourceIndex = data?.getAsNumber(SOURCE)?.intValue() ?: continue
+                        val bytes = layer.bytes
+                        if (bytes.isEmpty()) {
+                            removals += sourceIndex
+                        } else if (data.getAsBool(EDITED) == true) {
+                            if (PdfMarkContent.isBlank(bytes)) removals += sourceIndex else replacements[sourceIndex] = bytes
+                        }
                     }
                     val streams = base.getAsNumber(STREAMS)?.intValue() ?: -1
                     if (page.contentStreamCount <= streams) continue
@@ -210,6 +229,7 @@ object PdfEditProjection {
                     if (streams < 0 || length != base.getAsNumber(LENGTH)?.longValue()) {
                         throw NotProjectableException("page $number original content was modified")
                     }
+                    if ((streams until page.contentStreamCount).all { PdfMarkContent.isBlank(page.getContentStream(it).bytes) }) continue
                     val cells = base.getAsArray(CELLS) ?: continue
                     var offset = 0
                     while (offset + 7 <= cells.size()) {
@@ -223,9 +243,10 @@ object PdfEditProjection {
             onProgress(to - from + 1)
             from = to + 1
         }
-        if (bySource.isEmpty() && removals.isEmpty()) return Projection(0, source)
+        removals.forEach(replacements::remove)
+        if (bySource.isEmpty() && removals.isEmpty() && replacements.isEmpty()) return Projection(0, source)
 
-        val changed = bySource.keys + removals
+        val changed = bySource.keys + removals + replacements.keys
         if (changed.any { it !in 0 until source.total }) {
             throw NotProjectableException("layout record does not match the source")
         }
@@ -239,7 +260,8 @@ object PdfEditProjection {
             ensureActive()
             val firstNumber = destination.numberOfPages - (last - first)
             for (page in first..last) {
-                if (page in removals) removeLayer(destination.getPage(firstNumber + page - first))
+                val target = destination.getPage(firstNumber + page - first)
+                if (page in removals) removeLayer(target) else replacements[page]?.let { replaceLayer(target, it) }
             }
             val affected = (first..last).filter { bySource.containsKey(it) }
             if (affected.isNotEmpty()) {
@@ -297,14 +319,14 @@ object PdfEditProjection {
     private fun pageBase(page: PdfPage): PdfDictionary? = privateData(page.pdfObject)?.getAsDictionary(BASE)
 
     private fun sourceLayer(page: PdfPage): PdfStream? =
-        privateData(page.pdfObject)?.getAsStream(LAYER_FORM)?.takeIf { ownsLayer(page, it) }
+        privateData(page.pdfObject)?.getAsStream(LAYER_FORM)?.takeIf { ownsForm(page, it) }
 
-    private fun ownsLayer(page: PdfPage, layer: PdfStream): Boolean {
-        val reference = layer.indirectReference
+    private fun ownsForm(page: PdfPage, form: PdfStream): Boolean {
+        val reference = form.indirectReference
         val xObjects = page.pdfObject.getAsDictionary(PdfName.Resources)?.getAsDictionary(PdfName.XObject) ?: return false
         return xObjects.keySet().any { name ->
             val stream = xObjects.getAsStream(name)
-            stream === layer || (reference != null && stream?.indirectReference == reference)
+            stream === form || (reference != null && stream?.indirectReference == reference)
         }
     }
 
@@ -344,6 +366,20 @@ object PdfEditProjection {
         return result
     }
 
+    internal fun editStreams(page: PdfPage): List<PdfStream> {
+        val result = ArrayList<PdfStream>()
+        appendedFrom(page)?.let { first -> for (index in first until page.contentStreamCount) result += page.getContentStream(index) }
+        result += layersOf(page)
+        return result
+    }
+
+    private fun replaceLayer(page: PdfPage, content: ByteArray) {
+        val layer = sourceLayer(page) ?: return
+        layer.remove(PdfName.Filter)
+        layer.remove(PdfName.DecodeParms)
+        layer.setData(content)
+    }
+
     private fun removeLayer(page: PdfPage) {
         val layer = sourceLayer(page) ?: return
         val reference = layer.indirectReference
@@ -359,20 +395,23 @@ object PdfEditProjection {
             stream === layer || (reference != null && stream?.indirectReference == reference)
         }
         for (name in names) xObjects.remove(name)
-        val contents = page.pdfObject.getAsArray(PdfName.Contents) ?: return
-        var called = false
-        for (index in contents.size() - 1 downTo 0) {
-            val stream = contents.getAsStream(index) ?: continue
-            if (wrap != null && (stream === wrap || (wrapReference != null && stream.indirectReference == wrapReference))) {
-                if (called) contents.remove(index)
-                continue
-            }
-            val text = String(stream.bytes, Charsets.ISO_8859_1)
-            if (text.length <= 128 && names.any { text.contains("$it Do") }) {
-                contents.remove(index)
-                called = true
+        val contents = page.pdfObject.getAsArray(PdfName.Contents)
+        if (contents != null) {
+            var called = false
+            for (index in contents.size() - 1 downTo 0) {
+                val stream = contents.getAsStream(index) ?: continue
+                if (wrap != null && (stream === wrap || (wrapReference != null && stream.indirectReference == wrapReference))) {
+                    if (called) contents.remove(index)
+                    continue
+                }
+                val text = String(stream.bytes, Charsets.ISO_8859_1)
+                if (text.length <= 128 && names.any { text.contains("$it Do") }) {
+                    contents.remove(index)
+                    called = true
+                }
             }
         }
+        restoreContent(page)
     }
 
     private fun appendEdit(target: PdfPage, nupPage: PdfPage, matrix: DoubleArray) {
@@ -414,19 +453,41 @@ object PdfEditProjection {
             form.makeIndirect(destination)
             unsharePrivateData(target.pdfObject)
             privateData(target.pdfObject)?.remove(WRAP)
-            val unclosed = unclosedSaves(target)
+            val single = if (target.contentStreamCount == 1) target.getContentStream(0).bytes else null
+            val content = single ?: pageContent(target)
+            val scan = PdfCopySupport.scanContent(content, target.resources.pdfObject)
+            val unclosed = scan.unclosed.takeUnless { scan.broken }
             if (unclosed != null) {
                 val wrap = target.newContentStreamBefore()
                 wrap.setData("q\n".toByteArray(Charsets.ISO_8859_1))
                 writablePrivateData(target.pdfObject).put(WRAP, wrap)
             }
             writablePrivateData(target.pdfObject).put(LAYER_FORM, form)
-            val ownResources = PdfDictionary(target.pdfObject.getAsDictionary(PdfName.Resources) ?: PdfDictionary())
-            ownResources.put(
-                PdfName.XObject,
-                PdfDictionary(ownResources.getAsDictionary(PdfName.XObject) ?: PdfDictionary())
-            )
+            val previous = target.resources.pdfObject
+            val kept = PdfDictionary()
+            for (key in RESOURCE_KEYS) previous.get(key, false)?.let { kept.put(key, it) }
+            val original = if (scan.broken) {
+                kept.makeIndirect(destination)
+                PdfFormXObject(target.mediaBox).also { original ->
+                    original.pdfObject.setData(if (single != null) single + '\n'.code.toByte() else content)
+                    original.pdfObject.put(PdfName.Resources, kept)
+                    original.pdfObject.makeIndirect(destination)
+                    writablePrivateData(target.pdfObject).put(CONTENT_FORM, original.pdfObject)
+                }
+            } else {
+                null
+            }
+            val ownResources = if (original != null) PdfDictionary() else kept
+            ownResources.put(PdfName.XObject, PdfDictionary(ownResources.getAsDictionary(PdfName.XObject) ?: PdfDictionary()))
+            ownResources.makeIndirect(destination)
             target.pdfObject.put(PdfName.Resources, ownResources)
+            if (original != null) {
+                target.pdfObject.remove(PdfName.Contents)
+                PdfCanvas(target.newContentStreamAfter(), PdfResources(ownResources), destination)
+                    .saveState()
+                    .addXObjectWithTransformationMatrix(original, 1f, 0f, 0f, 1f, 0f, 0f)
+                    .restoreState()
+            }
             val call = target.newContentStreamAfter()
             if (unclosed != null) call.outputStream.writeString("Q\n".repeat(unclosed + 1))
             PdfCanvas(call, PdfResources(ownResources), destination)
@@ -436,13 +497,23 @@ object PdfEditProjection {
         }
     }
 
-    private fun unclosedSaves(page: PdfPage): Int? {
+    private fun pageContent(page: PdfPage): ByteArray {
         val content = ByteArrayOutputStream()
         for (index in 0 until page.contentStreamCount) {
             content.write(page.getContentStream(index).bytes)
             content.write('\n'.code)
         }
-        return PdfCopySupport.unclosedSaves(content.toByteArray(), page.resources.pdfObject)
+        return content.toByteArray()
+    }
+
+    private fun restoreContent(page: PdfPage) {
+        val data = privateData(page.pdfObject) ?: return
+        val original = data.getAsStream(CONTENT_FORM) ?: return
+        data.remove(CONTENT_FORM)
+        if (!ownsForm(page, original)) return
+        page.pdfObject.put(PdfName.Contents, PdfStream(original.bytes).makeIndirect(page.document))
+        page.pdfObject.put(PdfName.Resources, original.get(PdfName.Resources, false) ?: PdfDictionary())
+        page.pdfObject.setModified()
     }
 
     private fun renameResources(

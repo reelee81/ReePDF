@@ -30,6 +30,8 @@ class ViewerSurface(
     private var tileOrder: List<Int> = emptyList()
     private val heavyPages = HashSet<Int>()
     private val failedTiles = HashSet<ViewerTile>()
+    private val versions = HashMap<Int, Int>()
+    private var allVersion = 0
     private var needed: Set<Any> = emptySet()
     private var document: ViewerPageSource? = null
     private var sizes: ViewerPageSizes? = null
@@ -192,14 +194,43 @@ class ViewerSurface(
         failedPages = emptySet()
         heavyPages.clear()
         failedTiles.clear()
+        versions.clear()
+        allVersion = 0
         return doc
     }
+
+    fun refresh(pages: Set<Int>?) {
+        if (pages == null) allVersion++ else pages.forEach { versions[it] = (versions[it] ?: 0) + 1 }
+        plan()
+    }
+
+    private fun version(page: Int): Int = allVersion + (versions[page] ?: 0)
 
     fun screenRect(page: Int, box: Rect): Rect? {
         val pages = layout ?: return null
         val view = viewport ?: return null
         if (page !in 0 until pages.pageCount) return null
         return screenBox(pages, view, page, box)
+    }
+
+    fun pageHit(x: Float, y: Float): Pair<Int, ViewerTextPoint>? {
+        val pages = layout ?: return null
+        val view = viewport ?: return null
+        val contentY = (view.scrollY + y) / view.zoom
+        val page = pages.pageAt(contentY)
+        val pageX = (view.scrollX + x) / view.zoom - pages.left(page, view.contentLeft, view.contentWidth)
+        val pageY = contentY - pages.top(page)
+        if (pageX < 0 || pageX > pages.width(page) || pageY < 0 || pageY > pages.height(page)) return null
+        return page to ViewerTextPoint(pageX.toFloat(), pageY.toFloat())
+    }
+
+    fun pointOn(page: Int, x: Float, y: Float): ViewerTextPoint? {
+        val pages = layout ?: return null
+        val view = viewport ?: return null
+        if (page !in 0 until pages.pageCount) return null
+        val pageX = (view.scrollX + x) / view.zoom - pages.left(page, view.contentLeft, view.contentWidth)
+        val pageY = (view.scrollY + y) / view.zoom - pages.top(page)
+        return ViewerTextPoint(pageX.toFloat(), pageY.toFloat())
     }
 
     fun pagePoint(x: Float, y: Float): Pair<Int, ViewerTextPoint>? {
@@ -282,7 +313,7 @@ class ViewerSurface(
         for (page in visible) {
             val width = pages.width(page)
             val height = pages.height(page)
-            val image = planner.pageImage(page, width, height, zoom)
+            val image = planner.pageImage(page, width, height, zoom, version(page))
             val chosen = keptPageImage(page, image, !zooming && zoom > image.scale) ?: image
             wanted += chosen
             if (pageImages[page] != chosen && shown[chosen] != null) pageImages[page] = chosen
@@ -294,7 +325,7 @@ class ViewerSurface(
             val visibleTop = max(0.0, top - pageTop)
             val visibleBottom = min(height, bottom - pageTop)
             if (visibleRight <= visibleLeft || visibleBottom <= visibleTop) continue
-            val pageTiles = planner.tiles(page, width, height, zoom, visibleLeft, visibleTop, visibleRight, visibleBottom)
+            val pageTiles = planner.tiles(page, width, height, zoom, visibleLeft, visibleTop, visibleRight, visibleBottom, version(page))
             if (pageTiles.isEmpty()) continue
             wantedTiles[page] = pageTiles
             wanted.addAll(pageTiles)
@@ -333,7 +364,7 @@ class ViewerSurface(
     private fun keptPageImage(page: Int, image: ViewerPageImage, tiled: Boolean): ViewerPageImage? {
         if (!tiled) return null
         val current = pageImages[page] ?: return null
-        if (current == image || shown[current] == null) return null
+        if (current == image || current.version != image.version || shown[current] == null) return null
         return current.takeIf { it.scale * 2 >= image.scale }
     }
 

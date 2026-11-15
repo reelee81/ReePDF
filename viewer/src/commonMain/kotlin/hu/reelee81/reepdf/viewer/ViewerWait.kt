@@ -1,7 +1,7 @@
 package hu.reelee81.reepdf.viewer
 
 class ViewerWait(private val clock: () -> Long) {
-    enum class Reason { OPENING, OPENING_EDITED }
+    enum class Reason { OPENING, OPENING_EDITED, SAVING_EDITS }
 
     var reason: Reason? = null
         private set
@@ -10,9 +10,6 @@ class ViewerWait(private val clock: () -> Long) {
 
     val isActive: Boolean
         get() = reason != null
-
-    val leavesOnCancel: Boolean
-        get() = reason == Reason.OPENING_EDITED
 
     fun start(reason: Reason) {
         if (this.reason == null) startedAt = clock()

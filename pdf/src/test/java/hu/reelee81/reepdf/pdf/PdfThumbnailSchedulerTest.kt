@@ -45,6 +45,10 @@ class PdfThumbnailSchedulerTest {
 
         override fun text(pageIndex: Int) = ""
 
+        override fun pageMarks(pageIndex: Int) = PdfPageMarks.NONE
+
+        override fun editStreams(edits: Map<Int, PdfStreamEdit>) = Unit
+
         override fun emptyStore() = Unit
 
         override fun dropLoadedObjects() = Unit

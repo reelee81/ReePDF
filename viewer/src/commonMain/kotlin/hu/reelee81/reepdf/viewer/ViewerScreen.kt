@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -25,7 +26,14 @@ import androidx.compose.ui.unit.dp
 import hu.reelee81.reepdf.viewer.resources.Res
 import hu.reelee81.reepdf.viewer.resources.back_to_main_screen
 import hu.reelee81.reepdf.viewer.resources.cancel_text
+import hu.reelee81.reepdf.viewer.resources.edit_erase_all_question
 import hu.reelee81.reepdf.viewer.resources.edit_pdf
+import hu.reelee81.reepdf.viewer.resources.edit_question
+import hu.reelee81.reepdf.viewer.resources.no_pdf_edits_to_save
+import hu.reelee81.reepdf.viewer.resources.ok_text
+import hu.reelee81.reepdf.viewer.resources.pdf_edits_erase_failed
+import hu.reelee81.reepdf.viewer.resources.pdf_edits_save_failed
+import hu.reelee81.reepdf.viewer.resources.pdf_edits_saving
 import hu.reelee81.reepdf.viewer.resources.pdf_wait_reading_edited_pages
 import hu.reelee81.reepdf.viewer.resources.pdf_wait_reading_pages
 import hu.reelee81.reepdf.viewer.resources.selection_too_large
@@ -46,7 +54,23 @@ fun ViewerScreen(state: ViewerState, actions: ViewerActions, fontFamily: FontFam
     var copying by remember { mutableStateOf(false) }
     Box(Modifier.fillMaxSize().background(colors.pdfViewerSbBgColor.default)) {
         Column(Modifier.fillMaxSize().then(if (waiting) Modifier.clearAndSetSemantics {} else Modifier)) {
-            if (state.search.isActive) {
+            if (state.editor.isActive) {
+                ViewerEditBar(
+                    editor = state.editor,
+                    colors = colors,
+                    viewerColors = viewerColors,
+                    onBack = actions::onBack,
+                    onEraseVisible = {
+                        state.editor.closePanel()
+                        state.editor.eraseVisible(state.labeledPages())
+                    },
+                    onEraseAll = {
+                        state.editor.closePanel()
+                        state.editor.question = ViewerEditQuestion.ERASE_ALL
+                    },
+                    onSave = state::saveEdits
+                )
+            } else if (state.search.isActive) {
                 ViewerSearchBar(
                     search = state.search,
                     currentPage = { state.currentPage },
@@ -58,7 +82,7 @@ fun ViewerScreen(state: ViewerState, actions: ViewerActions, fontFamily: FontFam
             } else {
                 val search = ViewerBarAction(ViewerIcons.search, stringResource(Res.string.viewer_search), onClick = state::startSearch)
                 val bar = if (state.canEdit) {
-                    listOf(search, ViewerBarAction(ViewerIcons.edit, stringResource(Res.string.edit_pdf)) { if (!state.isWaiting) actions.onEdit() })
+                    listOf(search, ViewerBarAction(ViewerIcons.edit, stringResource(Res.string.edit_pdf), onClick = state::startEditing))
                 } else {
                     listOf(search)
                 }
@@ -70,49 +94,101 @@ fun ViewerScreen(state: ViewerState, actions: ViewerActions, fontFamily: FontFam
                     onBack = actions::onBack
                 )
             }
-            ViewerPages(
-                state = state,
-                colors = viewerColors,
-                reeColors = colors,
-                fontFamily = fontFamily,
-                onTap = {
-                    focusManager.clearFocus()
-                    state.selection.clear()
-                },
-                onCopy = {
-                    if (!copying) {
-                        copying = true
-                        scope.launch {
-                            try {
-                                val text = state.selection.copyText()
-                                if (text == null) {
-                                    actions.onMessage(tooLarge)
-                                } else {
-                                    if (text.isNotEmpty()) actions.onCopy(text)
-                                    state.selection.clear()
+            Box(Modifier.weight(1f).fillMaxWidth()) {
+                ViewerPages(
+                    state = state,
+                    colors = viewerColors,
+                    reeColors = colors,
+                    fontFamily = fontFamily,
+                    onTap = {
+                        focusManager.clearFocus()
+                        state.selection.clear()
+                    },
+                    onCopy = {
+                        if (!copying) {
+                            copying = true
+                            scope.launch {
+                                try {
+                                    val text = state.selection.copyText()
+                                    if (text == null) {
+                                        actions.onMessage(tooLarge)
+                                    } else {
+                                        if (text.isNotEmpty()) actions.onCopy(text)
+                                        state.selection.clear()
+                                    }
+                                } finally {
+                                    copying = false
                                 }
-                            } finally {
-                                copying = false
                             }
                         }
-                    }
-                },
-                modifier = Modifier.weight(1f).fillMaxWidth()
-            )
+                    },
+                    modifier = Modifier.fillMaxSize()
+                )
+                if (state.editor.isActive) {
+                    ViewerUndoPanel(state.editor, colors, viewerColors)
+                    ViewerEditPanels(state, colors, viewerColors, fontFamily)
+                }
+            }
             if (state.bottomGap) Spacer(Modifier.fillMaxWidth().height(BOTTOM_SPACE))
+        }
+        when (state.editor.question) {
+            ViewerEditQuestion.EXIT -> ViewerSaveQuestion(
+                text = stringResource(Res.string.edit_question),
+                colors = colors,
+                overlayColor = palette.dialogOverlayBackgroundColor,
+                fontFamily = fontFamily,
+                onDismiss = { state.editor.question = null },
+                onDiscard = state.editor::discard,
+                onSave = state::saveEdits
+            )
+            ViewerEditQuestion.ERASE_ALL -> ViewerSaveQuestion(
+                text = stringResource(Res.string.edit_erase_all_question),
+                colors = colors,
+                overlayColor = palette.dialogOverlayBackgroundColor,
+                fontFamily = fontFamily,
+                onDismiss = { state.editor.question = null },
+                onDiscard = { state.editor.question = null },
+                onSave = {
+                    state.editor.question = null
+                    state.editor.eraseAll()
+                },
+                firstButton = Res.string.cancel_text,
+                secondButton = Res.string.ok_text
+            )
+            null -> Unit
         }
         if (waiting) {
             Box(Modifier.fillMaxSize().pointerInput(Unit) { blockTouches() })
             if (state.waitRevealed) {
-                val leaves = state.leavesOnCancel
+                val reason = state.waitReason
+                val saving = reason == ViewerWait.Reason.SAVING_EDITS
+                val leaves = reason == ViewerWait.Reason.OPENING_EDITED
                 ViewerWaitDialog(
-                    caption = stringResource(if (leaves) Res.string.pdf_wait_reading_edited_pages else Res.string.pdf_wait_reading_pages),
+                    caption = stringResource(
+                        when {
+                            saving -> Res.string.pdf_edits_saving
+                            leaves -> Res.string.pdf_wait_reading_edited_pages
+                            else -> Res.string.pdf_wait_reading_pages
+                        }
+                    ),
                     buttonLabel = stringResource(if (leaves) Res.string.back_to_main_screen else Res.string.cancel_text),
                     colors = colors,
                     overlayColor = palette.dialogOverlayBackgroundColor,
                     fontFamily = fontFamily,
-                    onCancel = actions::onCancelWait
+                    onCancel = if (saving) state::cancelSave else actions::onCancelWait
                 )
+            }
+        }
+        val message = when (val shown = state.editMessage) {
+            null -> null
+            ViewerEditMessage.NothingToSave -> stringResource(Res.string.no_pdf_edits_to_save)
+            is ViewerEditMessage.SaveFailed -> stringResource(Res.string.pdf_edits_save_failed, shown.text)
+            is ViewerEditMessage.EraseFailed -> stringResource(Res.string.pdf_edits_erase_failed, shown.text)
+        }
+        LaunchedEffect(message) {
+            if (message != null) {
+                actions.onMessage(message)
+                state.messageShown()
             }
         }
     }

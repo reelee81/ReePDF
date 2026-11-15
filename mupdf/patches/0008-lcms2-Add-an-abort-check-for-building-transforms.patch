@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: reelee81 <reelee81@gmail.com>
 Date: Wed, 11 Nov 2026 12:30:14 +0100
-Subject: [PATCH 8/18] lcms2: Add an abort check for building transforms.
+Subject: [PATCH 8/20] lcms2: Add an abort check for building transforms.
 
 cmsSetAbortCheck() sets a process wide callback that is asked while a
 transform is built: every 1024 grid points when a CLUT is resampled and

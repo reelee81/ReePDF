@@ -15,8 +15,10 @@ import kotlinx.coroutines.cancel
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -68,6 +70,39 @@ class ViewerStateTest {
         opened()
         zoomedInFrom()
         return checkNotNull(state.viewport)
+    }
+
+    @Test
+    fun aRefreshedPageKeepsItsImageUntilTheNewOneArrives() {
+        opened()
+        val page = state.currentPage
+        val before = checkNotNull(state.pageImage(page))
+        assertEquals(0, document.pendingPageImages)
+
+        state.surface.refresh(setOf(page))
+
+        assertSame(before, state.pageImage(page))
+        assertEquals(1, document.pendingPageImages)
+        document.finishAll()
+        val after = checkNotNull(state.pageImage(page))
+        assertNotSame(before, after)
+        state.surface.refresh(null)
+        assertTrue(document.pendingPageImages >= 1)
+        assertSame(after, state.pageImage(page))
+    }
+
+    @Test
+    fun aRefreshedTiledPageRedrawsItsBackgroundToo() {
+        zoomedIn()
+        document.finishAll()
+        val page = state.currentPage
+        assertEquals(0, document.pendingPageImages)
+        assertEquals(0, document.pendingTiles)
+
+        state.surface.refresh(setOf(page))
+
+        assertEquals(1, document.pendingPageImages)
+        assertTrue(document.pendingTiles > 0)
     }
 
     @Test

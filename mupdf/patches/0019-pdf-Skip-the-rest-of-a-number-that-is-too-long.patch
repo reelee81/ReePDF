@@ -1,0 +1,60 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: reelee81 <reelee81@gmail.com>
+Date: Sun, 15 Nov 2026 01:12:00 +0100
+Subject: [PATCH 19/20] pdf: Skip the rest of a number that is too long.
+
+lex_number() reads a number into the lexer buffer and stops when the
+buffer is full: the remaining digits stay in the stream and are read as
+the next token. Inside a dictionary that token is a number where a key
+is expected, so the whole object fails to parse ("invalid key in dict");
+the pdf.js test filled-background.pdf has a /Pi entry of 100 001
+characters in the resources of its pages. Like an over-long name, which
+lex_name() already truncates, the rest of such a number is now read and
+dropped with a warning, and the number keeps the value of its first
+characters (255 in content streams, 65 535 in objects).
+
+Modified for ReePDF on 2026-11-15.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ source/pdf/pdf-lex.c | 27 +++++++++++++++++++++++++++
+ 1 file changed, 27 insertions(+)
+
+diff --git a/source/pdf/pdf-lex.c b/source/pdf/pdf-lex.c
+index aaee6af..d5b7851 100644
+--- a/source/pdf/pdf-lex.c
++++ b/source/pdf/pdf-lex.c
+@@ -242,6 +242,33 @@ lex_number(fz_context *ctx, fz_stream *f, pdf_lexbuf *buf, int c)
+ 		c = lex_byte(ctx, f);
+ 	}
+ 
++	/* skip the rest of numbers that are too long */
++	fz_warn(ctx, "number is too long");
++	while (1)
++	{
++		switch (c)
++		{
++		case IS_WHITE:
++		case IS_DELIM:
++			fz_unread_byte(ctx, f);
++			goto end;
++		case EOF:
++			goto end;
++		case '.':
++			if (isreal)
++				isbad = 1;
++			isreal = s;
++			break;
++		case '-':
++		case RANGE_0_9:
++			break;
++		default:
++			isbad = 1;
++			break;
++		}
++		c = lex_byte(ctx, f);
++	}
++
+ end:
+ 	*s = '\0';
+ 	if (isbad)

@@ -2,8 +2,9 @@
 
 ReePDF uses its own build of the MuPDF Java bindings for Android instead of
 the `com.artifex.mupdf:fitz` package from <https://maven.ghostscript.com>.
-The build is MuPDF 1.28.6 with the eighteen patches in [`patches/`](patches),
-modified for ReePDF on 2026-11-08, 2026-11-10, 2026-11-11 and 2026-11-12.
+The build is MuPDF 1.28.6 with the twenty patches in [`patches/`](patches),
+modified for ReePDF on 2026-11-08, 2026-11-10, 2026-11-11, 2026-11-12 and
+2026-11-15.
 
 ## Modifications
 
@@ -112,6 +113,21 @@ and with a random function test; on Android (ARM) the output is unchanged.
     pixmap size limit (the page fails with "Overly large image") or take
     hundreds of MB. The repeats are placed exactly instead of on whole pixels,
     so their edges can be anti-aliased slightly differently.
+19. `0019` — a number longer than the lexer buffer (255 characters in content
+    streams, 65 535 in objects) is read to its end with a warning, and its
+    first characters give its value. Upstream stops at the end of the buffer
+    and reads the remaining digits as a new token, so a dictionary holding
+    such a number cannot be parsed ("invalid key in dict") and a content
+    stream operator gets wrong operands. Names that are too long were
+    already truncated the same way.
+20. `0020` — a change inside the dictionary of a stream (its `Length`,
+    `Filter`, `DecodeParms` or the resources of a form) keeps the page maps.
+    Upstream drops them on every change of an object in the document unless
+    the change is marked as non-structural, so every in-memory stream update
+    (`pdf_update_stream()`) made the next page lookup walk the whole page tree
+    and load every page dictionary again (57 ms instead of 3 ms per page load
+    on a 30 000 page document, and the dictionaries stay in memory). A stream
+    is never a node of the page tree.
 
 Everything else is unchanged upstream code. The Java package stays
 `com.artifex.mupdf.fitz`.
@@ -176,6 +192,7 @@ tools gives a byte-identical file.
 | Version | SHA-256 |
 |---|---|
 | `1.28.6-reepdf` | `37d10493d432db9cce5347768ffe94078b5373c684ab5433b15e83c9ef299cc2` |
+| `1.28.6-reepdf2` | `f563508205887a1bc8c1eb3d6185c8964865d8a203a1fdf0745e1589ed221af0` |
 
 ## License
 

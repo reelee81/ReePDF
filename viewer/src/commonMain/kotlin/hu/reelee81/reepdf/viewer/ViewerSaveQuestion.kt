@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import hu.reelee81.reepdf.viewer.resources.Res
 import hu.reelee81.reepdf.viewer.resources.discard_text
 import hu.reelee81.reepdf.viewer.resources.save_text
+import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
 
 @Composable
@@ -35,7 +36,9 @@ internal fun ViewerSaveQuestion(
     onDismiss: () -> Unit,
     onDiscard: () -> Unit,
     onSave: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    firstButton: StringResource = Res.string.discard_text,
+    secondButton: StringResource = Res.string.save_text
 ) {
     val density = LocalDensity.current
     BoxWithConstraints(
@@ -64,8 +67,8 @@ internal fun ViewerSaveQuestion(
                 )
             )
             Row(Modifier.fillMaxWidth()) {
-                ViewerTextButton(stringResource(Res.string.discard_text), colors, fontFamily, onDiscard, Modifier.weight(1f))
-                ViewerTextButton(stringResource(Res.string.save_text), colors, fontFamily, onSave, Modifier.weight(1f))
+                ViewerTextButton(stringResource(firstButton), colors, fontFamily, onDiscard, Modifier.weight(1f))
+                ViewerTextButton(stringResource(secondButton), colors, fontFamily, onSave, Modifier.weight(1f))
             }
         }
     }

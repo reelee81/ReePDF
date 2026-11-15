@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: reelee81 <reelee81@gmail.com>
 Date: Wed, 11 Nov 2026 12:30:14 +0100
-Subject: [PATCH 5/18] fitz: Stop the long steps of an aborted page run early.
+Subject: [PATCH 5/20] fitz: Stop the long steps of an aborted page run early.
 
 A cookie abort was only noticed by the PDF interpreter between two
 operators, so one long operator (decoding or scaling a large image,

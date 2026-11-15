@@ -18,6 +18,10 @@ class ViewerColors private constructor(night: Boolean) {
     val cropFrame = p.cropFrameColor
     val cropShade = p.cropShadeColor
     val cropGrid = p.cropGridColor
+    val activeTool = if (night) p.darkLight050 else p.darkLight065
+    val activeToolIcon = if (night) p.darkLight000 else p.darkLight100
+    val colorOutline = if (night) p.darkLight100 else p.darkLight000
+    val dropTarget = p.teal100
 
     companion object {
         val light = ViewerColors(night = false)

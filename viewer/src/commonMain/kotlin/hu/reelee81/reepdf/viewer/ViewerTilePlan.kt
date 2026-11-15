@@ -6,9 +6,17 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sqrt
 
-data class ViewerPageImage(val page: Int, val scale: Float, val width: Int, val height: Int)
+data class ViewerPageImage(val page: Int, val scale: Float, val width: Int, val height: Int, val version: Int = 0)
 
-data class ViewerTile(val page: Int, val zoom: Float, val left: Int, val top: Int, val width: Int, val height: Int)
+data class ViewerTile(
+    val page: Int,
+    val zoom: Float,
+    val left: Int,
+    val top: Int,
+    val width: Int,
+    val height: Int,
+    val version: Int = 0
+)
 
 class ViewerTilePlan(private val tileSize: Int, private val maxPagePixels: Long) {
 
@@ -16,9 +24,9 @@ class ViewerTilePlan(private val tileSize: Int, private val maxPagePixels: Long)
         require(tileSize > 0 && maxPagePixels > 0) { "Invalid tile limits" }
     }
 
-    fun pageImage(page: Int, pageWidth: Double, pageHeight: Double, zoom: Float): ViewerPageImage {
+    fun pageImage(page: Int, pageWidth: Double, pageHeight: Double, zoom: Float, version: Int = 0): ViewerPageImage {
         val scale = min(zoom.toDouble(), sqrt(maxPagePixels / (pageWidth * pageHeight))).toFloat()
-        return ViewerPageImage(page, scale, pixels(pageWidth, scale), pixels(pageHeight, scale))
+        return ViewerPageImage(page, scale, pixels(pageWidth, scale), pixels(pageHeight, scale), version)
     }
 
     fun tiles(
@@ -29,7 +37,8 @@ class ViewerTilePlan(private val tileSize: Int, private val maxPagePixels: Long)
         visibleLeft: Double,
         visibleTop: Double,
         visibleRight: Double,
-        visibleBottom: Double
+        visibleBottom: Double,
+        version: Int = 0
     ): List<ViewerTile> {
         if (zoom <= pageImage(page, pageWidth, pageHeight, zoom).scale) return emptyList()
         val width = pixels(pageWidth, zoom)
@@ -45,7 +54,7 @@ class ViewerTilePlan(private val tileSize: Int, private val maxPagePixels: Long)
             for (column in firstColumn..lastColumn) {
                 val left = column * tileSize
                 val top = row * tileSize
-                tiles += ViewerTile(page, zoom, left, top, min(tileSize, width - left), min(tileSize, height - top))
+                tiles += ViewerTile(page, zoom, left, top, min(tileSize, width - left), min(tileSize, height - top), version)
             }
         }
         return tiles

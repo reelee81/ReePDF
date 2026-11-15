@@ -16,6 +16,7 @@ import com.itextpdf.kernel.pdf.PdfPage
 import com.itextpdf.kernel.pdf.PdfResources
 import com.itextpdf.kernel.pdf.PdfStream
 import com.itextpdf.kernel.pdf.canvas.PdfCanvas
+import com.itextpdf.kernel.pdf.canvas.parser.util.InlineImageParsingUtils
 import com.itextpdf.kernel.pdf.canvas.parser.util.PdfCanvasParser
 import com.itextpdf.kernel.pdf.xobject.PdfFormXObject
 import java.io.ByteArrayOutputStream
@@ -33,6 +34,12 @@ object PdfCopySupport {
     private val STATE_OPERATORS = setOf("q", "Q", "cm")
     private val PATH_OPERATORS = setOf("m", "l", "c", "v", "y", "h", "re")
     private val PATH_ENDING_OPERATORS = setOf("S", "s", "f", "F", "f*", "B", "B*", "b", "b*", "n")
+    private val CONTENT_OPERATORS = setOf(
+        "b", "B", "b*", "B*", "BDC", "BI", "BMC", "BT", "BX", "c", "cm", "CS", "cs", "d", "d0", "d1", "Do", "DP",
+        "EI", "EMC", "ET", "EX", "f", "F", "f*", "G", "g", "gs", "h", "i", "ID", "j", "J", "K", "k", "l", "m", "M",
+        "MP", "n", "q", "Q", "re", "RG", "rg", "ri", "s", "S", "SC", "sc", "SCN", "scn", "sh", "T*", "Tc", "Td", "TD",
+        "Tf", "Tj", "TJ", "TL", "Tm", "Tr", "Ts", "Tw", "Tz", "v", "w", "W", "W*", "y", "'", "\""
+    )
     private val REF = PdfName("Ref")
     private const val MAX_WRAPPER_DEPTH = 64
     private const val MAX_REFERENCE_DEPTH = 16
@@ -240,6 +247,34 @@ object PdfCopySupport {
         } catch (_: Exception) {
             null
         }
+    }
+
+    internal class ContentScan(val unclosed: Int?, val broken: Boolean)
+
+    internal fun scanContent(content: ByteArray, resources: PdfDictionary): ContentScan {
+        var depth = 0
+        var restoredTooOften = false
+        var broken = false
+        var compatibility = 0
+        try {
+            PdfTokenizer(RandomAccessFileOrArray(RandomAccessSourceFactory().createSource(content))).use { tokenizer ->
+                val parser = PdfCanvasParser(tokenizer, PdfResources(resources))
+                val operands = ArrayList<PdfObject>()
+                while (parser.parse(operands).isNotEmpty()) {
+                    when (val operator = operands.last().toString()) {
+                        "q" -> depth++
+                        "Q" -> if (--depth < 0) restoredTooOften = true
+                        "BX" -> compatibility++
+                        "EX" -> if (compatibility > 0) compatibility--
+                        "BI" -> InlineImageParsingUtils.parse(parser, resources.getAsDictionary(PdfName.ColorSpace))
+                        else -> if (compatibility == 0 && operator !in CONTENT_OPERATORS) broken = true
+                    }
+                }
+            }
+        } catch (_: Exception) {
+            return ContentScan(null, true)
+        }
+        return ContentScan(depth.takeUnless { restoredTooOften }, broken)
     }
 
     private fun ByteArrayOutputStream.writeLatin1(text: String) {

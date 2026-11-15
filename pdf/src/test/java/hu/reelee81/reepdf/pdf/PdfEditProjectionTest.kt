@@ -40,6 +40,10 @@ class PdfEditProjectionTest {
 
     private val rotatedHalf = doubleArrayOf(0.0, 0.5, -0.5, 0.0, 450.0, 100.0)
 
+    private companion object {
+        val BROKEN = "\nq0.313 cm.176 ".repeat(120) + "q\n"
+    }
+
     @Test
     fun inverseUndoesThePlacement() {
         val inverse = PdfEditProjection.inverse(rotatedHalf)!!
@@ -139,6 +143,116 @@ class PdfEditProjectionTest {
             assertEquals(original, String(page.getContentStream(0).bytes, Charsets.ISO_8859_1))
             assertFalse(String(page.getContentStream(1).bytes, Charsets.ISO_8859_1).startsWith("Q"))
         }
+    }
+
+    @Test
+    fun aBrokenSourcePageGetsItsContentInItsOwnFormBeneathTheEdit() {
+        val projected = projectEdit(brokenSource(), "EDIT", 1)
+        PdfDocument(PdfReader(projected)).use { pdf ->
+            val page = pdf.getPage(1)
+            val data = privateData(page.pdfObject)!!
+            val original = data.getAsStream(PdfName("ContentForm"))
+            assertNotNull(original)
+            assertNull(data.get(PdfName("Wrap")))
+            assertTrue(String(original!!.bytes, Charsets.ISO_8859_1).contains(BROKEN))
+            assertEquals(2, page.contentStreamCount)
+            val xObjects = page.pdfObject.getAsDictionary(PdfName.Resources).getAsDictionary(PdfName.XObject)
+            val originalName = xObjects.keySet().single { sameStream(xObjects.getAsStream(it), original) }
+            val layerName = xObjects.keySet().single { sameStream(xObjects.getAsStream(it), layerForm(page)!!) }
+            assertTrue(String(page.getContentStream(0).bytes, Charsets.ISO_8859_1).contains("/${originalName.value} Do"))
+            assertTrue(String(page.getContentStream(1).bytes, Charsets.ISO_8859_1).contains("/${layerName.value} Do"))
+        }
+        val positions = textPositions(buildNup(projected), 1)
+        assertTrue(positions.containsKey("SOURCE 1"))
+        assertEquals(150f, positions.getValue("EDIT")[0], 0.05f)
+        assertEquals(200f, positions.getValue("EDIT")[1], 0.05f)
+    }
+
+    @Test
+    fun removingTheEditFromABrokenSourcePageRestoresItsContent() {
+        val source = brokenSource()
+        val content = PdfDocument(PdfReader(source)).use { pdf -> pdf.getPage(1).getContentStream(0).bytes + '\n'.code.toByte() }
+        val projected = projectEdit(source, "EDIT", 1)
+        val cleared = temporary.newFile()
+        assertEquals(1, PdfEditProjection.clearLayers(buildNup(projected), cleared, null, batchSize = 1) {})
+        val restored = temporary.newFile()
+        assertEquals(1, projectFile(projected, cleared, restored))
+        PdfDocument(PdfReader(restored)).use { pdf ->
+            val page = pdf.getPage(1)
+            assertNull(layerForm(page))
+            assertNull(privateData(page.pdfObject)?.get(PdfName("ContentForm")))
+            assertEquals(1, page.contentStreamCount)
+            assertArrayEquals(content, page.getContentStream(0).bytes)
+            assertNotNull(page.pdfObject.getAsDictionary(PdfName.Resources).getAsDictionary(PdfName.Font))
+            assertNull(page.pdfObject.getAsDictionary(PdfName.Resources).getAsDictionary(PdfName.XObject))
+        }
+        assertTrue(textPositions(buildNup(restored), 1).containsKey("SOURCE 1"))
+    }
+
+    @Test
+    fun aBrokenSourcePageGetsDeeperOnlyOnceAcrossEditsSavesAndReloads() {
+        val plain = buildNup(projectEdit(makeSource(1), "EDIT 0", 1), flatten = true)
+        var exported = buildNup(projectEdit(brokenSource(), "EDIT 0", 1), flatten = true)
+        val depth = maxDepth(exported)
+        assertTrue(depth <= maxDepth(plain) + 1)
+
+        for (round in 1..5) {
+            val resaved = buildNup(reload(exported), flatten = true)
+            assertEquals("resave in round $round", depth, maxDepth(resaved))
+
+            exported = buildNup(projectEdit(reload(resaved), "EDIT $round", 1), flatten = true)
+            assertEquals("new edit in round $round", depth, maxDepth(exported))
+
+            val texts = textPositions(exported, 1)
+            assertTrue(texts.containsKey("SOURCE 1"))
+            for (previous in 0..round) assertTrue("EDIT $previous is missing", texts.containsKey("EDIT $previous"))
+        }
+    }
+
+    @Test
+    fun anInlineImageDoesNotMakeASourcePageBroken() {
+        val projected = projectEdit(rawSource("q\nBI /W 2 /H 1 /BPC 8 /CS /G ID QQ EI\n0 0 m 100 100 l S\n"), "EDIT", 1)
+        PdfDocument(PdfReader(projected)).use { pdf ->
+            val page = pdf.getPage(1)
+            val data = privateData(page.pdfObject)!!
+            assertNull(data.get(PdfName("ContentForm")))
+            assertNotNull(data.get(PdfName("Wrap")))
+            assertEquals(3, page.contentStreamCount)
+        }
+    }
+
+    private fun brokenSource(): File {
+        val file = temporary.newFile()
+        PdfDocument(PdfWriter(file)).use { pdf ->
+            val page = pdf.addNewPage(PageSize.A4)
+            PdfCanvas(page).beginText().setFontAndSize(PdfFontFactory.createFont(), 12f)
+                .moveText(40.0, 780.0).showText("SOURCE 1").endText()
+            page.getContentStream(0).outputStream.writeString(BROKEN)
+        }
+        return file
+    }
+
+    @Test
+    fun aProjectedPageKeepsOnlyItsStandardResourcesInTheirOwnObject() {
+        val source = temporary.newFile()
+        PdfDocument(PdfWriter(source)).use { pdf ->
+            val page = pdf.addNewPage(PageSize.A4)
+            PdfCanvas(page).beginText().setFontAndSize(PdfFontFactory.createFont(), 20f)
+                .moveText(100.0, 700.0).showText("SOURCE 1").endText()
+            page.resources.pdfObject.put(PdfName("Pi"), PdfNumber(3.14159))
+        }
+        val projected = projectEdit(source, "EDIT", 1)
+        PdfDocument(PdfReader(projected)).use { pdf ->
+            val page = pdf.getPage(1)
+            assertTrue(page.pdfObject.get(PdfName.Resources, false) is PdfIndirectReference)
+            val resources = page.pdfObject.getAsDictionary(PdfName.Resources)
+            assertFalse(resources.containsKey(PdfName("Pi")))
+            assertNotNull(resources.getAsDictionary(PdfName.Font))
+            assertNotNull(layerForm(page))
+        }
+        val positions = textPositions(buildNup(projected), 1)
+        assertTrue(positions.containsKey("SOURCE 1"))
+        assertTrue(positions.containsKey("EDIT"))
     }
 
     private fun rawSource(content: String): File {

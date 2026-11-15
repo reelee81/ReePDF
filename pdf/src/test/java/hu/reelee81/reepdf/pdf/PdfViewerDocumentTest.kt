@@ -83,6 +83,16 @@ class PdfViewerDocumentTest {
             return texts(pageIndex)
         }
 
+        @Volatile
+        var markStreams = IntArray(0)
+
+        override fun pageMarks(pageIndex: Int): PdfPageMarks {
+            record("marks $pageIndex")
+            return PdfPageMarks(PdfMatrix.IDENTITY, emptyList(), markStreams)
+        }
+
+        override fun editStreams(edits: Map<Int, PdfStreamEdit>) = record("edit ${edits.keys.sorted()}")
+
         override fun emptyStore() = record("empty")
 
         override fun dropLoadedObjects() = record("drop")
@@ -869,6 +879,36 @@ class PdfViewerDocumentTest {
         assertTrue(failed is IllegalStateException)
         assertEquals(error.message, failed?.message)
         assertEquals("text 2", next)
+    }
+
+    @Test
+    fun markCallsRunOnTheDocumentThreadAndAnEmptyEditStaysAway() = runBlocking {
+        val engine = FakeEngine()
+        val document = open(engine)
+
+        val marks = document.pageMarks(1)
+        document.editStreams(emptyMap())
+        document.editStreams(mapOf(7 to PdfStreamEdit.BLANK, 3 to PdfStreamEdit.ORIGINAL))
+        document.shut()
+
+        assertEquals(0, marks.streams.size)
+        assertEquals(listOf("marks 1", "edit [3, 7]", "close"), engine.events)
+        assertEquals(1, engine.threads.size)
+        assertNotSame(Thread.currentThread(), engine.threads.single())
+    }
+
+    @Test
+    fun aBlankReadEmptiesThePageStreamsInTheSameStep() = runBlocking {
+        val engine = FakeEngine()
+        engine.markStreams = intArrayOf(5, 4)
+        val document = open(engine)
+
+        document.pageMarks(2, blank = true)
+        engine.markStreams = IntArray(0)
+        document.pageMarks(1, blank = true)
+        document.shut()
+
+        assertEquals(listOf("marks 2", "edit [4, 5]", "marks 1", "close"), engine.events)
     }
 
     @Test

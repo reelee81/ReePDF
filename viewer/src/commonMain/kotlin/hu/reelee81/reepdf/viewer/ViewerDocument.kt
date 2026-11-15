@@ -59,8 +59,6 @@ sealed interface ViewerTilesRender {
 interface ViewerActions {
     fun onBack()
 
-    fun onEdit()
-
     fun onCancelWait()
 
     fun onCopy(text: String)

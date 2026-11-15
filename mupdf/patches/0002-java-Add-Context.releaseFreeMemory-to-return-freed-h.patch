@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: reelee81 <reelee81@gmail.com>
 Date: Sun, 8 Nov 2026 19:37:46 +0100
-Subject: [PATCH 2/18] java: Add Context.releaseFreeMemory() to return freed
+Subject: [PATCH 2/20] java: Add Context.releaseFreeMemory() to return freed
  heap memory to the OS.
 
 After a large document is closed, the Android allocator keeps most of the

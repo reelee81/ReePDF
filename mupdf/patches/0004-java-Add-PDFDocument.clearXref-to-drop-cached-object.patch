@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: reelee81 <reelee81@gmail.com>
 Date: Tue, 10 Nov 2026 22:44:34 +0100
-Subject: [PATCH 4/18] java: Add PDFDocument.clearXref() to drop cached objects.
+Subject: [PATCH 4/20] java: Add PDFDocument.clearXref() to drop cached objects.
 
 A PDF document keeps every object it has parsed until it is closed. A
 viewer that scrolls through a large document therefore grows by a few

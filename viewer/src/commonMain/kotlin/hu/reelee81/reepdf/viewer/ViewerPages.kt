@@ -32,6 +32,11 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
@@ -58,6 +63,7 @@ import hu.reelee81.reepdf.viewer.resources.page_indicator_range
 import hu.reelee81.reepdf.viewer.resources.page_indicator_single
 import kotlin.math.roundToInt
 import kotlin.time.Duration.Companion.milliseconds
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import org.jetbrains.compose.resources.stringResource
@@ -85,7 +91,9 @@ internal fun ViewerPages(
                 handleSlop = ViewerSelectionHandles.TOUCH_SLOP.toPx(),
                 wordTolerance = WORD_TOLERANCE.toPx(),
                 edge = AUTO_SCROLL_EDGE.toPx(),
-                edgeStep = AUTO_SCROLL_STEP.toPx()
+                edgeStep = AUTO_SCROLL_STEP.toPx(),
+                strokeStep = STROKE_STEP.toPx(),
+                eraserTolerance = ERASER_TOLERANCE.toPx()
             )
         }
     }
@@ -95,6 +103,8 @@ internal fun ViewerPages(
     val tap by rememberUpdatedState(onTap)
     var frame by remember { mutableStateOf(PagesFrame(0f, 0)) }
     val keyboardCover = state.keyboardCover
+    val editing = state.editor.isActive
+    val scrolling = state.editor.paused
 
     LaunchedEffect(state.scrollCount) {
         if (state.scrollCount == 0) return@LaunchedEffect
@@ -118,7 +128,11 @@ internal fun ViewerPages(
                 val next = PagesFrame(coordinates.positionInRoot().y, coordinates.findRootCoordinates().size.height)
                 if (next != frame) frame = next
             }
-            .pointerInput(state) {
+            .pointerInput(state, editing, scrolling) {
+                if (editing) {
+                    if (scrolling) detectTapGestures(onDoubleTap = { position -> motion.doubleTap(state, scope, position) })
+                    return@pointerInput
+                }
                 detectTapGestures(
                     onDoubleTap = { position -> motion.doubleTap(state, scope, position) },
                     onLongPress = { position -> selectWord(state, position, touch.wordTolerance) },
@@ -126,7 +140,10 @@ internal fun ViewerPages(
                 )
             },
         grab = { position -> grabAt(state, fastScroll, scrollerAlpha, position, thumbWidth, thumbHeight, touch) },
-        drawPage = { page, x, y, zoom -> drawTexts(state, colors, page, x, y, zoom) },
+        drawPage = { page, x, y, zoom ->
+            drawTexts(state, colors, page, x, y, zoom)
+            if (state.editor.isActive) drawEditMarks(state, page, x, y, zoom)
+        },
         drawOver = { drawHandles(state, touch.handleRadius, colors.selectionHandle) }
     ) {
         PageDescriptions(state)
@@ -144,7 +161,9 @@ private class ViewerTouch(
     val handleSlop: Float,
     val wordTolerance: Float,
     val edge: Float,
-    val edgeStep: Float
+    val edgeStep: Float,
+    val strokeStep: Float,
+    val eraserTolerance: Float
 )
 
 private fun ViewerMotion.doubleTap(state: ViewerState, scope: CoroutineScope, tap: Offset) {
@@ -203,6 +222,7 @@ private fun grabAt(
             false
         }
     }
+    if (state.editor.isActive) return editGrab(state, position, touch)
     val grab = ViewerSelectionHandles.grab(state, position, touch.handleRadius, touch.handleSlop)
     if (grab != null && state.selection.beginDrag(grab.handle)) {
         return { down ->
@@ -262,6 +282,90 @@ private suspend fun AwaitPointerEventScope.dragHandle(
         val anchor = finger + offset
         val (page, point) = state.pagePoint(anchor.x, anchor.y - grab.lineHeight / 2) ?: continue
         state.selection.dragTo(page, point)
+    }
+}
+
+private fun editGrab(state: ViewerState, position: Offset, touch: ViewerTouch): ViewerDrag? {
+    val editor = state.editor
+    if (state.isWaiting || editor.paused) return null
+    val tool = editor.settings.tool
+    val erasing = tool == ViewerEditTool.ERASER
+    if (!erasing && tool != ViewerEditTool.PEN && tool != ViewerEditTool.HIGHLIGHTER) return null
+    val (page, point) = state.pageHit(position.x, position.y) ?: return null
+    if (page in state.failedPages) return null
+    val zoom = state.viewport?.zoom ?: return null
+    return { down ->
+        if (erasing) {
+            editor.beginErase(page, point, touch.eraserTolerance / zoom)
+        } else {
+            editor.beginStroke(page, point, touch.strokeStep / zoom, touch.wordTolerance / zoom)
+        }
+        var zoomNext = false
+        try {
+            while (true) {
+                val event = awaitPointerEvent()
+                if (event.changes.count { it.pressed } > 1) {
+                    zoomNext = true
+                    break
+                }
+                val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                change.consume()
+                if (!change.pressed) break
+                if (erasing) {
+                    state.pagePoint(change.position.x, change.position.y)?.let { (hitPage, hitPoint) -> editor.extendErase(hitPage, hitPoint) }
+                } else {
+                    state.pointOn(page, change.position.x, change.position.y)?.let(editor::extendStroke)
+                }
+            }
+        } catch (e: CancellationException) {
+            editor.cancelGesture()
+            throw e
+        }
+        when {
+            zoomNext -> editor.cancelGesture()
+            erasing -> editor.endErase()
+            else -> editor.endStroke()
+        }
+        zoomNext
+    }
+}
+
+private fun DrawScope.drawEditMarks(state: ViewerState, page: Int, x: Double, y: Double, zoom: Float) {
+    val editor = state.editor
+    val pages = state.layout ?: return
+    val marks = editor.addedMarks(page)
+    val wet = editor.wet?.takeIf { it.page == page }
+    if (marks.isEmpty() && wet == null) return
+    val left = x.toFloat()
+    val top = y.toFloat()
+    clipRect(left, top, left + (pages.width(page) * zoom).toFloat(), top + (pages.height(page) * zoom).toFloat()) {
+        for (mark in marks) drawMark(mark, left, top, zoom)
+        if (wet != null) drawMark(wet, left, top, zoom)
+    }
+}
+
+private fun DrawScope.drawMark(mark: ViewerMark, left: Float, top: Float, zoom: Float) {
+    val path = Path()
+    val p = mark.path.points
+    var index = 0
+    for (verb in mark.path.verbs) {
+        when (verb) {
+            ViewerMarkPath.MOVE -> path.moveTo(left + p[index] * zoom, top + p[index + 1] * zoom)
+            ViewerMarkPath.LINE -> path.lineTo(left + p[index] * zoom, top + p[index + 1] * zoom)
+            ViewerMarkPath.CUBIC -> path.cubicTo(
+                left + p[index] * zoom, top + p[index + 1] * zoom,
+                left + p[index + 2] * zoom, top + p[index + 3] * zoom,
+                left + p[index + 4] * zoom, top + p[index + 5] * zoom
+            )
+            ViewerMarkPath.CLOSE -> path.close()
+        }
+        index += ViewerMarkPath.pointsOf(verb)
+    }
+    val color = Color(OPAQUE or mark.color).copy(alpha = if (mark.kind == ViewerMarkKind.PEN) 1f else MARK_ALPHA)
+    if (mark.kind == ViewerMarkKind.TEXT_HIGHLIGHT) {
+        drawPath(path, color)
+    } else {
+        drawPath(path, color, style = Stroke(width = maxOf(mark.width * zoom, 1f), cap = StrokeCap.Round, join = StrokeJoin.Round))
     }
 }
 
@@ -384,3 +488,5 @@ private val INDICATOR_RADIUS = 16.dp
 private val INDICATOR_PADDING = 12.dp
 private val INDICATOR_TEXT_SIZE = 12.sp
 private val WORD_TOLERANCE = 8.dp
+private val STROKE_STEP = 1.dp
+private val ERASER_TOLERANCE = 10.dp

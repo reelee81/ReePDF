@@ -36,10 +36,16 @@ import hu.reelee81.reepdf.core.SignatureGeometry
 import hu.reelee81.reepdf.core.WorkFileBackup
 import hu.reelee81.reepdf.pdf.MuPdfSignedPageRenderer
 import hu.reelee81.reepdf.pdf.MuPdfViewerEngine
+import hu.reelee81.reepdf.pdf.PdfEditProjection
 import hu.reelee81.reepdf.pdf.PdfImportOperation
 import hu.reelee81.reepdf.pdf.PdfIo
 import hu.reelee81.reepdf.pdf.PdfLayoutChangeOperation
+import hu.reelee81.reepdf.pdf.PdfMark
+import hu.reelee81.reepdf.pdf.PdfMarkKind
+import hu.reelee81.reepdf.pdf.PdfMarkPath
+import hu.reelee81.reepdf.pdf.PdfMarkSave
 import hu.reelee81.reepdf.pdf.PdfOutputOperation
+import hu.reelee81.reepdf.pdf.PdfPageMark
 import hu.reelee81.reepdf.pdf.PdfPageView
 import hu.reelee81.reepdf.pdf.PdfRasterTarget
 import hu.reelee81.reepdf.pdf.PdfRenderAbort
@@ -47,11 +53,14 @@ import hu.reelee81.reepdf.pdf.PdfRenderResult
 import hu.reelee81.reepdf.pdf.PdfSearchCounter
 import hu.reelee81.reepdf.pdf.PdfSignOperation
 import hu.reelee81.reepdf.pdf.PdfSourceParts
+import hu.reelee81.reepdf.pdf.PdfStreamEdit
 import hu.reelee81.reepdf.pdf.PdfTextHits
 import hu.reelee81.reepdf.pdf.PdfTextPoint
 import hu.reelee81.reepdf.pdf.PdfThumbnailScheduler
 import hu.reelee81.reepdf.pdf.PdfViewerDocument
+import hu.reelee81.reepdf.pdf.PdfViewerEditOperation
 import hu.reelee81.reepdf.pdf.PdfViewerPageSizes
+import hu.reelee81.reepdf.pdf.ProgressTracker
 import hu.reelee81.reepdf.pdf.SignedPageRenderer
 import hu.reelee81.reepdf.viewer.ViewerPageLayout
 import hu.reelee81.reepdf.viewer.ViewerRender
@@ -150,6 +159,7 @@ class R8SmokeActivity : Activity() {
                         thumbnails()
                         placer()
                         cropper()
+                        editor()
                     }
                 }
         }
@@ -477,6 +487,204 @@ class R8SmokeActivity : Activity() {
                 }
             }
         }
+    }
+
+    private fun editor() {
+        val expected = nupPages()
+        val indices = if (expected > 1) listOf(0, expected - 1) else listOf(0)
+        val saved = File(dir, "editor_saved.pdf")
+        val erased = File(dir, "editor_erased.pdf")
+        val blanked = File(dir, "editor_blanked.pdf")
+        runBlocking {
+            val pages = withViewerDocument(nup) { document ->
+                val sizes = document.pageSizes()
+                val pages = indices.map { index ->
+                    val before = document.pageMarks(index)
+                    check(before.marks.isEmpty()) { "editor page ${index + 1}: ${before.marks.size} marks before editing" }
+                    EditorPage(index, sizes.widths[index], sizes.heights[index], before.toPage).also { page ->
+                        page.background = probe(document, page, page.extraY)
+                    }
+                }
+                check(saveMarks(nup, saved, PdfMarkSave.Plan(added = pages.associate { it.index to it.added() }))) { "editor: nothing saved" }
+                pages
+            }
+            withViewerDocument(saved) { document ->
+                val erase = HashMap<Int, PdfStreamEdit>()
+                for (page in pages) {
+                    val marks = expectMarks(document, page, "saved", page.highlight, page.pen, page.extra)
+                    checkColor(probe(document, page, page.extraY), EXTRA_COLOR) { "editor page ${page.index + 1} saved: extra pen not drawn ($it)" }
+                    val stream = marks.single { it.mark.id == page.extra.id }.stream
+                    val edit = PdfStreamEdit(false, setOf(page.extra.id))
+                    erase[stream] = edit
+                    document.editStreams(mapOf(stream to edit))
+                    checkErased(document, page, "erased in memory")
+                    checkPenDrawn(document, page, "editor page ${page.index + 1} erased in memory")
+                }
+                check(saveMarks(saved, erased, PdfMarkSave.Plan(streams = erase))) { "editor: erasing saved nothing" }
+            }
+            withViewerDocument(erased) { document ->
+                for (page in pages) {
+                    expectMarks(document, page, "erased", page.highlight, page.pen)
+                    checkErased(document, page, "erased")
+                }
+            }
+            project(erased)
+            withViewerDocument(nup) { document ->
+                for (page in pages) expectMarks(document, page, "projected", page.highlight, page.pen)
+                check(saveMarks(nup, blanked, PdfMarkSave.Plan(blankAll = true))) { "editor: erasing every page saved nothing" }
+            }
+            checkSourceMark(pages, true, "projected")
+            withViewerDocument(blanked) { document ->
+                for (page in pages) expectMarks(document, page, "every page erased")
+            }
+            project(blanked)
+            withViewerDocument(nup) { document ->
+                for (page in pages) expectMarks(document, page, "every page erased, projected")
+            }
+            checkSourceMark(pages, false, "every page erased, projected")
+        }
+    }
+
+    private suspend fun <R> withViewerDocument(file: File, block: suspend (PdfViewerDocument<PdfRasterTarget>) -> R): R {
+        val document = PdfViewerDocument.open { MuPdfViewerEngine.open(file.absolutePath) }
+        try {
+            return block(document)
+        } finally {
+            document.close()
+            document.awaitClosed()
+        }
+    }
+
+    private fun saveMarks(input: File, output: File, plan: PdfMarkSave.Plan): Boolean {
+        val tracker = ProgressTracker(SystemClock::uptimeMillis)
+        return PdfMarkSave.write(input, output, plan, BATCH, tracker::stage) {}
+    }
+
+    private suspend fun project(edited: File) {
+        val operation = PdfViewerEditOperation(
+            files = files(),
+            saveSelection = {},
+            input = PdfViewerEditOperation.Input(
+                config = config,
+                builtConfig = config,
+                crops = crops,
+                rotation = rotation.copyOf(),
+                position = position.copyOf(),
+                defaultPosition = DEFAULT_POSITION,
+                batchSize = BATCH,
+                selected = emptyList()
+            ),
+            progress = progress,
+            copyEdited = { work -> edited.copyTo(work, overwrite = true) }
+        )
+        take(operation.execute {})
+    }
+
+    private suspend fun expectMarks(
+        document: PdfViewerDocument<PdfRasterTarget>,
+        page: EditorPage,
+        label: String,
+        vararg wanted: PdfMark
+    ): List<PdfPageMark> {
+        val name = "editor page ${page.index + 1} $label"
+        val found = document.pageMarks(page.index).marks
+        val ids = found.map { it.mark.id }.sorted()
+        check(ids == wanted.map { it.id }.sorted()) { "$name: marks $ids, expected ${wanted.map { it.id }.sorted()}" }
+        for (mark in wanted) {
+            val read = found.single { it.mark.id == mark.id }.mark
+            check(read.kind == mark.kind && read.color == mark.color) { "$name: ${mark.kind} read back as ${read.kind} #${Integer.toHexString(read.color)}" }
+            check(samePath(read, mark)) { "$name: ${mark.kind} moved to ${read.path.points.joinToString()} width ${read.width}" }
+        }
+        if (wanted.any { it.id == page.pen.id }) checkPenDrawn(document, page, name)
+        return found
+    }
+
+    private fun samePath(read: PdfMark, wanted: PdfMark): Boolean {
+        val points = read.path.points
+        val expected = wanted.path.points
+        return read.path.verbs.contentEquals(wanted.path.verbs) &&
+            points.size == expected.size &&
+            points.indices.all { abs(points[it] - expected[it]) <= MARK_TOLERANCE } &&
+            abs(read.width - wanted.width) <= MARK_TOLERANCE
+    }
+
+    private suspend fun checkPenDrawn(document: PdfViewerDocument<PdfRasterTarget>, page: EditorPage, name: String) {
+        checkColor(probe(document, page, page.centerY), PEN_COLOR) { "$name: pen not drawn at the page centre ($it)" }
+    }
+
+    private suspend fun checkErased(document: PdfViewerDocument<PdfRasterTarget>, page: EditorPage, label: String) {
+        val rgb = probe(document, page, page.extraY)
+        val background = page.background
+        val same = rgb.indices.all { abs(rgb[it] - background[it]) <= PROBE_SAME }
+        check(same) { "editor page ${page.index + 1} $label: extra pen still drawn (${rgb.joinToString()}, page ${background.joinToString()})" }
+    }
+
+    private fun checkColor(rgb: IntArray, color: Int, message: (String) -> String) {
+        val matches = rgb.indices.all { channel ->
+            val wanted = (color shr (16 - 8 * channel)) and 0xFF
+            if (wanted == 0xFF) rgb[channel] >= PROBE_STRONG else rgb[channel] <= PROBE_WEAK
+        }
+        check(matches) { message(rgb.joinToString()) }
+    }
+
+    private suspend fun probe(document: PdfViewerDocument<PdfRasterTarget>, page: EditorPage, pageY: Float): IntArray {
+        val name = "editor page ${page.index + 1}"
+        val zoom = max(1f, PROBE_LINE_PX / page.pen.width)
+        val x = (page.centerX * zoom).toInt()
+        val y = (pageY * zoom).toInt()
+        val left = (x - PROBE_PX / 2).coerceAtLeast(0)
+        val top = (y - PROBE_PX / 2).coerceAtLeast(0)
+        val bitmap = createBitmap(PROBE_PX, PROBE_PX)
+        try {
+            val result = document.render(page.index, zoom, left, top, AndroidBitmapRasterTarget(bitmap))
+            if (result is PdfRenderResult.Failed) throw IllegalStateException("$name: ${result.error}", result.error)
+            check(result == PdfRenderResult.Done) { "$name: $result" }
+            val pixel = bitmap.getPixel((x - left).coerceIn(0, PROBE_PX - 1), (y - top).coerceIn(0, PROBE_PX - 1))
+            return intArrayOf(Color.red(pixel), Color.green(pixel), Color.blue(pixel))
+        } finally {
+            bitmap.recycle()
+        }
+    }
+
+    private fun checkSourceMark(pages: List<EditorPage>, expected: Boolean, label: String) {
+        val parts = PdfSourceParts.open(sourceDir)
+        for (page in pages) {
+            val location = parts.locate(page.index)
+            val found = PdfDocument(PdfIo.reader(location.file.absolutePath, null)).use { pdf ->
+                val xObjects = pdf.getPage(location.page + 1).pdfObject.getAsDictionary(PdfName.Resources)?.getAsDictionary(PdfName.XObject)
+                xObjects?.keySet().orEmpty().any { name ->
+                    val form = xObjects?.getAsStream(name)?.takeIf { it.getAsName(PdfName.Subtype) == PdfName.Form }
+                    form != null && (form.getAsNumber(PdfName.Length)?.longValue() ?: Long.MAX_VALUE) <= LAYER_LIMIT &&
+                        String(form.bytes, Charsets.ISO_8859_1).contains("(${page.pen.id})")
+                }
+            }
+            check(found == expected) { "editor source page ${page.index + 1} $label: pen ${if (found) "still on" else "missing from"} the source page" }
+        }
+    }
+
+
+    private class EditorPage(val index: Int, width: Float, height: Float, private val toPage: DoubleArray) {
+        private val markWidth = (min(width, height) * MARK_WIDTH_RATIO).coerceIn(MIN_MARK_WIDTH, MAX_MARK_WIDTH)
+        val highlight = line(PdfMarkKind.HIGHLIGHTER, HIGHLIGHT_COLOR, width, height * HIGHLIGHT_Y)
+        val pen = line(PdfMarkKind.PEN, PEN_COLOR, width, height * PEN_Y)
+        val extra = line(PdfMarkKind.PEN, EXTRA_COLOR, width, height * EXTRA_Y)
+        val centerX = width / 2f
+        val centerY = height * PEN_Y
+        val extraY = height * EXTRA_Y
+        var background = IntArray(3)
+
+        fun added(): List<PdfMark> {
+            val toUser = checkNotNull(PdfEditProjection.inverse(toPage)) { "editor page ${index + 1}: no usable transform" }
+            return listOf(highlight, pen, extra).map { it.transformed(toUser) }
+        }
+
+        private fun line(kind: PdfMarkKind, color: Int, width: Float, y: Float) = PdfMark(
+            PdfMark.newId(),
+            kind,
+            color,
+            markWidth,
+            PdfMarkPath.Builder().moveTo(width * LINE_FROM, y).lineTo(width * LINE_TO, y).build()
+        )
     }
 
     private suspend fun fitAndZoom(page: AndroidSinglePage, label: String, gutter: Double) {
@@ -877,6 +1085,24 @@ class R8SmokeActivity : Activity() {
         const val SMALL_SIDE_PX = 100f
         const val ZOOMED_TILE_PX = 512
         const val CROP_GUTTER_DP = 24f
+        const val MARK_WIDTH_RATIO = 0.05f
+        const val MIN_MARK_WIDTH = 0.5f
+        const val MAX_MARK_WIDTH = 24f
+        const val MARK_TOLERANCE = 0.05f
+        const val LINE_FROM = 0.3f
+        const val LINE_TO = 0.7f
+        const val HIGHLIGHT_Y = 0.25f
+        const val PEN_Y = 0.5f
+        const val EXTRA_Y = 0.75f
+        const val HIGHLIGHT_COLOR = 0xFFFF00
+        const val PEN_COLOR = 0xFF0000
+        const val EXTRA_COLOR = 0x0000FF
+        const val PROBE_PX = 5
+        const val PROBE_LINE_PX = 12f
+        const val PROBE_STRONG = 180
+        const val PROBE_WEAK = 90
+        const val PROBE_SAME = 3
+        const val LAYER_LIMIT = 1_000_000L
         const val HEAVY_ZOOM = 2f
         const val HEAVY_FILLS = 8_000
         const val CLOSE_AFTER_MS = 50L

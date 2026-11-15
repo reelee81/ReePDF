@@ -122,6 +122,21 @@ class PdfViewerDocument<T> private constructor(
 
     suspend fun text(pageIndex: Int): String = readText(pageIndex) { engine.text(pageIndex) }
 
+    suspend fun pageMarks(pageIndex: Int, blank: Boolean = false): PdfPageMarks = readText(pageIndex) {
+        val marks = engine.pageMarks(pageIndex)
+        if (blank && marks.streams.isNotEmpty()) engine.editStreams(marks.streams.associateWith { PdfStreamEdit.BLANK })
+        marks
+    }
+
+    suspend fun editStreams(edits: Map<Int, PdfStreamEdit>) {
+        if (edits.isEmpty()) return
+        checkOpen()
+        onDocumentThread(null) {
+            checkOpen()
+            engine.editStreams(edits)
+        }
+    }
+
     fun trimMemory() {
         synchronized(lock) {
             if (closed) return

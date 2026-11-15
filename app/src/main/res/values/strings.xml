@@ -69,15 +69,9 @@
     <string name="in_progress_pdf_reading">Reading PDF\u2026</string>
     <string name="in_progress_page_layout">Page layout\u2026</string>
     <string name="in_progress_ui">UI update\u2026</string>
-    <string name="pdf_navigation_wait">Please wait</string>
     <string name="pdf_edits_saving">Saving edit(s)…</string>
     <string name="pdf_wait_reading_pages">Reading page(s)…</string>
-    <string name="pdf_wait_editing_pages">Editing page(s)…</string>
     <string name="pdf_wait_reading_edited_pages">Reading edited page(s)…</string>
-    <string name="pdf_wait_erasing_visible">Removing visible edit(s)…</string>
-    <string name="pdf_wait_erasing_all">Removing all edits…</string>
-    <string name="pdf_wait_searching_edits">Looking for edits…</string>
-    <string name="pdf_wait_refreshing_pages">Refreshing pages…</string>
     <string name="progress_percent" translatable="false">%1$d%%</string>
     <string name="no_app_can_open_pdf">No app can open PDF</string>
     <string name="no_app_can_share_pdf">No app can share PDF</string>
@@ -151,23 +145,8 @@
     <string name="allow_notifications">Allow notifications</string>
     <string name="allow_notifications_text">During long PDF operations, the app shows the processing progress in a notification, without sound. If notifications are turned off, processing still runs, but the progress is only visible in the app.\n\nOK opens the app\'s notification settings, where you can turn them on.</string>
     <string name="position_on_page">Position on page(s)</string>
-    <string name="edit_pdf">Edit</string>
-    <string name="save_pdf_edits">SAVE</string>
-    <string name="pdf_editor_requires_s_ext_18">The PDF editor requires Android 12 (S) Extension 18 or higher.</string>
     <string name="pdf_edits_save_failed">Saving PDF edits failed: %1$s</string>
-    <string name="pdf_edits_save_engine_restarted">The PDF engine restarted, so the drawings can\'t be saved. Leave the editor and open it again.</string>
-    <string name="pdf_edits_save_cancelled">Saving canceled. The drawings stay on the page, but they can no longer be undone one by one. You can discard them when leaving the editor.</string>
-    <string name="no_pdf_edits_to_save">No PDF edits to save</string>
-    <string name="discard_pdf_edits">Discard PDF edits?</string>
-    <string name="discard_text">DISCARD</string>
-    <string name="back_to_main_screen">BACK TO MAIN SCREEN</string>
-    <string name="erase_visible_pdf_edits">Remove saved edits from the visible pages</string>
-    <string name="erase_all_pdf_edits">Remove saved edits from all pages</string>
-    <string name="erase_all_pdf_edits_confirm">Remove saved edits from all pages?</string>
-    <string name="erase_visible_pdf_edits_unsaved_confirm">Unsaved drawings will be lost on all pages. Remove saved edits from the visible pages anyway?</string>
-    <string name="erase_all_pdf_edits_unsaved_confirm">Unsaved drawings will be lost on all pages. Remove saved edits from all pages anyway?</string>
     <string name="pdf_edits_erasing">Removing edits</string>
-    <string name="pdf_edits_erase_failed">Removing edits failed: %1$s</string>
     <string name="about_app">About the app</string>
     <string name="about_title" translatable="false">%1$s %2$s</string>
     <string name="about_author" translatable="false">by reelee81</string>

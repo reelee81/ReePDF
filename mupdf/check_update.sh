@@ -30,6 +30,8 @@ upstream_fixes=(
     "0016 source/fitz/draw-device.c fz_saturate_float_to_int(floorf((area.x0"
     "0017 source/pdf/pdf-stream.c pdf_remember_inline_image_length"
     "0018 source/pdf/pdf-op-run.c pattern_cell_too_large"
+    "0019 source/pdf/pdf-lex.c number is too long"
+    "0020 source/pdf/pdf-object.c never part of the page tree"
 )
 
 current=$(sed -n 's/^version=//p' "$here/build.sh")

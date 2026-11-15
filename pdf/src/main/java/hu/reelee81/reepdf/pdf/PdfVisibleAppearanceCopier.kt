@@ -42,7 +42,7 @@ class PdfVisibleAppearanceCopier(
             return
         }
         var canvas: PdfCanvas? = null
-        fun contentCanvas(): PdfCanvas = canvas ?: PdfCanvas(toPage, true).also { canvas = it }
+        fun contentCanvas(): PdfCanvas = canvas ?: wrappedCanvas(toPage).also { canvas = it }
         val generated = generateMissingAppearances(annotations, optionalContent, toPage)
 
         try {
@@ -91,6 +91,13 @@ class PdfVisibleAppearanceCopier(
         }
 
         toPage.pdfObject.remove(PdfName.Annots)
+    }
+
+    private fun wrappedCanvas(page: PdfPage): PdfCanvas {
+        page.newContentStreamBefore().outputStream.writeString("q\n")
+        val stream = page.newContentStreamAfter()
+        stream.outputStream.writeString("Q\n")
+        return PdfCanvas(stream, page.resources, page.document)
     }
 
     private fun paintedRect(annotation: PdfDictionary, optionalContent: PdfOptionalContentFilter?): Rectangle? {

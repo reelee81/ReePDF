@@ -16,6 +16,12 @@ class ViewerIconsTest {
     fun editMatchesTheAppIcon() = assertMatchesApp("ic_edit_24", ViewerIcons.EDIT_PATH)
 
     @Test
+    fun visibilityOffMatchesTheAppIcon() = assertMatchesApp("ic_visibility_off_24", ViewerIcons.VISIBILITY_OFF_PATH)
+
+    @Test
+    fun visibilityOnMatchesTheAppIcon() = assertMatchesApp("ic_visibility_on_24", ViewerIcons.VISIBILITY_ON_PATH)
+
+    @Test
     fun searchMatchesItsDesign() = assertMatchesDesign("ic_search_24", ViewerIcons.SEARCH_PATH, ViewerIcons.VIEWPORT)
 
     @Test
@@ -40,6 +46,42 @@ class ViewerIconsTest {
         assertMatchesDesign("ic_restore_cut_24", ViewerIcons.RESTORE_CROP_PATH, ViewerIcons.LARGE_VIEWPORT)
 
     @Test
+    fun textEditMatchesItsDesign() =
+        assertMatchesDesign("ic_text_edit_24", ViewerIcons.TEXT_EDIT_PATH, ViewerIcons.LARGE_VIEWPORT)
+
+    @Test
+    fun drawEditMatchesItsDesign() =
+        assertMatchesDesign("ic_draw_edit_24", ViewerIcons.DRAW_EDIT_PATH, ViewerIcons.LARGE_VIEWPORT)
+
+    @Test
+    fun inkEditMatchesItsDesign() =
+        assertMatchesDesign("ic_ink_edit_24", ViewerIcons.INK_EDIT_PATH, ViewerIcons.LARGE_VIEWPORT)
+
+    @Test
+    fun vectorSignMatchesItsDesign() =
+        assertMatchesDesign("ic_vector_sign_24", ViewerIcons.VECTOR_SIGN_PATH, ViewerIcons.LARGE_VIEWPORT)
+
+    @Test
+    fun eraserEditMatchesItsDesign() =
+        assertMatchesDesign("ic_eraser_edit_24", ViewerIcons.ERASER_EDIT_PATH, ViewerIcons.LARGE_VIEWPORT)
+
+    @Test
+    fun eraseOnePageMatchesItsDesign() =
+        assertMatchesDesign("ic_erase_one_page_24", ViewerIcons.ERASE_ONE_PAGE_PATH, ViewerIcons.VIEWPORT)
+
+    @Test
+    fun eraseAllPagesMatchesItsDesign() =
+        assertMatchesDesign("ic_erase_all_pages_24", ViewerIcons.ERASE_ALL_PAGES_PATH, ViewerIcons.VIEWPORT)
+
+    @Test
+    fun undoMatchesItsDesign() =
+        assertMatchesDesign("ic_undo_24", ViewerIcons.UNDO_PATH, ViewerIcons.LARGE_VIEWPORT)
+
+    @Test
+    fun redoMatchesItsDesign() =
+        assertMatchesDesign("ic_redo_24", ViewerIcons.REDO_PATH, ViewerIcons.LARGE_VIEWPORT)
+
+    @Test
     fun everyPathParses() {
         val paths = listOf(
             ViewerIcons.ARROW_BACK_PATH,
@@ -51,7 +93,18 @@ class ViewerIconsTest {
             ViewerIcons.SAVE_PATH,
             ViewerIcons.ALL_PAGES_OFF_PATH,
             ViewerIcons.ALL_PAGES_ON_PATH,
-            ViewerIcons.RESTORE_CROP_PATH
+            ViewerIcons.RESTORE_CROP_PATH,
+            ViewerIcons.TEXT_EDIT_PATH,
+            ViewerIcons.DRAW_EDIT_PATH,
+            ViewerIcons.INK_EDIT_PATH,
+            ViewerIcons.VECTOR_SIGN_PATH,
+            ViewerIcons.ERASER_EDIT_PATH,
+            ViewerIcons.ERASE_ONE_PAGE_PATH,
+            ViewerIcons.ERASE_ALL_PAGES_PATH,
+            ViewerIcons.VISIBILITY_OFF_PATH,
+            ViewerIcons.VISIBILITY_ON_PATH,
+            ViewerIcons.UNDO_PATH,
+            ViewerIcons.REDO_PATH
         )
         for (path in paths) {
             assertTrue(addPathNodes(path).isNotEmpty())

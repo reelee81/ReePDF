@@ -31,14 +31,6 @@ class ViewerWaitTest {
     }
 
     @Test
-    fun onlyTheEditedDocumentLeavesOnCancel() {
-        wait.start(ViewerWait.Reason.OPENING)
-        assertFalse(wait.leavesOnCancel)
-        wait.start(ViewerWait.Reason.OPENING_EDITED)
-        assertTrue(wait.leavesOnCancel)
-    }
-
-    @Test
     fun stoppingEndsTheWait() {
         wait.start(ViewerWait.Reason.OPENING)
         wait.stop()

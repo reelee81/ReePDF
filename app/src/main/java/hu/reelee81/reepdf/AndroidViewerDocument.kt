@@ -1,26 +1,42 @@
 package hu.reelee81.reepdf
 
 import hu.reelee81.reepdf.pdf.MuPdfViewerEngine
+import hu.reelee81.reepdf.pdf.PdfEditProjection
+import hu.reelee81.reepdf.pdf.PdfMark
+import hu.reelee81.reepdf.pdf.PdfMarkKind
+import hu.reelee81.reepdf.pdf.PdfMarkPath
+import hu.reelee81.reepdf.pdf.PdfMarkSave
 import hu.reelee81.reepdf.pdf.PdfRasterTarget
 import hu.reelee81.reepdf.pdf.PdfSearchCounter
+import hu.reelee81.reepdf.pdf.PdfStreamEdit
 import hu.reelee81.reepdf.pdf.PdfTextPoint
 import hu.reelee81.reepdf.pdf.PdfViewerDocument
 import hu.reelee81.reepdf.viewer.ViewerDocument
+import hu.reelee81.reepdf.viewer.ViewerEditPlan
 import hu.reelee81.reepdf.viewer.ViewerImage
+import hu.reelee81.reepdf.viewer.ViewerMarkKind
+import hu.reelee81.reepdf.viewer.ViewerMarkPath
+import hu.reelee81.reepdf.viewer.ViewerMarkSource
+import hu.reelee81.reepdf.viewer.ViewerPageMarks
 import hu.reelee81.reepdf.viewer.ViewerPageSizes
 import hu.reelee81.reepdf.viewer.ViewerRender
+import hu.reelee81.reepdf.viewer.ViewerSavedMark
+import hu.reelee81.reepdf.viewer.ViewerStreamEdit
 import hu.reelee81.reepdf.viewer.ViewerTextHits
 import hu.reelee81.reepdf.viewer.ViewerTextPoint
 import hu.reelee81.reepdf.viewer.ViewerTextSpan
 import hu.reelee81.reepdf.viewer.ViewerTile
 import hu.reelee81.reepdf.viewer.ViewerTilesRender
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 
 class AndroidViewerDocument private constructor(
+    val path: String,
     private val document: PdfViewerDocument<PdfRasterTarget>,
     private val counter: PdfSearchCounter<PdfRasterTarget>,
     private val raster: AndroidPageRaster
-) : ViewerDocument {
+) : ViewerDocument, ViewerMarkSource {
+    private val toPages = ConcurrentHashMap<Int, DoubleArray>()
 
     override val pageCount: Int
         get() = document.pageCount
@@ -54,6 +70,38 @@ class AndroidViewerDocument private constructor(
 
     override suspend fun text(page: Int): String = document.text(page)
 
+    override suspend fun pageMarks(page: Int, blank: Boolean): ViewerPageMarks {
+        val marks = document.pageMarks(page, blank)
+        toPages[page] = marks.toPage
+        return ViewerPageMarks(
+            marks.marks.map { found ->
+                val mark = found.mark
+                ViewerSavedMark(mark.id, found.stream, ViewerMarkKind.valueOf(mark.kind.name), mark.width, ViewerMarkPath(mark.path.verbs, mark.path.points))
+            },
+            marks.streams
+        )
+    }
+
+    override suspend fun editStreams(edits: Map<Int, ViewerStreamEdit>) =
+        document.editStreams(edits.mapValues { (_, edit) -> PdfStreamEdit(edit.blank, edit.erased) })
+
+    suspend fun markPlan(plan: ViewerEditPlan): PdfMarkSave.Plan {
+        val added = plan.added.mapValues { (page, marks) ->
+            val toPage = toPages[page] ?: document.pageMarks(page).toPage.also { toPages[page] = it }
+            val toUser = checkNotNull(PdfEditProjection.inverse(toPage)) { "Page ${page + 1} has no usable transform" }
+            marks.map { mark ->
+                PdfMark(PdfMark.newId(), PdfMarkKind.valueOf(mark.kind.name), mark.color, mark.width, PdfMarkPath(mark.path.verbs, mark.path.points))
+                    .transformed(toUser)
+            }
+        }
+        return PdfMarkSave.Plan(
+            added = added,
+            streams = plan.erased.mapValues { (_, ids) -> PdfStreamEdit(false, ids) },
+            blankPages = plan.blankPages,
+            blankAll = plan.blankAll
+        )
+    }
+
     private fun ViewerTextPoint.toPdf() = PdfTextPoint(x, y)
 
     private fun PdfTextPoint.toViewer() = ViewerTextPoint(x, y)
@@ -81,7 +129,7 @@ class AndroidViewerDocument private constructor(
                 }
                     .also(OpenViewerDocuments::add)
             })
-            return AndroidViewerDocument(document, counter, AndroidPageRaster(document, ownBytes))
+            return AndroidViewerDocument(path, document, counter, AndroidPageRaster(document, ownBytes))
         }
     }
 }
