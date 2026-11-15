@@ -3,15 +3,13 @@
     xmlns:tools="http://schemas.android.com/tools"
     tools:targetApi="33">
 
-    <uses-sdk
-        tools:overrideLibrary="androidx.pdf, androidx.pdf.core, androidx.pdf.ink, androidx.pdf.document.service, androidx.pdf.viewer.fragment" />
-
     <uses-permission
         android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="28"/>
 
     <uses-permission
-        android:name="android.permission.FOREGROUND_SERVICE" />
+        android:name="android.permission.FOREGROUND_SERVICE"
+        tools:ignore="ForegroundServicesPolicy" />
 
     <uses-permission
         android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
@@ -23,22 +21,6 @@
         <intent>
             <action android:name="android.intent.action.SEND" />
             <data android:mimeType="application/pdf" />
-        </intent>
-        <intent>
-            <action android:name="android.intent.action.SEND_MULTIPLE" />
-            <data android:mimeType="application/pdf" />
-        </intent>
-        <intent>
-            <action android:name="android.intent.action.VIEW" />
-            <data android:mimeType="application/pdf" />
-        </intent>
-        <intent>
-            <action android:name="android.intent.action.SEND" />
-            <data android:mimeType="image/*" />
-        </intent>
-        <intent>
-            <action android:name="android.intent.action.VIEW" />
-            <data android:mimeType="image/*" />
         </intent>
     </queries>
 

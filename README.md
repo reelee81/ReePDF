@@ -38,7 +38,8 @@ We publish the source code so that others can use it, modify it and learn from i
 - **Border**: draws a frame around every cell
 - **Position on page**: aligns the page inside its cell to one of 9 positions (corners, edges, center),
   for all pages or for the selected ones
-- **Free crop**: cut out any area of a page with a live preview, for a single page group or for all pages,
+- **Free crop**: cut out any area of a page on a full-screen view of the page with two-finger zoom
+  (drag the handles to resize the frame and the frame lines to move it), for a single page group or for all pages,
   and reset it at any time
 - Rotate pages 90° to the left, one by one or all selected ones together
 - Add an empty page to the end of the list, with the exact size of the first page
@@ -54,14 +55,14 @@ We publish the source code so that others can use it, modify it and learn from i
 - Reorder pages by drag and drop
 - Select one, several or all pages; delete, rotate or position the selection in one step
 - Every thumbnail has its own delete, rotate, position and crop buttons
-- Tap a thumbnail to open the result in the built-in PDF viewer or in an external app
+- Tap a thumbnail to open the result in the built-in PDF viewer and editor
 
 ### Signature, stamp, watermark
 
 - Add a PNG signature, stamp, logo or watermark to the selected pages
 - Keep your own library of signature images (add new ones, remove old ones)
 - Set the position in millimeters (X / Y); with a single page selected, tap the pencil icon
-  to drag the signature to its place on the page preview
+  to drag the signature to its place on a full-screen view of the page, with two-finger zoom
 - Choose the resolution: 144 dpi or 300 dpi
 - Optional **scan effect** and **grayscale background**
 - The signed page is rasterized: the page content and the image become a single picture,
@@ -73,12 +74,15 @@ We publish the source code so that others can use it, modify it and learn from i
 
 ### Built-in PDF viewer and editor
 
-- Built-in PDF viewer based on the AndroidX PDF component (Android 9+); it can be turned off in the menu,
-  then an external app opens the result
-- Search and text selection (Android 12+ with S Extension 13+)
-- Edit pages: draw and highlight with the AndroidX PDF editing tools (Android 12+ with S Extension 18+)
+- The app's own PDF viewer (MuPDF), on every supported Android version, fast even with tens of thousands of pages
+- Continuous vertical pages, two-finger and double-tap zoom, fast scrollbar and page number
+- Search (upper and lower case do not matter, accents do), text selection across pages and copying;
+  with touch exploration on, the screen reader reads the text of the page
+- Edit pages right in the viewer: pen and highlighter, each with its own color palette and five line widths;
+  on text the highlighter follows the text lines
+- Eraser (it also removes saved edits), remove the edits of the current page or of every page,
+  undo and redo
 - Saved edits stay on the pages even when the layout settings change later
-- Remove saved edits from the visible pages or from all pages; the app asks first if unsaved drawings would be lost
 - Edits stored in a file that was saved earlier and opened again become part of the page and
   cannot be removed separately
 
@@ -158,7 +162,7 @@ Typical build commands:
 
 In Android Studio, simply open the project directory.
 
-MuPDF does not come from Maven: the app uses its own build of MuPDF with eighteen patches (the `mupdf` folder).
+MuPDF does not come from Maven: the app uses its own build of MuPDF with twenty patches (the `mupdf` folder).
 Gradle downloads the built AAR from the GitHub release `mupdf` of this repository automatically. To build it
 yourself (Android NDK needed), run `bash mupdf/build.sh`; `mupdf/README.md` describes the patches, the build and
 how to check for a newer MuPDF release (`bash mupdf/check_update.sh`).
@@ -183,7 +187,9 @@ next to the normal one.
 It contains a hidden smoke test screen (`app/src/r8check`) that runs the PDF engine without the user interface:
 it imports every PDF from its input folder, then rebuilds the layout (with Scale and Fit), crops, rotates, positions,
 adds an empty page, reorders, deletes, signs (MuPDF) and saves with and without a password, and checks that
-canceling an import restores the previous state.
+canceling an import restores the previous state. Every imported file is also opened the way the built-in screens
+open it: the viewer (pages, zoomed tiles, search, text selection and copying), the thumbnails, the signature
+placement and crop screens, and the editor (edits saved, erased and carried over into the page layout).
 
 ```bash
 ./gradlew :app:installR8check
@@ -221,8 +227,8 @@ The entire project (unless otherwise noted) is available under the terms of the
 available under AGPL-3.0 or a commercial license:
 
 - **iText Core for Android (9.x)** – PDF processing and generation, password protection
-- **MuPDF (Android/Java bindings, own build with patches, see `mupdf/`)** – content bounds measurement,
-  repair of damaged PDFs and password checking
+- **MuPDF (Android/Java bindings, own build with patches, see `mupdf/`)** – the built-in PDF viewer and editor,
+  thumbnails, rendering of signed pages, content bounds measurement, repair of damaged PDFs and password checking
 
 If the AGPL terms are not suitable for the given project,
 then you will need your own commercial licenses (iText: Apryse, MuPDF: Artifex).
@@ -238,10 +244,7 @@ The source code of this app: https://github.com/reelee81/ReePDF
 The app shows this link in the “About the app” window.
 
 
-## Acknowledgments / Inspiration
-
-The built-in PDF viewer is based on the AndroidX PDF component. Thanks to the AndroidX PDF Viewer team:  
-https://developer.android.com/jetpack/androidx/releases/pdf
+## Inspiration
 
 The development of the application was inspired and bootstrapped by:
 

@@ -16,7 +16,6 @@ import android.graphics.BitmapRegionDecoder
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Rect
-import android.graphics.drawable.Drawable
 import android.net.Uri
 import android.os.Build
 import android.os.Build.VERSION_CODES
@@ -44,7 +43,6 @@ import android.view.Menu
 import android.view.MenuItem
 import android.view.MotionEvent
 import android.view.View
-import android.view.ViewConfiguration
 import android.view.ViewGroup
 import android.view.ViewTreeObserver
 import android.view.WindowManager
@@ -53,7 +51,6 @@ import android.view.inputmethod.InputMethodManager
 import android.widget.BaseAdapter
 import android.widget.Button
 import android.widget.EditText
-import android.widget.FrameLayout
 import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.ListView
@@ -76,7 +73,6 @@ import androidx.core.content.FileProvider
 import androidx.core.content.edit
 import androidx.core.graphics.createBitmap
 import androidx.core.net.toUri
-import androidx.core.view.doOnPreDraw
 import androidx.core.view.isVisible
 import androidx.core.view.MenuCompat
 import androidx.core.widget.NestedScrollView
@@ -89,7 +85,6 @@ import androidx.lifecycle.withStarted
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.PagerSnapHelper
 import androidx.recyclerview.widget.RecyclerView
 import androidx.window.layout.FoldingFeature
 import androidx.window.layout.WindowInfoTracker
@@ -154,13 +149,11 @@ import java.io.FileOutputStream
 import java.io.IOException
 import java.io.StringReader
 import java.io.StringWriter
-import java.text.Collator
 import java.util.BitSet
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.Locale
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.coroutines.resume
-import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.max
@@ -236,7 +229,6 @@ class MainActivity : AppCompatActivity() {
         const val KEY_LAST_GRAYSCALE = "key_last_grayscale_page"
         const val KEY_REEPROFILE1_GRAYSCALE = "reeprofile1_grayscale"
         const val KEY_REEPROFILE2_GRAYSCALE = "reeprofile2_grayscale"
-        const val KEY_LAST_INNER_PDF_READER = "key_last_inner_pdf_reader"
         const val KEY_LAST_LOADED_PROFILE = "key_last_loaded_profile"
         const val KEY_RESTORE_LOCK_UNTIL_RELOAD = "key_restore_lock_until_reload"
         const val KEY_FIRST_RUN_INITIALIZED = "key_first_run_initialized"
@@ -262,10 +254,6 @@ class MainActivity : AppCompatActivity() {
         private const val PROGRESS_TICK_MS = 500L
         private const val PROGRESS_IDLE_MS = 5_000L
         private const val PENDING_INTENT_RETRY_MS = 500L
-        private const val OPEN_WITH_COLUMNS = 4
-        private const val OPEN_WITH_ROWS = 2
-        private const val OPEN_WITH_ANIMATION_MS = 200L
-        private const val OPEN_WITH_TABLET_MIN_DP = 600
 
         private val pendingIncomingFiles = HashSet<String>()
         private var incomingSequence = 0L
@@ -350,7 +338,6 @@ class MainActivity : AppCompatActivity() {
     private var orientationLockPrevRequested: Int? = null
     private var uiModeRecreateScheduled: Boolean = false
     private var lastConfigSnapshotForDiff: Configuration? = null
-    private var openWithRequest: Pair<Uri, List<OpenWithApp>>? = null
     private var operationOverlay = false
     private var operationId: Long? = null
     private var operationRestore: ThumbRestore? = null
@@ -363,7 +350,6 @@ class MainActivity : AppCompatActivity() {
     @Volatile private var deferOrientationUnlockUntilThumbnailsReady: Boolean = false
     @Volatile private var deferredOrientationUnlockRequested: Boolean = false
     @Volatile private var reloadThumbnailsGeneration: Long = 0L
-    @Volatile private var lastNamedExport: File? = null
 
     private val progressTracker = ProgressTracker(SystemClock::uptimeMillis)
     private var progressMessage = ""
@@ -707,7 +693,7 @@ class MainActivity : AppCompatActivity() {
             positionIconFor = { pos -> positionIcon(positionsOfNupIndices(listOf(pos))) },
             cropListener = { pos -> openPageCropper(pos) },
             isCroppedAt = { pos -> isNupGroupCropped(pos) },
-            clickListener = { position -> openPdfWithDriveOrOther(position) },
+            clickListener = { position -> openNupPdf(position) },
             selectionChanged = { _, _ -> updateButtonsState() }
         )
         rvThumbnails.adapter = adapter
@@ -908,9 +894,6 @@ class MainActivity : AppCompatActivity() {
                 )
             }
 
-        savedInstanceState
-            ?.getString("state_last_named_export")
-            ?.let { lastNamedExport = File(it) }
         pendingSaveNamedPath = savedInstanceState?.getString("state_pending_save_path")
         pendingSaveNamedDisplayName = savedInstanceState?.getString("state_pending_save_name")
         placerResult = PlacerResult.from(savedInstanceState)
@@ -1150,11 +1133,6 @@ class MainActivity : AppCompatActivity() {
                         return
                     }
 
-                    if (binding.overlayDialogOpenWith.isVisible) {
-                        binding.overlayDialogOpenWith.performClick()
-                        return
-                    }
-
                     if (binding.overlayDialogPositionOnPage.isVisible) {
                         binding.overlayDialogPositionOnPage.performClick()
                         return
@@ -1247,7 +1225,6 @@ class MainActivity : AppCompatActivity() {
             binding.overlayDialogBatteryOptimizationPanel,
             binding.overlayDialogNotificationsPanel,
             binding.overlayDialogAboutPanel,
-            binding.overlayDialogOpenWithPanel,
             binding.overlayDialogPositionOnPagePanel,
             binding.overlayDialogMaxCoordinatesPanel,
             binding.overlayDialogImportWarningsPanel,
@@ -1275,14 +1252,6 @@ class MainActivity : AppCompatActivity() {
         recomputeTabletLikeFlag()
 
         reapplyPanelsMaxWidthFromResources()
-
-        openWithRequest?.let { (uri, apps) ->
-            if (binding.overlayDialogOpenWith.isVisible) {
-                binding.root.post {
-                    if (openWithRequest != null) showOpenWithDialog(uri, apps, animate = false)
-                }
-            }
-        }
 
         fastScroller?.refreshDisplayMetrics()
 
@@ -1417,7 +1386,6 @@ class MainActivity : AppCompatActivity() {
                 )
             )
         }
-        lastNamedExport?.let { outState.putString("state_last_named_export", it.absolutePath) }
         pendingSaveNamedPath?.let { outState.putString("state_pending_save_path", it) }
         pendingSaveNamedDisplayName?.let { outState.putString("state_pending_save_name", it) }
         val reopenChooser = placerChooserSignature?.takeIf { ::binding.isInitialized && binding.overlayDialogSignatureChooser.isVisible }
@@ -2849,7 +2817,6 @@ class MainActivity : AppCompatActivity() {
                 putBoolean(KEY_LAST_GRAYSCALE, false)
                 putBoolean(KEY_REEPROFILE1_GRAYSCALE, false)
                 putBoolean(KEY_REEPROFILE2_GRAYSCALE, false)
-                putBoolean(KEY_LAST_INNER_PDF_READER, true)
                 putString(KEY_LAST_LOADED_PROFILE, "reeprofile1")
                 putString(KEY_THEME_MODE, "system")
                 putBoolean(KEY_RESTORE_LOCK_UNTIL_RELOAD, false)
@@ -5589,8 +5556,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun handleEditedPdfFromViewer(uri: Uri) {
-        val namedExport = lastNamedExport
-        lastNamedExport = null
         val selected = selectedNupIndices()
 
         val operation = PdfViewerEditOperation(
@@ -5607,7 +5572,7 @@ class MainActivity : AppCompatActivity() {
                 selected = selected
             ),
             progress = operationProgress(ProgressMath.THUMBNAIL_PHASE_START),
-            copyEdited = { work -> copyEditedFromViewer(uri, namedExport, work) },
+            copyEdited = { work -> copyEditedFromViewer(uri, work) },
             warn = { warning, error -> Log.w("PdfMuPdfFitBounds", warning, error) }
         )
 
@@ -5620,12 +5585,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     @WorkerThread
-    private fun copyEditedFromViewer(uri: Uri, namedExport: File?, work: File) {
+    private fun copyEditedFromViewer(uri: Uri, work: File) {
         val editedFile = ownCacheFileFor(uri)
-        namedExport?.let { named ->
-            if (named.canonicalPath != editedFile?.canonicalPath) runCatching { named.delete() }
-        }
-
         if (editedFile == null || !editedFile.renameTo(work)) {
             contentResolver.openInputStream(uri)?.use { input ->
                 FileOutputStream(work).use { output ->
@@ -5641,21 +5602,15 @@ class MainActivity : AppCompatActivity() {
         didPauseForExternalAction = false
     }
 
-    private fun openPdfWithDriveOrOther(initialPageIndex: Int) {
-        val inViewer = runCatching {
-            val prefs = getSharedPreferences(PREFS_NAME_FRAGMENT, MODE_PRIVATE)
-            synchronized(prefsBackupLock) {
-                prefs.getBoolean(KEY_LAST_INNER_PDF_READER, true)
-            }
-        }.getOrDefault(true)
-        val operation = outputOperation(password = null, packed = false, direct = inViewer)
+    private fun openNupPdf(initialPageIndex: Int) {
+        val operation = outputOperation(password = null, packed = false, direct = true)
         startOperation(
             PdfOperationKind.OPEN,
             getString(R.string.in_progress_pdf_reading),
             onCancelled = operation::discard,
             work = { report ->
                 val opened = operation.execute(report)
-                OpenResult(opened.file, initialPageIndex, opened.name, inViewer)
+                OpenResult(opened.file, initialPageIndex, opened.name)
             }
         )
     }
@@ -5674,222 +5629,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun openExported(named: File) {
-        val job = lifecycleScope.launch {
-            try {
-                val uri = withContext(Dispatchers.IO) {
-                    FileProvider.getUriForFile(this@MainActivity, "${packageName}.provider", named)
-                }
-
-                val apps = withContext(Dispatchers.IO) { pdfViewerApps(uri) }
-                if (apps.isEmpty()) {
-                    Toast.makeText(this@MainActivity, getString(R.string.no_app_can_open_pdf), Toast.LENGTH_LONG).show()
-                    return@launch
-                }
-
-                showOpenWithDialog(uri, apps)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                hideInProgressIfShown()
-                unlockScreenOrientation()
-                Toast.makeText(this@MainActivity, getString(R.string.failed_to_open_pdf_with_msg, e.message), Toast.LENGTH_LONG).show()
-            }
-        }
-        activeJobs.add(job)
-        job.invokeOnCompletion { activeJobs.remove(job) }
-    }
-
-    private class OpenWithApp(
-        val label: CharSequence,
-        val icon: Drawable,
-        val packageName: String,
-        val activityName: String
-    )
-
-    private class OpenWithPagerAdapter(
-        private val pages: List<List<OpenWithApp>>,
-        private val rows: Int,
-        private val onPick: (OpenWithApp) -> Unit
-    ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
-
-        override fun getItemCount(): Int = pages.size
-
-        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
-            val page = LayoutInflater.from(parent.context).inflate(R.layout.item_open_with_page, parent, false)
-            return object : RecyclerView.ViewHolder(page) {}
-        }
-
-        override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
-            val page = holder.itemView as LinearLayout
-            page.removeAllViews()
-            val apps = pages[position]
-            val inflater = LayoutInflater.from(page.context)
-
-            for (r in 0 until rows) {
-                val row = LinearLayout(page.context).apply {
-                    orientation = LinearLayout.HORIZONTAL
-                    layoutParams = LinearLayout.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                        ViewGroup.LayoutParams.WRAP_CONTENT
-                    )
-                }
-                for (c in 0 until OPEN_WITH_COLUMNS) {
-                    val cell = inflater.inflate(R.layout.item_open_with_app, row, false)
-                    cell.layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
-                    val app = apps.getOrNull(r * OPEN_WITH_COLUMNS + c)
-                    if (app == null) {
-                        cell.visibility = View.INVISIBLE
-                    } else {
-                        cell.findViewById<AppCompatImageView>(R.id.open_with_icon).setImageDrawable(app.icon)
-                        cell.findViewById<MaterialTextView>(R.id.open_with_label).text = app.label
-                        cell.setOnClickListener { onPick(app) }
-                    }
-                    row.addView(cell)
-                }
-                page.addView(row)
-            }
-        }
-    }
-
-    @WorkerThread
-    private fun pdfViewerApps(uri: Uri): List<OpenWithApp> {
-        val viewIntent = Intent(Intent.ACTION_VIEW).setDataAndType(uri, "application/pdf")
-        val collator = Collator.getInstance(Locale.getDefault())
-        return packageManager.queryIntentActivities(viewIntent, 0)
-            .filter { it.activityInfo.packageName != packageName }
-            .map {
-                OpenWithApp(
-                    label = it.loadLabel(packageManager),
-                    icon = it.loadIcon(packageManager),
-                    packageName = it.activityInfo.packageName,
-                    activityName = it.activityInfo.name
-                )
-            }
-            .sortedWith(compareBy(collator) { it.label.toString() })
-    }
-
-    private fun showOpenWithDialog(uri: Uri, apps: List<OpenWithApp>, animate: Boolean = true) {
-        val overlay = binding.overlayDialogOpenWith
-        val panel = binding.overlayDialogOpenWithPanel
-
-        openWithRequest = uri to apps
-
-        panel.removeAllViews()
-        val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_open_with, panel, false)
-        panel.addView(dialogView)
-
-        fun close() {
-            openWithRequest = null
-            overlay.visibility = View.GONE
-            overlay.setOnClickListener(null)
-            panel.removeAllViews()
-        }
-
-        fun cancel() {
-            close()
-            lifecycleScope.launch(Dispatchers.IO) { cleanupCacheExceptTemps() }
-        }
-
-        overlay.setOnClickListener { cancel() }
-        panel.setOnClickListener {
-        }
-        dialogView.findViewById<Button>(R.id.open_with_btn_cancel).setOnClickListener { cancel() }
-
-        val config = resources.configuration
-        val phoneLandscape = config.orientation == Configuration.ORIENTATION_LANDSCAPE &&
-                config.smallestScreenWidthDp < OPEN_WITH_TABLET_MIN_DP
-        val rows = if (apps.size <= OPEN_WITH_COLUMNS || phoneLandscape) 1 else OPEN_WITH_ROWS
-        val pages = apps.chunked(rows * OPEN_WITH_COLUMNS)
-
-        val pager = RecyclerView(this).apply {
-            layoutParams = FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-            )
-            layoutManager = LinearLayoutManager(this@MainActivity, LinearLayoutManager.HORIZONTAL, false)
-            overScrollMode = View.OVER_SCROLL_NEVER
-            isNestedScrollingEnabled = false
-        }
-        dialogView.findViewById<FrameLayout>(R.id.open_with_pager_container).addView(pager)
-
-        val touchSlop = ViewConfiguration.get(this).scaledTouchSlop
-        pager.addOnItemTouchListener(object : RecyclerView.SimpleOnItemTouchListener() {
-            private var downX = 0f
-            private var downY = 0f
-
-            override fun onInterceptTouchEvent(rv: RecyclerView, e: MotionEvent): Boolean {
-                when (e.actionMasked) {
-                    MotionEvent.ACTION_DOWN -> {
-                        downX = e.x
-                        downY = e.y
-                        rv.parent.requestDisallowInterceptTouchEvent(rv.canScrollHorizontally(1) || rv.canScrollHorizontally(-1))
-                    }
-                    MotionEvent.ACTION_MOVE -> {
-                        val dx = abs(e.x - downX)
-                        val dy = abs(e.y - downY)
-                        if (dy > touchSlop && dy > dx) rv.parent.requestDisallowInterceptTouchEvent(false)
-                    }
-                }
-                return false
-            }
-        })
-        pager.adapter = OpenWithPagerAdapter(pages, rows) { app ->
-            close()
-            val viewIntent = Intent(Intent.ACTION_VIEW).apply {
-                setDataAndType(uri, "application/pdf")
-                setClassName(app.packageName, app.activityName)
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-            try {
-                startActivity(viewIntent)
-                scheduleCacheCleanupAfterExternalReturn()
-            } catch (_: Exception) {
-                Toast.makeText(this, getString(R.string.no_app_can_open_pdf), Toast.LENGTH_LONG).show()
-                lifecycleScope.launch(Dispatchers.IO) { cleanupCacheExceptTemps() }
-            }
-        }
-        val snapHelper = PagerSnapHelper()
-        snapHelper.attachToRecyclerView(pager)
-
-        val dots = dialogView.findViewById<LinearLayout>(R.id.open_with_dots)
-        dots.isVisible = pages.size > 1
-        repeat(pages.size) {
-            LayoutInflater.from(this).inflate(R.layout.item_open_with_dot, dots, true)
-        }
-
-        fun selectDot(index: Int) {
-            for (i in 0 until dots.childCount) dots.getChildAt(i).isSelected = (i == index)
-        }
-        selectDot(0)
-
-        pager.addOnScrollListener(object : RecyclerView.OnScrollListener() {
-            override fun onScrollStateChanged(recyclerView: RecyclerView, newState: Int) {
-                if (newState != RecyclerView.SCROLL_STATE_IDLE) return
-                val lm = recyclerView.layoutManager ?: return
-                val snapView = snapHelper.findSnapView(lm) ?: return
-                selectDot(lm.getPosition(snapView))
-            }
-        })
-
-        if (!animate) {
-            overlay.alpha = 1f
-            panel.translationY = 0f
-            overlay.visibility = View.VISIBLE
-            return
-        }
-
-        overlay.alpha = 0f
-        overlay.visibility = View.VISIBLE
-        panel.doOnPreDraw {
-            panel.translationY = panel.height.toFloat()
-            overlay.animate().alpha(1f).setDuration(OPEN_WITH_ANIMATION_MS).start()
-            panel.animate().translationY(0f).setDuration(OPEN_WITH_ANIMATION_MS).start()
-        }
-    }
-
-    private class OpenResult(val file: File, val pageIndex: Int, val name: String, val inViewer: Boolean) : PdfOperationResult
+    private class OpenResult(val file: File, val pageIndex: Int, val name: String) : PdfOperationResult
 
     private fun outputOperation(password: ByteArray?, packed: Boolean, direct: Boolean = false): PdfOutputOperation =
         PdfOutputOperation(
@@ -5931,23 +5671,16 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        if (result is OpenResult && result.inViewer) {
-            lastNamedExport = null
+        if (result is OpenResult) {
             openInViewer(result)
             return
         }
 
-        val file = when (result) {
-            is OpenResult -> result.file
-            is PdfOutputOperation.Result -> result.file
-            else -> return
-        }
-        lastNamedExport = file
+        val file = (result as? PdfOutputOperation.Result)?.file ?: return
 
         when (kind) {
             PdfOperationKind.PRINT -> printExported(file)
             PdfOperationKind.SEND -> shareExported(file)
-            PdfOperationKind.OPEN -> openExported(file)
             PdfOperationKind.SAVE_EXPORT -> askSaveLocation(file)
             else -> Unit
         }
@@ -6515,18 +6248,6 @@ class MainActivity : AppCompatActivity() {
 
         MenuCompat.setGroupDividerEnabled(menu, true)
 
-        runCatching {
-            val item = menu.findItem(R.id.action_inner_pdf_reader)
-            if (item != null) {
-                val prefs = getSharedPreferences(PREFS_NAME_FRAGMENT, MODE_PRIVATE)
-                val enabled = synchronized(prefsBackupLock) {
-                    prefs.getBoolean(KEY_LAST_INNER_PDF_READER, true)
-                }
-                item.isCheckable = true
-                item.isChecked = enabled
-            }
-        }
-
         return true
     }
 
@@ -6535,16 +6256,6 @@ class MainActivity : AppCompatActivity() {
             R.id.action_theme_light -> { setThemeMode("light"); true }
             R.id.action_theme_dark  -> { setThemeMode("dark");  true }
             R.id.action_theme_system-> { setThemeMode("system");true }
-
-            R.id.action_inner_pdf_reader -> {
-                val newChecked = !item.isChecked
-                item.isChecked = newChecked
-                synchronized(prefsBackupLock) {
-                    getSharedPreferences(PREFS_NAME_FRAGMENT, MODE_PRIVATE)
-                        .edit { putBoolean(KEY_LAST_INNER_PDF_READER, newChecked) }
-                }
-                true
-            }
 
             R.id.action_battery_optimization -> {
                 launchBatteryOptimizationSettings()
@@ -6781,7 +6492,7 @@ class MainActivity : AppCompatActivity() {
                 KEY_REEPROFILE1_SCAN_EFFECT, KEY_REEPROFILE2_SCAN_EFFECT,
                 KEY_REEPROFILE1_GRAYSCALE, KEY_REEPROFILE2_GRAYSCALE,
                 KEY_LAST_SIG_DPI_INDEX, KEY_LAST_SCAN_EFFECT, KEY_LAST_GRAYSCALE,
-                KEY_LAST_INNER_PDF_READER, KEY_LAST_LOADED_PROFILE,
+                KEY_LAST_LOADED_PROFILE,
                 KEY_RESTORE_LOCK_UNTIL_RELOAD, KEY_FIRST_RUN_INITIALIZED
             )
 
@@ -6854,7 +6565,7 @@ class MainActivity : AppCompatActivity() {
             KEY_REEPROFILE1_SCAN_EFFECT, KEY_REEPROFILE2_SCAN_EFFECT,
             KEY_REEPROFILE1_GRAYSCALE, KEY_REEPROFILE2_GRAYSCALE,
             KEY_LAST_SCAN_EFFECT, KEY_LAST_GRAYSCALE,
-            KEY_LAST_INNER_PDF_READER, KEY_RESTORE_LOCK_UNTIL_RELOAD, KEY_FIRST_RUN_INITIALIZED
+            KEY_RESTORE_LOCK_UNTIL_RELOAD, KEY_FIRST_RUN_INITIALIZED
         )
         val positionKeys = setOf(KEY_REEPROFILE1_POSITION, KEY_REEPROFILE2_POSITION)
         val dpiIndexKeys = setOf(KEY_REEPROFILE1_SIG_DPI_INDEX, KEY_REEPROFILE2_SIG_DPI_INDEX, KEY_LAST_SIG_DPI_INDEX)

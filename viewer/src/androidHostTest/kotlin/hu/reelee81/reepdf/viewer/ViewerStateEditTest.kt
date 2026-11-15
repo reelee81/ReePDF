@@ -162,7 +162,7 @@ class ViewerStateEditTest {
     }
 
     @Test
-    fun erasingTheShownPagesSparesThePartlyVisibleNeighbour() {
+    fun erasingTheShownPagesSparesThePartlyVisibleNeighbor() {
         opened()
         state.startEditing()
         drawSomething()

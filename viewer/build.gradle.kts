@@ -30,6 +30,7 @@ kotlin {
         }
         androidMain.dependencies {
             implementation(libs.androidx.lifecycle.runtime)
+            implementation(libs.androidx.autofill)
         }
         getByName("androidHostTest").dependencies {
             implementation(libs.junit)

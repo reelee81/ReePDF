@@ -89,7 +89,7 @@ class PdfNupBuilderTest {
     }
 
     @Test
-    fun aTwoByTwoLayoutWithMarginScalesEachPageIntoItsCellAndHonoursPositions() {
+    fun aTwoByTwoLayoutWithMarginScalesEachPageIntoItsCellAndHonorsPositions() {
         val pages = List(5) { 200f to 100f }
         val built = build(
             pages,

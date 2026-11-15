@@ -2,7 +2,7 @@ package hu.reelee81.reepdf.viewer
 
 import androidx.compose.ui.graphics.Color
 
-enum class ReeColorState { DISABLED, CHECKED, FOCUSED, PRESSED, SELECTED }
+enum class ReeColorState { DISABLED, CHECKED, PRESSED }
 
 class ReeColor(val default: Color, vararg rules: Pair<ReeColorState, Color>) {
     val rules: List<Pair<ReeColorState, Color>> = rules.toList()

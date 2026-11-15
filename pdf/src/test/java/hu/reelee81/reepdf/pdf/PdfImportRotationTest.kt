@@ -345,7 +345,7 @@ class PdfImportRotationTest {
         assertEquals(left, readSizes(projected.source))
 
         val cleared = File(dir, "cleared.pdf")
-        assertEquals(1, PdfEditProjection.clearLayers(layoutFile(projected.source, rotation), cleared, null, batchSize = 2) {})
+        assertTrue(PdfMarkSave.write(layoutFile(projected.source, rotation), cleared, PdfMarkSave.Plan(blankAll = true), 2, ProgressTracker { 0L }.let { it::stage }) {})
         val erased = PdfEditProjection.project(projected.source, cleared, batchSize = 2, writeStage = { NoProgress }) {}
         assertEquals(1, erased.changed)
         PdfDocument(PdfReader(erased.source.file(0))).use { pdf ->

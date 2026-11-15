@@ -18,7 +18,11 @@ the **Apache License 2.0**:
 - `com.google.android.material:material:1.14.0`
 - `androidx.activity:activity:1.13.0`
 - `androidx.constraintlayout:constraintlayout:2.2.2`
+- `androidx.recyclerview:recyclerview:1.4.0`
+- `androidx.fragment:fragment:1.9.1`
 - `androidx.window:window:1.5.1`
+- `androidx.lifecycle:lifecycle-runtime:2.11.0`
+- `androidx.autofill:autofill:1.3.0`
 
 Many additional transitive AndroidX modules may also be pulled in at build time.
 They are usually licensed under Apache 2.0 as well.
@@ -30,7 +34,8 @@ References (examples):
 
 ## Compose Multiplatform (Apache License 2.0)
 
-The app's own PDF viewer screen (module `:viewer`) is built with
+The app's own PDF viewer and editor, the signature placement screen and the
+crop screen (module `:viewer`) are built with
 **Compose Multiplatform 1.12.2** by JetBrains:
 
 - `org.jetbrains.compose.runtime:runtime:1.12.2`
@@ -44,17 +49,6 @@ On Android these modules pull in the matching Jetpack Compose libraries
 References:
 - <https://github.com/JetBrains/compose-multiplatform>
 - <https://www.apache.org/licenses/LICENSE-2.0>
-
-
-## PDF viewer and editor (Apache License 2.0)
-
-- `androidx.pdf:pdf-viewer-fragment:1.0.0-beta01`
-- `androidx.pdf:pdf-ink:1.0.0-beta01`
-
-These PDF components are part of AndroidX and are also licensed under
-the Apache License 2.0.
-
-Reference: <https://developer.android.com/media/grow/implement-pdf-viewer>
 
 
 ## iText Core for Android (AGPL-3.0)
@@ -78,12 +72,14 @@ References:
 
 ## MuPDF (AGPL-3.0)
 
-The app uses **MuPDF 1.28.6** (Java bindings with native libraries) to measure
-the visible content bounds of PDF pages:
+The app uses **MuPDF 1.28.6** (Java bindings with native libraries) for the
+built-in PDF viewer and editor, the page thumbnails, the signature placement
+and crop screens, the rendering of signed pages, the measurement of the
+visible content bounds of PDF pages and the repair of damaged PDFs:
 
-- `hu.reelee81.reepdf:mupdf-fitz:1.28.6-reepdf` — a modified build of MuPDF
-  1.28.6 made for ReePDF: the unmodified upstream source plus eighteen patches
-  (modified on 2026-11-08, 2026-11-10, 2026-11-11 and 2026-11-12): the missing
+- `hu.reelee81.reepdf:mupdf-fitz:1.28.6-reepdf2` — a modified build of MuPDF
+  1.28.6 made for ReePDF: the unmodified upstream source plus twenty patches
+  (modified on 2026-11-08, 2026-11-10, 2026-11-11, 2026-11-12 and 2026-11-15): the missing
   JNI binding for `PDFDocument.setPageTreeCache`, a new
   `Context.releaseFreeMemory()`, decoding JPEG 2000 images at a reduced
   resolution when they are drawn scaled down, a new `PDFDocument.clearXref()`,
@@ -92,12 +88,14 @@ the visible content bounds of PDF pages:
   the needed area of a JPEG 2000 image when a zoomed part of it is drawn, with
   an exact area decode in the bundled OpenJPEG, the right sub-pixel position
   for vertically flipped scaled images, skipping the zero-weight samples of
-  sampled functions, and removing four cases of undefined behaviour (a NaN
+  sampled functions, and removing four cases of undefined behavior (a NaN
   function input, an empty rasterizer clip, mesh shading edge values and
   pattern tile ranges converted or multiplied out of the int range), and
   remembering where inline images end so that they are not decoded again
-  just to find their end, and drawing the repeats of a very large pattern
-  cell directly instead of through one huge tile. The patches, the build script and the exact
+  just to find their end, drawing the repeats of a very large pattern
+  cell directly instead of through one huge tile, reading a number that is
+  longer than the lexer buffer as one number, and keeping the page maps when
+  only the dictionary of a stream changes. The patches, the build script and the exact
   upstream commits are in the [`mupdf`](mupdf) folder of this repository; the
   built AAR is published as an asset of the GitHub release `mupdf`.
 

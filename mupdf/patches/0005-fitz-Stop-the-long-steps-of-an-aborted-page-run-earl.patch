@@ -20,13 +20,13 @@ images are read from their decode chain in bands, the subarea,
 subsample and unpack readers check on every call, JPEG 2000, JBIG2
 (also the shared globals) and progressive JPEG stop inside the decoder
 through the abort hooks of the OpenJPEG and jbig2dec patches and the
-libjpeg progress monitor, decode arrays, colour keys and shading
+libjpeg progress monitor, decode arrays, color keys and shading
 functions are evaluated with checks, and an ICC transform built during
 an abort is not stored (the lcms2 patch stops its slow building steps).
 
 Steps that only draw stop early (fz_abort_requested): image scaling and
 painting, pixmap painting and blending, glyph drawing, path flattening
-and scan conversion, shading triangles and pixmap colour conversion
+and scan conversion, shading triangles and pixmap color conversion
 (ICC, separations, Lab). Pattern tiles and glyphs drawn during an abort
 are not cached, and a run without a cookie (patterns, type3 glyphs)
 throws instead of ending normally.
@@ -35,7 +35,7 @@ An abort never ends in an incomplete or more expensive result that
 could be stored: fz_available, fz_read_byte, fz_peek_byte, fz_read_best,
 the font and type3 glyph loaders let FZ_ERROR_ABORT through, and the
 reduced resolution JPEG 2000 decode is not retried at full resolution.
-When the colour key step of a JPEG 2000 image fails, the decoded image
+When the color key step of a JPEG 2000 image fails, the decoded image
 is dropped too (it was leaked). Without an abort the output is
 unchanged.
 

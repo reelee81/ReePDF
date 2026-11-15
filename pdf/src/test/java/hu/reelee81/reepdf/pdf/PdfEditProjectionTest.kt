@@ -107,8 +107,7 @@ class PdfEditProjectionTest {
         assertEquals(150f, position!![0], 0.05f)
         assertEquals(200f, position[1], 0.05f)
 
-        val cleared = temporary.newFile()
-        assertEquals(1, PdfEditProjection.clearLayers(buildNup(projected), cleared, null, batchSize = 1) {})
+        val cleared = erase(buildNup(projected), null)!!
         val restored = temporary.newFile()
         assertEquals(1, projectFile(projected, cleared, restored))
         PdfDocument(PdfReader(restored)).use { pdf ->
@@ -173,8 +172,7 @@ class PdfEditProjectionTest {
         val source = brokenSource()
         val content = PdfDocument(PdfReader(source)).use { pdf -> pdf.getPage(1).getContentStream(0).bytes + '\n'.code.toByte() }
         val projected = projectEdit(source, "EDIT", 1)
-        val cleared = temporary.newFile()
-        assertEquals(1, PdfEditProjection.clearLayers(buildNup(projected), cleared, null, batchSize = 1) {})
+        val cleared = erase(buildNup(projected), null)!!
         val restored = temporary.newFile()
         assertEquals(1, projectFile(projected, cleared, restored))
         PdfDocument(PdfReader(restored)).use { pdf ->
@@ -271,9 +269,7 @@ class PdfEditProjectionTest {
 
         val nup = buildNup(source)
         assertTrue(hasLayers(nup, setOf(1)))
-        val cleared = temporary.newFile()
-        assertEquals(1, PdfEditProjection.clearLayers(nup, cleared, setOf(1), batchSize = 1) {})
-        TestPdfs.assertWorkFile(cleared)
+        val cleared = erase(nup, setOf(1))!!
         assertFalse(hasLayers(cleared, setOf(1)))
         assertTrue(hasLayers(cleared, setOf(2)))
         assertTrue(hasLayers(cleared, null))
@@ -301,8 +297,7 @@ class PdfEditProjectionTest {
         source = projectEdit(source, "OLD ONE", 1)
         source = projectEdit(source, "OLD TWO", 2)
 
-        val cleared = temporary.newFile()
-        assertEquals(2, PdfEditProjection.clearLayers(buildNup(source), cleared, null, batchSize = 1) {})
+        val cleared = erase(buildNup(source), null)!!
         assertFalse(hasLayers(cleared, null))
         val edited = edit(cleared, "NEW ONE", 150f, 200f)
         val projected = temporary.newFile()
@@ -323,10 +318,10 @@ class PdfEditProjectionTest {
     @Test
     fun clearingPagesWithoutEditsChangesNothing() {
         val source = makeSource(2)
-        assertFalse(hasLayers(buildNup(source), null))
-        val cleared = temporary.newFile()
-        assertEquals(0, PdfEditProjection.clearLayers(buildNup(source), cleared, null, batchSize = 1) {})
-        assertEquals(0, projectFile(source, cleared, temporary.newFile()))
+        val nup = buildNup(source)
+        assertFalse(hasLayers(nup, null))
+        assertNull(erase(nup, null))
+        assertEquals(0, projectFile(source, nup, temporary.newFile()))
     }
 
     @Test
@@ -335,16 +330,16 @@ class PdfEditProjectionTest {
         val edited = edit(edit(buildNup(source), "FIRST PAGE EDIT", 150f, 200f, 1), "SECOND PAGE EDIT", 150f, 200f, 2)
         assertTrue(hasLayers(edited, setOf(1)))
 
-        val cleared = temporary.newFile()
-        assertEquals(1, PdfEditProjection.clearLayers(edited, cleared, setOf(1), batchSize = 1) {})
+        val cleared = erase(edited, setOf(1))!!
         assertFalse(hasLayers(cleared, setOf(1)))
         assertTrue(hasLayers(cleared, setOf(2)))
         assertFalse(textPositions(cleared, 1).containsKey("FIRST PAGE EDIT"))
         assertTrue(textPositions(cleared, 1).containsKey("SOURCE 1"))
         assertTrue(textPositions(cleared, 2).containsKey("SECOND PAGE EDIT"))
         PdfDocument(PdfReader(cleared)).use { pdf ->
-            assertEquals(1, pdf.getPage(1).contentStreamCount)
-            assertNotNull(base(pdf.getPage(1)))
+            val page = pdf.getPage(1)
+            assertNotNull(base(page))
+            assertTrue(PdfEditProjection.editStreams(page).all { PdfMarkContent.isBlank(it.bytes) })
         }
 
         val projected = temporary.newFile()
@@ -363,9 +358,25 @@ class PdfEditProjectionTest {
             stream.setData(stream.bytes + "\n0 0 m 10 10 l S\n".toByteArray())
         }
         assertFalse(hasLayers(modified, null))
-        val cleared = temporary.newFile()
-        assertEquals(0, PdfEditProjection.clearLayers(modified, cleared, null, batchSize = 1) {})
-        assertTrue(textPositions(cleared, 1).containsKey("EDIT"))
+        assertNull(erase(modified, null))
+        assertTrue(textPositions(modified, 1).containsKey("EDIT"))
+    }
+
+    @Test
+    fun anEmptiedLayerCopyRemovesTheSourceLayer() {
+        val projected = projectEdit(makeSource(1), "EDIT", 1)
+        val emptied = temporary.newFile()
+        PdfDocument(PdfReader(buildNup(projected)), PdfWriter(emptied)).use { pdf ->
+            val layer = PdfEditProjection.editStreams(pdf.getPage(1)).single()
+            layer.remove(PdfName.Filter)
+            layer.remove(PdfName.DecodeParms)
+            layer.setData(ByteArray(0))
+        }
+        val restored = temporary.newFile()
+        assertEquals(1, projectFile(projected, emptied, restored))
+        PdfDocument(PdfReader(restored)).use { pdf -> assertNull(layerForm(pdf.getPage(1))) }
+        assertFalse(textPositions(buildNup(restored), 1).containsKey("EDIT"))
+        assertTrue(textPositions(buildNup(restored), 1).containsKey("SOURCE 1"))
     }
 
     @Test
@@ -516,10 +527,12 @@ class PdfEditProjectionTest {
         return output
     }
 
-    private fun cleared(nup: File, pageNumber: Int): File {
-        val file = temporary.newFile()
-        assertEquals(1, PdfEditProjection.clearLayers(nup, file, setOf(pageNumber), batchSize = 1) {})
-        return file
+    private fun cleared(nup: File, pageNumber: Int): File = erase(nup, setOf(pageNumber))!!
+
+    private fun erase(nup: File, pages: Set<Int>?): File? {
+        val output = temporary.newFile()
+        val plan = if (pages == null) PdfMarkSave.Plan(blankAll = true) else PdfMarkSave.Plan(blankPages = pages.map { it - 1 }.toSet())
+        return output.takeIf { PdfMarkSave.write(nup, output, plan, 1, ProgressTracker { 0L }.let { it::stage }) {} }
     }
 
     private fun edits(file: File, pageNumber: Int): Set<String> =
@@ -563,8 +576,11 @@ class PdfEditProjectionTest {
         override fun idle() = Unit
     }
 
-    private fun hasLayers(file: File, pages: Set<Int>?): Boolean =
-        PdfEditProjection.hasLayers({ PdfReader(file) }, pages, batchSize = 1) {}
+    private fun hasLayers(file: File, pages: Set<Int>?): Boolean = PdfDocument(PdfReader(file)).use { pdf ->
+        (pages ?: (1..pdf.numberOfPages)).filter { it in 1..pdf.numberOfPages }.any { number ->
+            PdfEditProjection.editStreams(pdf.getPage(number)).any { !PdfMarkContent.isBlank(it.bytes) }
+        }
+    }
 
     private fun projectEdit(source: File, text: String, pageNumber: Int): File {
         val edited = edit(buildNup(source), text, 150f, 200f, pageNumber)
@@ -644,12 +660,11 @@ class PdfEditProjectionTest {
         val nup = buildNup(reloaded)
         assertTrue(textPositions(nup, 1).containsKey("SAVED EDIT"))
         assertFalse(hasLayers(nup, null))
-        assertEquals(0, PdfEditProjection.clearLayers(nup, temporary.newFile(), null, batchSize = 1) {})
+        assertNull(erase(nup, null))
         assertEquals(0, projectFile(reloaded, nup, temporary.newFile()))
 
         val newEdit = projectEdit(reloaded, "NEW EDIT", 1)
-        val cleared = temporary.newFile()
-        assertEquals(1, PdfEditProjection.clearLayers(buildNup(newEdit), cleared, null, batchSize = 1) {})
+        val cleared = erase(buildNup(newEdit), null)!!
         assertTrue(textPositions(cleared, 1).containsKey("SAVED EDIT"))
         assertFalse(textPositions(cleared, 1).containsKey("NEW EDIT"))
     }
@@ -670,8 +685,7 @@ class PdfEditProjectionTest {
             assertTrue(texts.containsKey("SOURCE 1"))
             for (previous in 0..round) assertTrue("EDIT $previous is missing", texts.containsKey("EDIT $previous"))
 
-            val cleared = temporary.newFile()
-            assertEquals(1, PdfEditProjection.clearLayers(exported, cleared, null, batchSize = 1) {})
+            val cleared = erase(exported, null)!!
             val left = textPositions(cleared, 1)
             assertFalse(left.containsKey("EDIT $round"))
             for (previous in 0 until round) assertTrue("EDIT $previous was cleared", left.containsKey("EDIT $previous"))

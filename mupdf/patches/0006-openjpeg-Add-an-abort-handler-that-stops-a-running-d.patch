@@ -5,7 +5,7 @@ Subject: [PATCH 6/20] openjpeg: Add an abort handler that stops a running
  decode.
 
 opj_set_abort_handler() sets a callback that the decoder asks before
-each code-block, between the wavelet, colour transform and level shift
+each code-block, between the wavelet, color transform and level shift
 steps, and every few rows inside them. When it returns true the decode
 fails, so a caller can stop decoding a very large image early. Without
 a handler nothing changes. The new symbols are renamed like the others
@@ -296,8 +296,8 @@ index fe2f1ee..22f1301 100644
 +/**
 + * Set the abort handler used by openjpeg while decoding.
 + * The handler is asked between code-blocks and between rows of the
-+ * wavelet, colour and level shift steps.
-+ * @param p_codec       the codec previously initialise
++ * wavelet, color and level shift steps.
++ * @param p_codec       the codec previously initialized
 + * @param p_callback    the callback function, or NULL
 + * @param p_user_data   client object passed to the callback
 +*/
@@ -356,7 +356,7 @@ index 5d466fb..96dd16b 100644
 -static OPJ_BOOL opj_tcd_dwt_decode(opj_tcd_t *p_tcd);
 +static OPJ_BOOL opj_tcd_dwt_decode(opj_tcd_t *p_tcd, opj_event_mgr_t *p_manager);
 +
-+/* Samples per colour transform step, so that an abort is noticed in time.
++/* Samples per color transform step, so that an abort is noticed in time.
 + * A multiple of 8 keeps the SIMD loads of every step aligned. */
 +#define OPJ_MCT_ABORT_CHUNK ((OPJ_SIZE_T)1 << 20)
 +

@@ -9,9 +9,11 @@ material = "1.14.0"
 activity = "1.13.0"
 constraintlayout = "2.2.2"
 itextpdf = "9.8.0"
-pdfviewer = "1.0.0-beta01"
 desugar = "2.1.5"
 window = "1.5.1"
+recyclerview = "1.4.0"
+fragment = "1.9.1"
+autofill = "1.3.0"
 mupdf = "1.28.6-reepdf2"
 coroutines = "1.11.0"
 kotlin = "2.4.21"
@@ -32,10 +34,11 @@ itextpdf-layout = { group = "com.itextpdf.android", name = "layout-android", ver
 itextpdf-forms = { group = "com.itextpdf.android", name = "forms-android", version.ref = "itextpdf" }
 itextpdf-bc-adapter  = { group = "com.itextpdf.android", name = "bouncy-castle-adapter-android", version.ref = "itextpdf" }
 itextpdf-bc-connector = { group = "com.itextpdf.android", name = "bouncy-castle-connector-android", version.ref = "itextpdf" }
-androidx-pdf-viewer = { group = "androidx.pdf", name = "pdf-viewer-fragment", version.ref = "pdfviewer" }
-androidx-pdf-ink = { group = "androidx.pdf", name = "pdf-ink", version.ref = "pdfviewer" }
 desugar-jdk-libs-nio = { module = "com.android.tools:desugar_jdk_libs_nio", version.ref = "desugar" }
 androidx-window = { module = "androidx.window:window", version.ref = "window" }
+androidx-recyclerview = { group = "androidx.recyclerview", name = "recyclerview", version.ref = "recyclerview" }
+androidx-fragment = { group = "androidx.fragment", name = "fragment", version.ref = "fragment" }
+androidx-autofill = { group = "androidx.autofill", name = "autofill", version.ref = "autofill" }
 mupdf-fitz = { group = "hu.reelee81.reepdf", name = "mupdf-fitz", version.ref = "mupdf" }
 kotlinx-coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "coroutines" }
 kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutines" }

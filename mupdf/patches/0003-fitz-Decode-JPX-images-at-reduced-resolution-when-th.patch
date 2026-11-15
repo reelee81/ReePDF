@@ -13,7 +13,7 @@ the applied factor back like the JPEG branch does.
 
 The reduction is not used for indexed images, for JP2 files with a palette
 box (the palette is applied to the decoded indices), or for images with a
-colour key. If decoding at the reduced resolution fails, the image is
+color key. If decoding at the reduced resolution fails, the image is
 decoded again at full resolution.
 
 Modified for ReePDF on 2026-11-08.

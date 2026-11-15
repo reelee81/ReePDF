@@ -43,7 +43,6 @@
     <string name="print_page_grayscale">Grayscale background</string>
     <string name="print_page_border">Border</string>
     <string name="tv_size_label_text">--cm x --cm</string>
-    <string name="inner_pdf_reader">Inner PDF reader</string>
     <string name="settings_saved">Settings saved</string>
     <string name="select_a_page">Select a page.</string>
     <string name="send_pdf_file">Send PDF file</string>
@@ -73,7 +72,6 @@
     <string name="pdf_wait_reading_pages">Reading page(s)…</string>
     <string name="pdf_wait_reading_edited_pages">Reading edited page(s)…</string>
     <string name="progress_percent" translatable="false">%1$d%%</string>
-    <string name="no_app_can_open_pdf">No app can open PDF</string>
     <string name="no_app_can_share_pdf">No app can share PDF</string>
     <string name="print_service_not_available">Print service not available</string>
     <string name="error_copying_signature_with_msg">Error copying signature: %1$s</string>
@@ -115,7 +113,6 @@
     <string name="file_name_optional">File name is optional</string>
     <string name="enter_value_0_209">Enter a value between 0 and 209 (mm)</string>
     <string name="enter_value_0_296">Enter a value between 0 and 296 (mm)</string>
-    <string name="open_with">Open with:</string>
     <string name="scan_effect">Scan effect</string>
     <string name="dpi_144">144 dpi (1190 x 1683)</string>
     <string name="dpi_300">300 dpi (2480 x 3507)</string>

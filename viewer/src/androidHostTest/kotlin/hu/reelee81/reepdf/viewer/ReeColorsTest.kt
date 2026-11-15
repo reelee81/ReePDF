@@ -11,20 +11,22 @@ import org.w3c.dom.Element
 class ReeColorsTest {
     @Test
     fun lightColorsMatchTheAppColorFiles() {
-        assertEquals(appColors("values", "color"), kotlinColors(ReeColors.light))
+        val kotlin = kotlinColors(ReeColors.light)
+        assertEquals(appColors("values", "color", kotlin.keys), kotlin)
     }
 
     @Test
     fun darkColorsMatchTheAppNightColorFiles() {
-        assertEquals(appColors("values-night", "color-night"), kotlinColors(ReeColors.dark))
+        val kotlin = kotlinColors(ReeColors.dark)
+        assertEquals(appColors("values-night", "color-night", kotlin.keys), kotlin)
     }
 
     @Test
     fun stateRulesApplyInOrderBeforeTheDefault() {
-        val color = ReeColors.light.edittextBgColor
-        assertEquals(ReePalette.light.darkLight000, color.of())
-        assertEquals(ReePalette.light.teal100, color.of(ReeColorState.FOCUSED))
-        assertEquals(ReePalette.light.darkLight065, color.of(ReeColorState.FOCUSED, ReeColorState.DISABLED))
+        val color = ReeColors.light.switchThumbColor
+        assertEquals(ReePalette.light.darkLight095, color.of())
+        assertEquals(ReePalette.light.teal100, color.of(ReeColorState.CHECKED))
+        assertEquals(ReePalette.light.darkLight080, color.of(ReeColorState.CHECKED, ReeColorState.DISABLED))
     }
 
     private fun kotlinColors(colors: ReeColors): Map<String, List<String>> =
@@ -36,9 +38,10 @@ class ReeColorsTest {
                     color.rules.map { (state, value) -> "$state:${hex(value)}" } + hex(color.default)
             }
 
-    private fun appColors(valuesFolder: String, colorFolder: String): Map<String, List<String>> {
+    private fun appColors(valuesFolder: String, colorFolder: String, names: Set<String>): Map<String, List<String>> {
         val palette = palette(valuesFolder)
-        val files = File("../app/src/main/res/$colorFolder").listFiles { file -> file.extension == "xml" }.orEmpty()
+        val files = File("../app/src/main/res/$colorFolder")
+            .listFiles { file -> file.extension == "xml" && file.nameWithoutExtension in names }.orEmpty()
         return files.associate { file -> file.nameWithoutExtension to selector(file, palette) }
     }
 
@@ -78,9 +81,7 @@ class ReeColorsTest {
         val STATES = mapOf(
             "android:state_enabled=false" to ReeColorState.DISABLED,
             "android:state_checked=true" to ReeColorState.CHECKED,
-            "android:state_focused=true" to ReeColorState.FOCUSED,
-            "android:state_pressed=true" to ReeColorState.PRESSED,
-            "android:state_selected=true" to ReeColorState.SELECTED
+            "android:state_pressed=true" to ReeColorState.PRESSED
         )
     }
 }

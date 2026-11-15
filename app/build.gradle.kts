@@ -27,8 +27,8 @@ android {
         applicationId = "hu.reelee81.reepdf"
         minSdk = 26
         targetSdk = 37
-        versionCode = 303
-        versionName = "3.03"
+        versionCode = 304
+        versionName = "3.04"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -98,8 +98,8 @@ dependencies {
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
-    implementation(libs.androidx.pdf.viewer)
-    implementation(libs.androidx.pdf.ink)
+    implementation(libs.androidx.recyclerview)
+    implementation(libs.androidx.fragment)
     implementation(libs.androidx.window)
     coreLibraryDesugaring(libs.desugar.jdk.libs.nio)
 }

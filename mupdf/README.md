@@ -20,7 +20,7 @@ modified for ReePDF on 2026-11-08, 2026-11-10, 2026-11-11, 2026-11-12 and
 3. `0003` — decodes JPEG 2000 (JPX) images at a reduced resolution when they
    are drawn scaled down. Upstream always decodes them at full resolution and
    scales afterwards. The reduction is skipped for indexed images, JP2 files
-   with a palette box and images with a colour key, and the image is decoded
+   with a palette box and images with a color key, and the image is decoded
    again at full resolution if the reduced decode fails.
 4. `0004` — adds `PDFDocument.clearXref()`, the Java binding of the C
    function `pdf_clear_xref()`. A document keeps every object it has parsed
@@ -37,14 +37,14 @@ modified for ReePDF on 2026-11-08, 2026-11-10, 2026-11-11, 2026-11-12 and
    image decoding, the decode filters and readers, shading function sampling
    and ICC transform building throw an abort error, so nothing incomplete is
    stored; scaling, painting, blending, glyph drawing, path rasterizing,
-   shading and colour conversion stop early, because their result is only
+   shading and color conversion stop early, because their result is only
    drawn. Pattern tiles and glyphs drawn during an abort are not cached, and
    an abort is never turned into a stored fallback (end of stream, substitute
-   font, full resolution JPEG 2000 retry). When the colour key step of a
+   font, full resolution JPEG 2000 retry). When the color key step of a
    JPEG 2000 image fails, the decoded image is dropped too (upstream leaks
    it). Without an abort the output is unchanged. It needs `0006`–`0008`.
 6. `0006` — adds `opj_set_abort_handler()` to OpenJPEG: the decoder asks the
-   handler between code-blocks and every few rows of the wavelet, colour and
+   handler between code-blocks and every few rows of the wavelet, color and
    level shift steps, and fails when it returns true.
 7. `0007` — adds `jbig2_ctx_set_abort_callback()` to jbig2dec: the decoder
    asks the callback during arithmetic and MMR decoding and fails when it
@@ -71,7 +71,7 @@ modified for ReePDF on 2026-11-08, 2026-11-10, 2026-11-11, 2026-11-12 and
     `fz_scale_pixmap_cached()`: the offset was taken from the bottom edge
     instead of the top, so an image at a fractional position was drawn as
     if mirrored around the half pixel. Images on whole pixels are unchanged.
-12. `0012` — a sampled function no longer reads the second neighbouring
+12. `0012` — a sampled function no longer reads the second neighboring
     sample of an input whose weight is exactly zero (the input lies on a
     sample, or the dimension has a single sample). Upstream reads 2^m
     samples for every evaluation of a function with m inputs, so a page with
@@ -86,7 +86,7 @@ modified for ReePDF on 2026-11-08, 2026-11-10, 2026-11-11, 2026-11-12 and
     zero size instead of multiplying the infinite coordinates of the empty
     rectangle by the antialiasing scale (a signed integer overflow). Nothing
     is drawn either way.
-15. `0015` — the colour values and steps of a mesh shading edge are converted
+15. `0015` — the color values and steps of a mesh shading edge are converted
     to fixed point with saturation at the int limits (NaN as 0), and the
     steps are added with an explicit wrap-around. Upstream uses a plain cast,
     which overflows for an almost horizontal edge: x86 gives `INT_MIN`, ARM
@@ -96,7 +96,7 @@ modified for ReePDF on 2026-11-08, 2026-11-10, 2026-11-11, 2026-11-12 and
     saturation (upstream: a plain cast, which overflows for an empty area far
     from the pattern origin). It needs `0015`.
 
-`0013`–`0016` remove undefined behaviour found with UBSan on the test corpus
+`0013`–`0016` remove undefined behavior found with UBSan on the test corpus
 and with a random function test; on Android (ARM) the output is unchanged.
 
 17. `0017` — a document remembers where the data of each inline image ends

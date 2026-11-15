@@ -17,15 +17,6 @@
             app:showAsAction="never" />
     </group>
 
-    <group android:id="@+id/checkboxes">
-        <item
-            android:id="@+id/action_inner_pdf_reader"
-            android:title="@string/inner_pdf_reader"
-            app:showAsAction="never"
-            android:checkable="true"
-            android:checked="true" />
-    </group>
-
     <group android:id="@+id/battery_optimization_group">
         <item
             android:id="@+id/action_battery_optimization"

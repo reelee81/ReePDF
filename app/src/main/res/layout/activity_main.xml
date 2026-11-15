@@ -761,35 +761,6 @@
     </androidx.constraintlayout.widget.ConstraintLayout>
 
     <androidx.constraintlayout.widget.ConstraintLayout
-        android:id="@+id/overlay_dialog_open_with"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:background="@color/dialog_overlay_background_color"
-        android:visibility="gone"
-        android:clickable="true"
-        android:focusable="true"
-        android:elevation="@dimen/dp_9999_overlay"
-        android:paddingTop="@dimen/dp_16">
-
-        <LinearLayout
-            android:id="@+id/overlay_dialog_open_with_panel"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:background="@drawable/bg_overlay_bottom_panel"
-            app:layout_constrainedHeight="true"
-            app:layout_constraintVertical_bias="1"
-            app:layout_constraintLeft_toLeftOf="parent"
-            app:layout_constraintRight_toRightOf="parent"
-            app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintWidth_max="@dimen/dp_9999_overlay">
-
-            <include layout="@layout/dialog_open_with" />
-        </LinearLayout>
-    </androidx.constraintlayout.widget.ConstraintLayout>
-
-    <androidx.constraintlayout.widget.ConstraintLayout
         android:id="@+id/overlay_dialog_position_on_page"
         android:layout_width="match_parent"
         android:layout_height="match_parent"

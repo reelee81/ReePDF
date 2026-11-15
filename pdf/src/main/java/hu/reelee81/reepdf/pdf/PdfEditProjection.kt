@@ -107,84 +107,6 @@ object PdfEditProjection {
         )
     }
 
-    fun hasLayers(
-        open: () -> PdfReader,
-        pages: Set<Int>?,
-        batchSize: Int,
-        onProgress: (Int) -> Unit = {},
-        ensureActive: () -> Unit
-    ): Boolean {
-        val total = PdfDocument(open().setMemorySavingMode(true)).use { it.numberOfPages }
-        val wanted = pages?.filter { it in 1..total }?.sorted() ?: (1..total).toList()
-        for (chunk in wanted.chunked(batchSize.coerceAtLeast(1))) {
-            ensureActive()
-            val found = PdfDocument(open().setMemorySavingMode(true)).use { pdf ->
-                chunk.any { number ->
-                    val page = pdf.getPage(number)
-                    appendedFrom(page) != null ||
-                        layersOf(page).any { it.bytes.isNotEmpty() }
-                }
-            }
-            if (found) return true
-            onProgress(chunk.size)
-        }
-        return false
-    }
-
-    fun clearLayers(
-        input: File,
-        output: File,
-        pages: Set<Int>?,
-        batchSize: Int,
-        ensureActive: () -> Unit
-    ): Int = clearLayers({ PdfReader(input) }, output, pages, batchSize, ensureActive = ensureActive)
-
-    fun clearLayers(
-        open: () -> PdfReader,
-        output: File,
-        pages: Set<Int>?,
-        batchSize: Int,
-        onProgress: (Int) -> Unit = {},
-        budget: Long = PdfBatchBudget.bytes(),
-        ensureActive: () -> Unit
-    ): Int {
-        val total = PdfDocument(open().setMemorySavingMode(true)).use { it.numberOfPages }
-        val batch = batchSize.coerceAtLeast(1)
-        var cleared = 0
-        PdfDocument(PdfIo.workFileWriter(output.absolutePath)).use { destination ->
-            destination.setFlushUnusedObjects(true)
-            var from = 1
-            while (from <= total) {
-                ensureActive()
-                val to = PdfDocument(open().setMemorySavingMode(true)).use { src ->
-                    val end = PdfPageCost.batchEnd(src, from, total, batch, budget)
-                    src.copyPagesTo(from, end, destination)
-                    for (number in from..end) {
-                        if (pages != null && number !in pages) continue
-                        val page = destination.getPage(number)
-                        appendedFrom(page)?.let { streams ->
-                            removeContentStreamsFrom(page, streams)
-                            cleared++
-                        }
-                        for (layer in layersOf(page)) {
-                            if (layer.bytes.isEmpty()) continue
-                            layer.remove(PdfName.Filter)
-                            layer.remove(PdfName.DecodeParms)
-                            layer.setData(ByteArray(0))
-                            cleared++
-                        }
-                    }
-                    destination.flushCopiedObjects(src)
-                    end
-                }
-                for (number in from..to) destination.getPage(number).flush()
-                onProgress(to - from + 1)
-                from = to + 1
-            }
-        }
-        return cleared
-    }
-
     private class Edit(val nupIndex: Int, val matrix: DoubleArray)
 
     class Projection(val changed: Int, val source: PdfSourceParts)
@@ -287,16 +209,6 @@ object PdfEditProjection {
         for (index in 0 until streams) length += page.getContentStream(index).bytes.size
         if (length != base.getAsNumber(LENGTH)?.longValue()) return null
         return streams
-    }
-
-    private fun removeContentStreamsFrom(page: PdfPage, streams: Int) {
-        val contents = page.pdfObject.getAsArray(PdfName.Contents)
-        if (contents == null) {
-            if (streams == 0) page.pdfObject.remove(PdfName.Contents)
-        } else {
-            for (index in contents.size() - 1 downTo streams) contents.remove(index)
-        }
-        page.pdfObject.setModified()
     }
 
     internal fun privateData(dictionary: PdfDictionary): PdfDictionary? =

@@ -43,7 +43,6 @@
     <string name="print_page_grayscale">Szürkeárnyalatos háttér</string>
     <string name="print_page_border">Keret</string>
     <string name="tv_size_label_text">--cm x --cm</string>
-    <string name="inner_pdf_reader">Beépített PDF-olvasó</string>
     <string name="settings_saved">Beállítások mentve</string>
     <string name="select_a_page">Válassz egy oldalt.</string>
     <string name="send_pdf_file">PDF fájl küldése</string>
@@ -72,7 +71,6 @@
     <string name="pdf_edits_saving">Szerkesztés(ek) mentése…</string>
     <string name="pdf_wait_reading_pages">Oldal(ak) olvasása…</string>
     <string name="pdf_wait_reading_edited_pages">Szerkesztett oldal(ak) olvasása…</string>
-    <string name="no_app_can_open_pdf">Nincs olyan alkalmazás, ami meg tudja nyitni a PDF-et</string>
     <string name="no_app_can_share_pdf">Nincs olyan alkalmazás, ami meg tudja osztani a PDF-et</string>
     <string name="print_service_not_available">A nyomtatási szolgáltatás nem érhető el</string>
     <string name="error_copying_signature_with_msg">Hiba az aláírás másolásakor: %1$s</string>
@@ -114,7 +112,6 @@
     <string name="file_name_optional">A fájlnév megadása nem kötelező</string>
     <string name="enter_value_0_209">Adj meg 0 és 209 közötti értéket (mm)</string>
     <string name="enter_value_0_296">Adj meg 0 és 296 közötti értéket (mm)</string>
-    <string name="open_with">Megnyitás ezzel:</string>
     <string name="scan_effect">Szkennelt hatás</string>
     <string name="dpi_144">144 dpi (1190 x 1683)</string>
     <string name="dpi_300">300 dpi (2480 x 3507)</string>

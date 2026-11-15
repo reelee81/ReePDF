@@ -4,7 +4,7 @@ Date: Thu, 12 Nov 2026 12:11:27 +0100
 Subject: [PATCH 12/20] pdf: Skip the zero-weight corner when evaluating
  sampled functions.
 
-interpolate_sample() reads both neighbouring samples in every input
+interpolate_sample() reads both neighboring samples in every input
 dimension, so a sampled function with m inputs reads 2^m samples for
 each evaluation, even where an input lies exactly on a sample or the
 dimension has a single sample, and the second corner gets the weight

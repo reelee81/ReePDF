@@ -15,7 +15,7 @@ device space (32 MB with alpha), its repeats are now drawn directly, as
 upstream already does when the area needs a single repeat. The drawn
 area is the same, but the repeats are placed exactly instead of on whole
 pixels, so their edges can be anti-aliased slightly differently. Shapes
-of two neighbouring repeats drawn directly can leave a faint seam where
+of two neighboring repeats drawn directly can leave a faint seam where
 they meet, so the limit is not lower: no test file shows such a seam at
 8 million pixels.
 

@@ -63,7 +63,7 @@ class SignedPageEffectsTest {
     }
 
     @Test
-    fun theScanColourMatrixDesaturatesSlightlyThenRaisesContrastAndDarkens() {
+    fun theScanColorMatrixDesaturatesSlightlyThenRaisesContrastAndDarkens() {
         val image = filled(100, 100, 200, 0, 0)
 
         SignedPageEffects.scanEffect(image, 100, 100)

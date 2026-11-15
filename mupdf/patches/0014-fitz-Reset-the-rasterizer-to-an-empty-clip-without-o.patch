@@ -6,7 +6,7 @@ Subject: [PATCH 14/20] fitz: Reset the rasterizer to an empty clip without
 
 fz_reset_rasterizer() multiplied the clip by the antialiasing scale even
 when the clip was empty. An empty clip is stored with FZ_MAX_INF_RECT and
-FZ_MIN_INF_RECT, so the multiplication overflowed (undefined behaviour,
+FZ_MIN_INF_RECT, so the multiplication overflowed (undefined behavior,
 on 394 of 1367 test files); the clip only stayed empty because the
 result wrapped. An empty clip is now reset to an empty clip of zero size
 at BBOX_MAX, without multiplying. Nothing is drawn either way, so the
