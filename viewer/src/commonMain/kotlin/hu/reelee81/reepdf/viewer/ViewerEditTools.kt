@@ -125,6 +125,8 @@ object ViewerEditPalettes {
 
 enum class ViewerEditTool(val enabled: Boolean) {
     TEXT(false),
+    UNDERLINE(false),
+    STRIKETHROUGH(false),
     PEN(true),
     HIGHLIGHTER(true),
     SIGNATURE(false),

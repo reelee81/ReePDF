@@ -29,16 +29,20 @@ class ViewerEditBarLayoutTest {
     @Test
     fun theToolRowIsCenteredUnderTheTabAndKeepsTheBackArrowsMargin() {
         for (width in listOf(260f, 320f, 360f, 393f, 1080f / 2.625f, 873f)) {
-            val text = ViewerEditBarLayout.rowCenter(ViewerEditTool.TEXT, width)
-            val pen = ViewerEditBarLayout.rowCenter(ViewerEditTool.PEN, width)
-            val highlighter = ViewerEditBarLayout.rowCenter(ViewerEditTool.HIGHLIGHTER, width)
-            val signature = ViewerEditBarLayout.rowCenter(ViewerEditTool.SIGNATURE, width)
+            val row = listOf(
+                ViewerEditTool.TEXT,
+                ViewerEditTool.UNDERLINE,
+                ViewerEditTool.STRIKETHROUGH,
+                ViewerEditTool.PEN,
+                ViewerEditTool.HIGHLIGHTER,
+                ViewerEditTool.SIGNATURE
+            ).map { ViewerEditBarLayout.rowCenter(it, width) }
             val step = ViewerEditBarLayout.step(width)
 
-            assertDp(ViewerEditBarLayout.center(ViewerEditBarLayout.GROUP, width), (text + signature) / 2)
-            assertDp(step, pen - text)
-            assertDp(step, highlighter - pen)
-            assertTrue(text >= ViewerEditBarLayout.center(0, width))
+            assertDp(ViewerEditBarLayout.center(ViewerEditBarLayout.GROUP, width), (row.first() + row.last()) / 2)
+            for (i in 1 until row.size) assertDp(step, row[i] - row[i - 1])
+            assertTrue(row.first() >= ViewerEditBarLayout.center(0, width))
+            assertTrue(row.last() <= ViewerEditBarLayout.center(ViewerEditBarLayout.SAVE, width))
         }
     }
 

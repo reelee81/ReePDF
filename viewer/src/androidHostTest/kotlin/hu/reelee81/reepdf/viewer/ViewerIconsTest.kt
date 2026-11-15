@@ -50,6 +50,14 @@ class ViewerIconsTest {
         assertMatchesDesign("ic_text_edit_24", ViewerIcons.TEXT_EDIT_PATH, ViewerIcons.LARGE_VIEWPORT)
 
     @Test
+    fun underlineMatchesItsDesign() =
+        assertMatchesDesign("ic_underline_24", ViewerIcons.UNDERLINE_PATH, ViewerIcons.LARGE_VIEWPORT)
+
+    @Test
+    fun strikethroughMatchesItsDesign() =
+        assertMatchesDesign("ic_strikethrough_24", ViewerIcons.STRIKETHROUGH_PATH, ViewerIcons.LARGE_VIEWPORT)
+
+    @Test
     fun drawEditMatchesItsDesign() =
         assertMatchesDesign("ic_draw_edit_24", ViewerIcons.DRAW_EDIT_PATH, ViewerIcons.LARGE_VIEWPORT)
 
@@ -95,6 +103,8 @@ class ViewerIconsTest {
             ViewerIcons.ALL_PAGES_ON_PATH,
             ViewerIcons.RESTORE_CROP_PATH,
             ViewerIcons.TEXT_EDIT_PATH,
+            ViewerIcons.UNDERLINE_PATH,
+            ViewerIcons.STRIKETHROUGH_PATH,
             ViewerIcons.DRAW_EDIT_PATH,
             ViewerIcons.INK_EDIT_PATH,
             ViewerIcons.VECTOR_SIGN_PATH,

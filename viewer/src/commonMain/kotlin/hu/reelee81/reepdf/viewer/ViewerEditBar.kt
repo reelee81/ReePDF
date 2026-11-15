@@ -44,7 +44,9 @@ import hu.reelee81.reepdf.viewer.resources.edit_eraser
 import hu.reelee81.reepdf.viewer.resources.edit_highlighter
 import hu.reelee81.reepdf.viewer.resources.edit_pen
 import hu.reelee81.reepdf.viewer.resources.edit_scroll
+import hu.reelee81.reepdf.viewer.resources.edit_strikethrough
 import hu.reelee81.reepdf.viewer.resources.edit_text
+import hu.reelee81.reepdf.viewer.resources.edit_underline
 import hu.reelee81.reepdf.viewer.resources.edit_vector_signature
 import hu.reelee81.reepdf.viewer.resources.viewer_back
 import hu.reelee81.reepdf.viewer.resources.viewer_save
@@ -202,6 +204,8 @@ private fun BarIcon(icon: ImageVector, tint: Color) {
 
 private val TOOLS = listOf(
     Triple(ViewerEditTool.TEXT, Res.string.edit_text, ViewerIcons.textEdit),
+    Triple(ViewerEditTool.UNDERLINE, Res.string.edit_underline, ViewerIcons.underline),
+    Triple(ViewerEditTool.STRIKETHROUGH, Res.string.edit_strikethrough, ViewerIcons.strikethrough),
     Triple(ViewerEditTool.PEN, Res.string.edit_pen, ViewerIcons.drawEdit),
     Triple(ViewerEditTool.HIGHLIGHTER, Res.string.edit_highlighter, ViewerIcons.inkEdit),
     Triple(ViewerEditTool.SIGNATURE, Res.string.edit_vector_signature, ViewerIcons.vectorSign),
@@ -235,7 +239,14 @@ internal object ViewerEditBarLayout {
     }
 }
 
-private val GROUP_TOOLS = listOf(ViewerEditTool.TEXT, ViewerEditTool.PEN, ViewerEditTool.HIGHLIGHTER, ViewerEditTool.SIGNATURE)
+private val GROUP_TOOLS = listOf(
+    ViewerEditTool.TEXT,
+    ViewerEditTool.UNDERLINE,
+    ViewerEditTool.STRIKETHROUGH,
+    ViewerEditTool.PEN,
+    ViewerEditTool.HIGHLIGHTER,
+    ViewerEditTool.SIGNATURE
+)
 
 internal const val OPAQUE = 0xFF000000.toInt()
 internal const val DISABLED_ALPHA = 0.38f

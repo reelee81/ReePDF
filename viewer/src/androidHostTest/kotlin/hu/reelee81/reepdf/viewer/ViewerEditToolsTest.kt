@@ -59,6 +59,8 @@ class ViewerEditToolsTest {
         assertEquals(listOf(ViewerEditTool.PEN, ViewerEditTool.HIGHLIGHTER, ViewerEditTool.ERASER), ViewerEditTool.entries.filter { it.enabled })
         val settings = ViewerEditSettings()
         assertSame(settings, settings.withTool(ViewerEditTool.TEXT))
+        assertSame(settings, settings.withTool(ViewerEditTool.UNDERLINE))
+        assertSame(settings, settings.withTool(ViewerEditTool.STRIKETHROUGH))
         assertSame(settings, settings.withTool(ViewerEditTool.SIGNATURE))
         assertSame(pen, ViewerEditTool.PEN.palette)
         assertSame(highlighter, ViewerEditTool.HIGHLIGHTER.palette)

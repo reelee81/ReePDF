@@ -4,12 +4,15 @@ import android.content.Context
 import hu.reelee81.reepdf.core.PdfOperationKeepAlive
 import hu.reelee81.reepdf.core.PdfOperationRequest
 import hu.reelee81.reepdf.core.PdfOperationRunner
+import hu.reelee81.reepdf.core.WorkFileCleaner
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 
 object PdfOperations {
     @Volatile private var instance: PdfOperationRunner? = null
+
+    val cleaner = WorkFileCleaner(CoroutineScope(SupervisorJob() + Dispatchers.IO))
 
     fun runner(context: Context): PdfOperationRunner =
         instance ?: synchronized(this) {

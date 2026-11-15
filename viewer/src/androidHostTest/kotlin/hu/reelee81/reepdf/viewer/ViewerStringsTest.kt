@@ -84,6 +84,8 @@ class ViewerStringsTest {
             "crop_question",
             "edit_color_palette",
             "edit_text",
+            "edit_underline",
+            "edit_strikethrough",
             "edit_pen",
             "edit_highlighter",
             "edit_vector_signature",

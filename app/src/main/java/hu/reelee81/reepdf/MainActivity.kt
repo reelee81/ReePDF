@@ -151,6 +151,7 @@ import java.io.StringReader
 import java.io.StringWriter
 import java.util.BitSet
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.Locale
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.coroutines.resume
@@ -257,9 +258,18 @@ class MainActivity : AppCompatActivity() {
 
         private val pendingIncomingFiles = HashSet<String>()
         private var incomingSequence = 0L
+        private val pendingWorkspaceClears = AtomicInteger()
+        private val sessions = AtomicInteger()
+
+        private fun isPendingIncoming(file: File): Boolean =
+            synchronized(pendingIncomingFiles) { file.name in pendingIncomingFiles }
     }
 
     private class ThumbRestore(val targetIndex: Int?, val offsetPx: Int, val selected: Set<Int>?)
+
+    private val cacheRoot: File by lazy { File(applicationInfo.dataDir, "cache") }
+    private val appPrefs: SharedPreferences by lazy { applicationContext.getSharedPreferences(PREFS_NAME_FRAGMENT, MODE_PRIVATE) }
+    private var session = 0
 
     private lateinit var binding: ActivityMainBinding
     private lateinit var viewModel: PageItemsViewModel
@@ -415,7 +425,7 @@ class MainActivity : AppCompatActivity() {
                     withContext(Dispatchers.Main) {
                         Toast.makeText(this@MainActivity, getString(R.string.msg_prefs_loaded_success), Toast.LENGTH_LONG).show()
 
-                        val sp = getSharedPreferences(PREFS_NAME_FRAGMENT, MODE_PRIVATE)
+                        val sp = appPrefs
                         val profile = synchronized(prefsBackupLock) {
                             sp.getString(KEY_LAST_LOADED_PROFILE, "") ?: ""
                         }
@@ -451,6 +461,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
 
+        session = if (savedInstanceState == null) sessions.incrementAndGet() else sessions.get()
         if (savedInstanceState == null) {
             val operations = PdfOperations.runner(this)
             when (val start = PdfOperationScreen.onFreshStart(operations.state.value)) {
@@ -465,7 +476,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        val prefs = getSharedPreferences(PREFS_NAME_FRAGMENT, MODE_PRIVATE)
+        val prefs = appPrefs
         val theme = synchronized(prefsBackupLock) {
             prefs.getString(KEY_THEME_MODE, "system") ?: "system"
         }
@@ -553,10 +564,7 @@ class MainActivity : AppCompatActivity() {
         setThemedBackArrow()
         binding.toolbar.setNavigationOnClickListener { finishAndRemoveTask() }
 
-        signaturesDir = File(filesDir, "Signatures")
-        if (!signaturesDir.exists()) {
-            signaturesDir.mkdirs()
-        }
+        signaturesDir = File(File(applicationInfo.dataDir, "files"), "Signatures")
 
         val rvThumbnails: RecyclerView = findViewById(R.id.rv_thumbnails)
         numberOfRows = findViewById(R.id.number_of_rows)
@@ -924,7 +932,7 @@ class MainActivity : AppCompatActivity() {
         val operationPending = PdfOperationScreen.isPending(PdfOperations.runner(this).state.value)
 
         runCatching {
-            val sp = getSharedPreferences(PREFS_NAME_FRAGMENT, MODE_PRIVATE)
+            val sp = appPrefs
 
             if (savedInstanceState == null) {
                 synchronized(prefsBackupLock) {
@@ -1019,7 +1027,7 @@ class MainActivity : AppCompatActivity() {
                             hideInProgressIfShownUpdateUI()
                             unlockScreenOrientation()
                             synchronized(prefsBackupLock) {
-                                val spLock = getSharedPreferences(PREFS_NAME_FRAGMENT, MODE_PRIVATE)
+                                val spLock = appPrefs
                                 spLock.edit { putBoolean(KEY_RESTORE_LOCK_UNTIL_RELOAD, false) }
                             }
                             finishStartupRestore()
@@ -1049,7 +1057,7 @@ class MainActivity : AppCompatActivity() {
                         hideInProgressIfShownUpdateUI()
                         unlockScreenOrientation()
                         synchronized(prefsBackupLock) {
-                            val spLock = getSharedPreferences(PREFS_NAME_FRAGMENT, MODE_PRIVATE)
+                            val spLock = appPrefs
                             spLock.edit { putBoolean(KEY_RESTORE_LOCK_UNTIL_RELOAD, false) }
                         }
                         finishStartupRestore()
@@ -1057,7 +1065,7 @@ class MainActivity : AppCompatActivity() {
                 )
             }
         }.onFailure {
-            val spLock = getSharedPreferences(PREFS_NAME_FRAGMENT, MODE_PRIVATE)
+            val spLock = appPrefs
             if (operationPending) {
                 dropPendingResults()
                 operationRestore = ThumbRestore(null, 0, null)
@@ -1162,17 +1170,22 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun clearCacheDir() {
-        try {
-            cacheDir.listFiles()?.forEach { file -> file.deleteRecursively() }
-        } catch (_: Exception) { }
+    private fun clearCacheDir(ready: suspend () -> Boolean = { true }) {
+        val app = applicationContext
+        pendingWorkspaceClears.incrementAndGet()
+        PdfOperations.cleaner.clear({ app.cacheDir }, { isPendingIncoming(it) }, ready) {
+            pendingWorkspaceClears.decrementAndGet()
+        }
     }
 
-    private fun sourceDir(): File = File(cacheDir, SOURCE_TEMP_NAME)
-    private fun nupTempFile(): File = File(cacheDir, NUP_TEMP_NAME)
+    private fun sourceDir(): File = File(cacheRoot, SOURCE_TEMP_NAME)
+    private fun nupTempFile(): File = File(cacheRoot, NUP_TEMP_NAME)
+
+    private fun hasNupTemp(): Boolean = pendingWorkspaceClears.get() == 0 && nupTempFile().exists()
+    private fun hasSourceParts(): Boolean = pendingWorkspaceClears.get() == 0 && PdfSourceParts.exists(sourceDir())
 
     private fun workFileBackup(): WorkFileBackup =
-        WorkFileBackup(cacheDir, SOURCE_TEMP_NAME, NUP_TEMP_NAME, SOURCE_TEMP_COPY_NAME, NUP_TEMP_COPY_NAME) { f ->
+        WorkFileBackup(cacheRoot, SOURCE_TEMP_NAME, NUP_TEMP_NAME, SOURCE_TEMP_COPY_NAME, NUP_TEMP_COPY_NAME) { f ->
             synchronized(pendingIncomingFiles) { f.name in pendingIncomingFiles }
         }
 
@@ -1405,7 +1418,7 @@ class MainActivity : AppCompatActivity() {
             val csv = selectedIdx.joinToString(",")
             val rotationCsv = sourceRotation.joinToString(",")
 
-            val sp = getSharedPreferences(PREFS_NAME_FRAGMENT, MODE_PRIVATE)
+            val sp = appPrefs
             synchronized(prefsBackupLock) {
                 sp.edit {
                     putInt(KEY_THEME_RESTORE_FIRST, first)
@@ -1507,16 +1520,11 @@ class MainActivity : AppCompatActivity() {
 
         val action = intent.action
 
-        val collected = LinkedHashSet<Uri>()
+        val candidates = ArrayList<Uri>()
 
-        fun tryCollectIfLikelyPdf(uri: Uri?) {
+        fun addCandidate(uri: Uri?) {
             if (uri == null) return
-
-            val mt = try { contentResolver.getType(uri) } catch (_: Exception) { null }
-            val mtLc = mt?.lowercase(Locale.ROOT)
-            val nameLc = try { extractFileName(uri).lowercase(Locale.ROOT) } catch (_: Exception) { "" }
-
-            if (IncomingFileKind.looksLikePdf(mtLc, nameLc)) collected.add(uri)
+            candidates.add(uri)
         }
 
         fun processUris(uris: List<Uri>) {
@@ -1541,75 +1549,76 @@ class MainActivity : AppCompatActivity() {
 
         when (action) {
             Intent.ACTION_VIEW -> {
-                tryCollectIfLikelyPdf(intent.data)
+                addCandidate(intent.data)
                 intent.clipData?.let { cd ->
-                    for (i in 0 until cd.itemCount) tryCollectIfLikelyPdf(cd.getItemAt(i)?.uri)
+                    for (i in 0 until cd.itemCount) addCandidate(cd.getItemAt(i)?.uri)
                 }
             }
             Intent.ACTION_SEND -> {
-                tryCollectIfLikelyPdf(intent.getParcelableCompat(Intent.EXTRA_STREAM))
+                addCandidate(intent.getParcelableCompat(Intent.EXTRA_STREAM))
                 intent.clipData?.let { cd ->
-                    for (i in 0 until cd.itemCount) tryCollectIfLikelyPdf(cd.getItemAt(i)?.uri)
+                    for (i in 0 until cd.itemCount) addCandidate(cd.getItemAt(i)?.uri)
                 }
             }
             Intent.ACTION_SEND_MULTIPLE -> {
                 val list = intent.getParcelableArrayListCompat(Intent.EXTRA_STREAM)
                 if (!list.isNullOrEmpty()) {
-                    for (u in list) tryCollectIfLikelyPdf(u)
+                    for (u in list) addCandidate(u)
                 } else {
                     val cd = intent.clipData
                     if (cd != null && cd.itemCount > 0) {
-                        for (i in 0 until cd.itemCount) tryCollectIfLikelyPdf(cd.getItemAt(i)?.uri)
+                        for (i in 0 until cd.itemCount) addCandidate(cd.getItemAt(i)?.uri)
                     } else {
-                        tryCollectIfLikelyPdf(intent.getParcelableCompat(Intent.EXTRA_STREAM))
+                        addCandidate(intent.getParcelableCompat(Intent.EXTRA_STREAM))
                     }
                 }
             }
         }
 
-        if (collected.isNotEmpty()) {
-            processUris(collected.toList())
-            return
+        val single = when (action) {
+            Intent.ACTION_VIEW -> intent.data
+            Intent.ACTION_SEND -> intent.getParcelableCompat(Intent.EXTRA_STREAM)
+            else -> null
         }
 
-        if (collected.isEmpty()) {
-            when (action) {
-                Intent.ACTION_VIEW -> {
-                    val single = intent.data
-                    if (single != null) {
-                        val mtLc = try { contentResolver.getType(single)?.lowercase(Locale.ROOT) } catch (_: Exception) { null }
-                        val nameLc = try { extractFileName(single).lowercase(Locale.ROOT) } catch (_: Exception) { "" }
-                        if (isSupportedImageMime(mtLc) || isSupportedImageFileName(nameLc)) {
-                            processUris(listOf(single))
-                            return
-                        } else {
-                            val looksImageByMime = (mtLc?.startsWith("image/") == true)
-                            if (looksImageByMime) {
-                                Toast.makeText(this@MainActivity, getString(R.string.unsupported_image), Toast.LENGTH_LONG).show()
-                                return
-                            }
-                        }
-                    }
-                }
-                Intent.ACTION_SEND -> {
-                    val single = intent.getParcelableCompat(Intent.EXTRA_STREAM)
-                    if (single != null) {
-                        val mtLc = try { contentResolver.getType(single)?.lowercase(Locale.ROOT) } catch (_: Exception) { null }
-                        val nameLc = try { extractFileName(single).lowercase(Locale.ROOT) } catch (_: Exception) { "" }
-                        if (isSupportedImageMime(mtLc) || isSupportedImageFileName(nameLc)) {
-                            processUris(listOf(single))
-                            return
-                        } else {
-                            val looksImageByMime = (mtLc?.startsWith("image/") == true)
-                            if (looksImageByMime) {
-                                Toast.makeText(this@MainActivity, getString(R.string.unsupported_image), Toast.LENGTH_LONG).show()
-                                return
-                            }
-                        }
-                    }
-                }
+        val job = lifecycleScope.launch {
+            when (val incoming = withContext(Dispatchers.IO) { classifyIncomingShare(candidates, single) }) {
+                is IncomingShare.Pdfs -> processUris(incoming.uris)
+                is IncomingShare.Image -> processUris(listOf(incoming.uri))
+                IncomingShare.UnsupportedImage ->
+                    Toast.makeText(this@MainActivity, getString(R.string.unsupported_image), Toast.LENGTH_LONG).show()
+                IncomingShare.Ignored -> Unit
             }
         }
+        activeJobs.add(job)
+        job.invokeOnCompletion { activeJobs.remove(job) }
+    }
+
+    private sealed interface IncomingShare {
+        class Pdfs(val uris: List<Uri>) : IncomingShare
+        class Image(val uri: Uri) : IncomingShare
+        data object UnsupportedImage : IncomingShare
+        data object Ignored : IncomingShare
+    }
+
+    @WorkerThread
+    private fun classifyIncomingShare(candidates: List<Uri>, single: Uri?): IncomingShare {
+        val collected = LinkedHashSet<Uri>()
+        for (uri in candidates) {
+            val mt = try { contentResolver.getType(uri) } catch (_: Exception) { null }
+            val mtLc = mt?.lowercase(Locale.ROOT)
+            val nameLc = try { extractFileName(uri).lowercase(Locale.ROOT) } catch (_: Exception) { "" }
+
+            if (IncomingFileKind.looksLikePdf(mtLc, nameLc)) collected.add(uri)
+        }
+        if (collected.isNotEmpty()) return IncomingShare.Pdfs(collected.toList())
+
+        if (single == null) return IncomingShare.Ignored
+        val mtLc = try { contentResolver.getType(single)?.lowercase(Locale.ROOT) } catch (_: Exception) { null }
+        val nameLc = try { extractFileName(single).lowercase(Locale.ROOT) } catch (_: Exception) { "" }
+        if (isSupportedImageMime(mtLc) || isSupportedImageFileName(nameLc)) return IncomingShare.Image(single)
+        val looksImageByMime = (mtLc?.startsWith("image/") == true)
+        return if (looksImageByMime) IncomingShare.UnsupportedImage else IncomingShare.Ignored
     }
 
     private fun handlePdfUrisBatch(uris: List<Uri>) {
@@ -1861,7 +1870,7 @@ class MainActivity : AppCompatActivity() {
         (if (isLand) DEFAULT_SIG_POS_LANDSCAPE_Y_MM else DEFAULT_SIG_POS_PORTRAIT_Y_MM).toString()
 
     private fun storedSignaturePosition(isLand: Boolean): Pair<String, String> {
-        val prefs = getSharedPreferences(PREFS_NAME_FRAGMENT, MODE_PRIVATE)
+        val prefs = appPrefs
         return synchronized(prefsBackupLock) {
             (prefs.getString(sigPosXKey(isLand), defaultSigPosX(isLand)) ?: defaultSigPosX(isLand)) to
                     (prefs.getString(sigPosYKey(isLand), defaultSigPosY(isLand)) ?: defaultSigPosY(isLand))
@@ -1876,7 +1885,7 @@ class MainActivity : AppCompatActivity() {
         }
 
     private fun swapSignaturePositionFields(isLand: Boolean) {
-        val prefs = getSharedPreferences(PREFS_NAME_FRAGMENT, MODE_PRIVATE)
+        val prefs = appPrefs
         synchronized(prefsBackupLock) {
             prefs.edit {
                 putString(sigPosXKey(!isLand), signaturePosX.text.toString())
@@ -1942,7 +1951,7 @@ class MainActivity : AppCompatActivity() {
 
             selectedSigIndex = -1
 
-            val prefs = getSharedPreferences(PREFS_NAME_FRAGMENT, MODE_PRIVATE)
+            val prefs = appPrefs
             val lastDpiSaved = synchronized(prefsBackupLock) {
                 prefs.getInt(KEY_LAST_SIG_DPI_INDEX, 0).coerceIn(0, 1)
             }
@@ -2492,7 +2501,7 @@ class MainActivity : AppCompatActivity() {
         applyGrayscalePage: Boolean
     ) {
         val nup = nupTempFile()
-        if (!nup.exists()) {
+        if (!hasNupTemp()) {
             Toast.makeText(this, getString(R.string.temporary_pdf_not_found), Toast.LENGTH_LONG).show()
             return
         }
@@ -2613,6 +2622,9 @@ class MainActivity : AppCompatActivity() {
         lifecycleScope.launch {
             try {
                 val copied = withContext(Dispatchers.IO) {
+                    if (!signaturesDir.exists()) {
+                        signaturesDir.mkdirs()
+                    }
                     contentResolver.openInputStream(uri)?.use { inputStream ->
                         var fileName = extractFileName(uri)
                         if (!fileName.startsWith("sign_")) fileName = "sign_$fileName"
@@ -2748,16 +2760,20 @@ class MainActivity : AppCompatActivity() {
         saveCurrentSettings()
         (findViewById<RecyclerView>(R.id.rv_thumbnails).adapter as? ThumbnailAdapter)?.close()
         handoverId?.let { PdfOperations.runner(this).abandon(it) }
-        if (isFinishing && !isChangingConfigurations) {
+        if (isFinishing && !isChangingConfigurations && session == sessions.get()) {
             val operations = PdfOperations.runner(this)
-            PdfOperationScreen.onFinishing(operations.state.value)?.let { operations.cancel(it) }
-            clearCacheDir()
+            val cancelled = PdfOperationScreen.onFinishing(operations.state.value)
+            cancelled?.let { operations.cancel(it) }
+            clearCacheDir(ready = {
+                if (cancelled != null) operations.state.first { !it.isBusy || it.request?.id != cancelled }
+                true
+            })
         }
         super.onDestroy()
     }
 
     private fun snapshotInitialPrefsIfNeeded() {
-        val sp = getSharedPreferences(PREFS_NAME_FRAGMENT, MODE_PRIVATE)
+        val sp = appPrefs
 
         synchronized(prefsBackupLock) {
             if (sp.getBoolean(KEY_FIRST_RUN_INITIALIZED, false)) return
@@ -2826,7 +2842,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun saveSettings(type: String) {
-        val prefs = getSharedPreferences(PREFS_NAME_FRAGMENT, MODE_PRIVATE)
+        val prefs = appPrefs
         val fileNameEt: EditText = findViewById(R.id.file_name)
 
         synchronized(prefsBackupLock) {
@@ -2910,7 +2926,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun saveCurrentSettings() {
-        val prefs = getSharedPreferences(PREFS_NAME_FRAGMENT, MODE_PRIVATE)
+        val prefs = appPrefs
         val fileNameEt: EditText = findViewById(R.id.file_name)
 
         synchronized(prefsBackupLock) {
@@ -2933,7 +2949,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun loadSettings() {
-        val prefs = getSharedPreferences(PREFS_NAME_FRAGMENT, MODE_PRIVATE)
+        val prefs = appPrefs
 
         val rows: String
         val columns: String
@@ -3015,7 +3031,7 @@ class MainActivity : AppCompatActivity() {
         lifecycleScope.launch {
             val data = withContext(Dispatchers.IO) {
                 localizeDefaultFileNameTemplatesInPrefs()
-                val prefs = getSharedPreferences(PREFS_NAME_FRAGMENT, MODE_PRIVATE)
+                val prefs = appPrefs
                 synchronized(prefsBackupLock) {
                     when (type) {
                         "reeprofile1" -> mapOf(
@@ -3118,7 +3134,7 @@ class MainActivity : AppCompatActivity() {
             val fileNameEt: EditText = findViewById(R.id.file_name)
             fileNameEt.setText(data["nlFileNameTemplate"] as String)
 
-            val prefs2 = getSharedPreferences(PREFS_NAME_FRAGMENT, MODE_PRIVATE)
+            val prefs2 = appPrefs
             synchronized(prefsBackupLock) {
                 prefs2.edit {
                     putString(KEY_FILE_NAME_TEMPLATE, fileNameEt.text?.toString() ?: "")
@@ -3139,7 +3155,7 @@ class MainActivity : AppCompatActivity() {
             isLoadingSettingsProfile = false
 
             var positionsGoWithRebuild = false
-            if (regenRequestedDuringProfileLoad && nupTempFile().exists()) {
+            if (regenRequestedDuringProfileLoad && hasNupTemp()) {
                 regenRequestedDuringProfileLoad = false
                 val rebuildNeeded = ProfileLoadRebuild.isNeeded(
                     built = lastBuiltNupConfig,
@@ -3174,7 +3190,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun localizeDefaultFileNameTemplatesInPrefs() {
         val defaults = defaultFileNameTemplatesOfAllLanguages()
-        val prefs = getSharedPreferences(PREFS_NAME_FRAGMENT, MODE_PRIVATE)
+        val prefs = appPrefs
         synchronized(prefsBackupLock) {
             val changes = listOf(KEY_FILE_NAME_TEMPLATE, KEY_REEPROFILE1_FILE_NAME_TEMPLATE, KEY_REEPROFILE2_FILE_NAME_TEMPLATE)
                 .mapNotNull { key ->
@@ -3478,7 +3494,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun longOperationStateBackup(): LongOperationStateBackup =
-        LongOperationStateBackup(getSharedPreferences(PREFS_NAME_FRAGMENT, MODE_PRIVATE), prefsBackupLock)
+        LongOperationStateBackup(appPrefs, prefsBackupLock)
 
     private fun backupUiStateBeforeLongOperation() {
         runCatching {
@@ -3732,7 +3748,7 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        if (nupTempFile().exists()) {
+        if (hasNupTemp()) {
             if (isLoadingSettingsProfile) {
                 regenRequestedDuringProfileLoad = true
                 return
@@ -3746,7 +3762,7 @@ class MainActivity : AppCompatActivity() {
         et.setOnFocusChangeListener { _, hasFocus ->if (hasFocus) {
             et.setTag(et.id, et.text?.toString())
         } else {
-            if (suppressNup || !nupTempFile().exists()) {
+            if (suppressNup || !hasNupTemp()) {
                 return@setOnFocusChangeListener
             }
 
@@ -4318,7 +4334,7 @@ class MainActivity : AppCompatActivity() {
     private fun writerProps(): WriterProperties = PdfIo.writerProperties()
 
     private fun addEmptyPageToSource() {
-        if (!PdfSourceParts.exists(sourceDir())) {
+        if (!hasSourceParts()) {
             Toast.makeText(this, getString(R.string.select_a_page), Toast.LENGTH_SHORT).show()
             return
         }
@@ -4471,14 +4487,8 @@ class MainActivity : AppCompatActivity() {
                 if (binding.overlayProgressDialog.isVisible) return@post
                 if (isSigningCancelled) return@post
 
-                runCatching {
-                    val srcCopy = File(cacheDir, SOURCE_TEMP_COPY_NAME)
-                    if (srcCopy.exists()) srcCopy.deleteRecursively()
-                }
-                runCatching {
-                    val nupCopy = File(cacheDir, NUP_TEMP_COPY_NAME)
-                    if (nupCopy.exists()) nupCopy.delete()
-                }
+                val app = applicationContext
+                PdfOperations.cleaner.delete({ app.cacheDir }, listOf(SOURCE_TEMP_COPY_NAME, NUP_TEMP_COPY_NAME))
             }
 
             if (shouldDeferUnlock && deferredOrientationUnlockRequested) {
@@ -5007,7 +5017,7 @@ class MainActivity : AppCompatActivity() {
         config: NupConfig = currentNupConfigFromInputs(),
         savesSelection: Boolean = true
     ): Boolean {
-        if (change !is PdfLayoutChangeOperation.Change.Rebuild && !PdfSourceParts.exists(sourceDir())) return false
+        if (change !is PdfLayoutChangeOperation.Change.Rebuild && !hasSourceParts()) return false
 
         val selectedIdxBefore = selectedNupIndices()
         val saveSelection = selectionSaver(selectedIdxBefore)
@@ -5054,7 +5064,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun operationFiles(): PdfLayoutChangeOperation.Files =
-        PdfLayoutChangeOperation.Files(cacheDir, sourceDir(), nupTempFile(), workFileBackup())
+        PdfLayoutChangeOperation.Files(cacheRoot, sourceDir(), nupTempFile(), workFileBackup())
 
     private fun operationProgress(share: Int = 100): PdfLayoutChangeOperation.Progress =
         PdfLayoutChangeOperation.Progress(SystemClock::uptimeMillis, PROGRESS_TICK_MS, PROGRESS_IDLE_MS, share)
@@ -5069,8 +5079,11 @@ class MainActivity : AppCompatActivity() {
         lockScreenOrientation()
         if (::adapter.isInitialized) runCatching { adapter.pausePrefetchAndCancel() }
 
+        val app = applicationContext
         val id =PdfOperations.runner(this).start(kind, message, onCancelled) { report ->
             OpenViewerDocuments.awaitClosing()
+            PdfOperations.cleaner.awaitIdle()
+            withContext(Dispatchers.IO) { app.cacheDir }
             work(report)
         }
         if (id == null) {
@@ -5545,14 +5558,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun cleanupCacheExceptTemps() {
-        if (PdfOperations.runner(this).state.value.isBusy) return
+        val app = applicationContext
+        val runner = PdfOperations.runner(this)
         val keep = setOf(SOURCE_TEMP_NAME, NUP_TEMP_NAME)
-        cacheDir.listFiles()?.forEach { f ->
-            val pending = synchronized(pendingIncomingFiles) { f.name in pendingIncomingFiles }
-            if (f.name !in keep && !pending) {
-                runCatching { f.deleteRecursively() }
-            }
-        }
+        PdfOperations.cleaner.clear({ app.cacheDir }, { it.name in keep || isPendingIncoming(it) }, { !runner.state.value.isBusy })
     }
 
     private fun handleEditedPdfFromViewer(uri: Uri) {
@@ -5634,7 +5643,7 @@ class MainActivity : AppCompatActivity() {
     private fun outputOperation(password: ByteArray?, packed: Boolean, direct: Boolean = false): PdfOutputOperation =
         PdfOutputOperation(
             files = PdfOutputOperation.Files(
-                cacheDir,
+                cacheRoot,
                 nupTempFile(),
                 setOf(NUP_TEMP_NAME, SOURCE_TEMP_NAME, SOURCE_TEMP_COPY_NAME, NUP_TEMP_COPY_NAME)
             ),
@@ -6149,7 +6158,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         val selected = selectedNupIndices().sorted()
-        if (selected.isEmpty() || !nupTempFile().exists() || !PdfSourceParts.exists(sourceDir())) {
+        if (selected.isEmpty() || !hasNupTemp() || !hasSourceParts()) {
             Toast.makeText(this, getString(R.string.select_a_page), Toast.LENGTH_SHORT).show()
             return
         }
@@ -6468,7 +6477,7 @@ class MainActivity : AppCompatActivity() {
 
         fun writeMap(name: String) {
             val all = synchronized(prefsBackupLock) {
-                getSharedPreferences(name, MODE_PRIVATE).all
+                applicationContext.getSharedPreferences(name, MODE_PRIVATE).all
             }
             serializer.startTag(null, "map")
             serializer.attribute(null, "name", name)
@@ -6533,7 +6542,7 @@ class MainActivity : AppCompatActivity() {
         val parser = Xml.newPullParser()
         parser.setInput(StringReader(xml))
 
-        val spFragment = getSharedPreferences(PREFS_NAME_FRAGMENT, MODE_PRIVATE)
+        val spFragment = appPrefs
 
         var editor: SharedPreferences.Editor? = null
         var inTargetMap = false
@@ -6665,7 +6674,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setThemeMode(mode: String) {
-        val prefs = getSharedPreferences(PREFS_NAME_FRAGMENT, MODE_PRIVATE)
+        val prefs = appPrefs
         synchronized(prefsBackupLock) {
             prefs.edit { putString(KEY_THEME_MODE, mode) }
         }
@@ -6691,7 +6700,7 @@ class MainActivity : AppCompatActivity() {
             val csv = selectedIdx.joinToString(",")
             val rotationCsv = sourceRotation.joinToString(",")
 
-            val sp = getSharedPreferences(PREFS_NAME_FRAGMENT, MODE_PRIVATE)
+            val sp = appPrefs
             synchronized(prefsBackupLock) {
                 sp.edit {
                     putInt(KEY_THEME_RESTORE_FIRST, first)
@@ -6706,7 +6715,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         runCatching {
-            val sp2 = getSharedPreferences(PREFS_NAME_FRAGMENT, MODE_PRIVATE)
+            val sp2 = appPrefs
             synchronized(prefsBackupLock) {
                 sp2.edit { putBoolean(KEY_RESTORE_LOCK_UNTIL_RELOAD, true) }
             }

@@ -36,6 +36,8 @@
     <string name="pdf_edits_erase_failed">A szerkesztések törlése sikertelen: %1$s</string>
     <string name="edit_color_palette">Színpaletta</string>
     <string name="edit_text">Szöveg</string>
+    <string name="edit_underline">Aláhúzás</string>
+    <string name="edit_strikethrough">Áthúzás</string>
     <string name="edit_pen">Toll</string>
     <string name="edit_highlighter">Kiemelő</string>
     <string name="edit_vector_signature">Vektoros aláírás</string>
