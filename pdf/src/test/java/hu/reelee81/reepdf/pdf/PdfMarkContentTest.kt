@@ -3,6 +3,7 @@ package hu.reelee81.reepdf.pdf
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -116,6 +117,46 @@ class PdfMarkContentTest {
         assertTrue(PdfMarkContent.isBlank("q\n1 0 0 1 0 0 cm\n\nQ\nq 2 0 0 2 1 1 cm Q % note\n".toByteArray()))
         assertFalse(PdfMarkContent.isBlank("q /Fm0 Do Q".toByteArray()))
         assertFalse(PdfMarkContent.isBlank("BI /W 1 /H 1 ID x EI".toByteArray()))
+    }
+
+    @Test
+    fun aPieceThatOnlyClipsIsBlank() {
+        assertTrue(PdfMarkContent.isBlank("q 2 0 0 2 1 1 cm\n10 20 30 40 re W n\nQ\n".toByteArray()))
+        assertTrue(PdfMarkContent.isBlank("q 0 0 m 10 0 l 10 10 l h W* n Q".toByteArray()))
+        assertFalse(PdfMarkContent.isBlank("q 10 20 30 40 re W n 0 0 10 10 re f Q".toByteArray()))
+        assertFalse(PdfMarkContent.isBlank("0 0 m 10 10 l S".toByteArray()))
+    }
+
+    @Test
+    fun otherContentIsWhatStandsBesideTheMarks() {
+        val marks = PdfMarkContent.write(listOf(pen, highlighter), "A")
+        val clipped = "q 1 0 0 1 5 5 cm\n0 0 50 50 re W n\n".toByteArray() + marks + "Q\n".toByteArray()
+        val foreign = marks + "q /Fm0 Do Q\n".toByteArray()
+
+        assertFalse(PdfMarkContent.hasOtherContent(marks, PdfMarkContent.read(marks)))
+        assertFalse(PdfMarkContent.hasOtherContent(clipped, PdfMarkContent.read(clipped)))
+        assertTrue(PdfMarkContent.hasOtherContent(foreign, PdfMarkContent.read(foreign)))
+        assertTrue(PdfMarkContent.hasOtherContent("q /Fm0 Do Q".toByteArray(), emptyList()))
+        assertFalse(PdfMarkContent.hasOtherContent(ByteArray(0), emptyList()))
+    }
+
+    @Test
+    fun aClipBeforeAMarkIsReadInTheSpaceAroundItAndEndsWithItsState() {
+        val clipped = "q 2 0 0 2 10 10 cm\n0 0 50 40 re W n\n".toByteArray() + PdfMarkContent.write(listOf(pen), null) +
+            "Q\n".toByteArray() + PdfMarkContent.write(listOf(text), "A")
+
+        val stored = PdfMarkContent.read(clipped)
+
+        assertArrayEquals(doubleArrayOf(10.0, 10.0, 110.0, 90.0), stored[0].clip!!, 1e-9)
+        assertNull(stored[1].clip)
+    }
+
+    @Test
+    fun nestedClipsNarrowEachOther() {
+        val content = "q 0 0 100 100 re W n\nq 50 20 m 150 20 l 150 80 l h W* n\n".toByteArray() +
+            PdfMarkContent.write(listOf(pen), null) + "Q Q\n".toByteArray()
+
+        assertArrayEquals(doubleArrayOf(50.0, 20.0, 100.0, 80.0), PdfMarkContent.read(content).single().clip!!, 1e-9)
     }
 
     @Test

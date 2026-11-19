@@ -335,7 +335,9 @@ class ViewerEditor(private val scope: CoroutineScope, private val onPagesChanged
         for (saved in marks.marks) {
             val ref = ViewerEditSession.SavedRef(page, saved.stream, saved.id)
             if (ref in pendingSaved || ref in found || !state.isVisible(ref)) continue
-            if (ViewerMarkHit.hits(saved.kind, saved.path, saved.width, point.x, point.y, tolerance)) {
+            if (ViewerMarkHit.within(saved.clip, point.x, point.y, tolerance) &&
+                ViewerMarkHit.hits(saved.kind, saved.path, saved.width, point.x, point.y, tolerance)
+            ) {
                 marks.marks.filter { it.id == saved.id }.forEach { found += ViewerEditSession.SavedRef(page, it.stream, it.id) }
             }
         }

@@ -27,6 +27,9 @@ import com.itextpdf.kernel.pdf.PdfStream
 import com.itextpdf.kernel.pdf.PdfWriter
 import com.itextpdf.kernel.pdf.canvas.PdfCanvas
 import com.itextpdf.kernel.pdf.xobject.PdfImageXObject
+import hu.reelee81.reepdf.core.NupArea
+import hu.reelee81.reepdf.core.NupBox
+import hu.reelee81.reepdf.core.NupCellArea
 import hu.reelee81.reepdf.core.NupConfig
 import hu.reelee81.reepdf.core.NupGeometry.A4_HEIGHT_PT
 import hu.reelee81.reepdf.core.NupGeometry.A4_WIDTH_PT
@@ -218,6 +221,174 @@ class R8SmokeActivity : Activity() {
         }
         step("viewer: aborted render, render, close while rendering") { viewerCore() }
         step("viewer: search, word selection, select all, copy") { viewerText() }
+        step("editor: 2x2 labels, a neighbor's mark stays off a label whose crop is reset") { labelsCropReset() }
+        step("editor: 2x2 fitted labels keep their size, no copy and no ghost") { labelsFit() }
+    }
+
+    private fun labelsCropReset() {
+        reset()
+        import(labelsPdf())
+        change(PdfLayoutChangeOperation.Change.Crop(0, LABEL_CROP, false))
+        change(PdfLayoutChangeOperation.Change.Rebuild(per()), LABELS_SCALED)
+        val cropped = recordedCells(nup)
+        check(cropped.size == LABELS) { "${cropped.size} labels on the sheet" }
+        val neighbor = cropped[1].area
+        val y = (neighbor.bottom + neighbor.top) / 2
+        val from = neighbor.left + LABEL_STROKE_INSET
+        val pen = PdfMark(
+            PdfMark.newId(), PdfMarkKind.PEN, PEN_COLOR, LABEL_PEN_WIDTH,
+            PdfMarkPath.Builder().moveTo(from.toFloat(), y.toFloat()).lineTo(((neighbor.left + neighbor.right) / 2).toFloat(), y.toFloat()).build()
+        )
+        val edited = File(dir, "labels_crop.pdf")
+        check(saveMarks(nup, edited, PdfMarkSave.Plan(added = mapOf(0 to listOf(pen))))) { "nothing saved" }
+        runBlocking { project(edited) }
+        check(!sourceHasMark(0, pen.id)) { "the neighbor's mark reached the cropped label's source" }
+        check(sourceHasMark(1, pen.id)) { "the mark is missing from its own label's source" }
+        change(PdfLayoutChangeOperation.Change.Crop(0, null, false))
+        val whole = recordedCells(nup)
+        val inSource = map(checkNotNull(PdfEditProjection.inverse(cropped[0].matrix)), from + LABEL_STROKE_INSET, y)
+        val oldPlace = map(whole[0].matrix, inSource.first, inSource.second)
+        check(oldPlace.first in whole[0].area.left..whole[0].area.right && oldPlace.second in whole[0].area.bottom..whole[0].area.top) {
+            "the check point $oldPlace is not on the reset label"
+        }
+        runBlocking {
+            withViewerDocument(nup) { document ->
+                val toPage = document.pageMarks(0).toPage
+                val stray = countPixels(document, toPage, whole[0].area, ::isPen)
+                check(stray == 0) { "the reset label shows $stray pixels of its neighbor's mark" }
+                check(countPixels(document, toPage, whole[1].area, ::isPen) > 0) { "the neighbor lost its own mark" }
+            }
+        }
+    }
+
+    private fun labelsFit() {
+        reset()
+        import(labelsPdf())
+        change(PdfLayoutChangeOperation.Change.Rebuild(per()), LABELS_FITTED)
+        val before = recordedCells(nup)
+        check(before.size == LABELS) { "${before.size} labels on the sheet" }
+        val label = before[1]
+        val start = map(label.matrix, LABEL_BAND_FROM, LABEL_BAND_Y)
+        val end = map(label.matrix, LABEL_BAND_TO, LABEL_BAND_Y)
+        val strip = PdfMark(
+            PdfMark.newId(), PdfMarkKind.HIGHLIGHTER, HIGHLIGHT_COLOR, LABEL_STRIP_WIDTH,
+            PdfMarkPath.Builder().moveTo(start.first.toFloat(), start.second.toFloat()).lineTo(end.first.toFloat(), end.second.toFloat()).build()
+        )
+        val edited = File(dir, "labels_fit.pdf")
+        check(saveMarks(nup, edited, PdfMarkSave.Plan(added = mapOf(0 to listOf(strip))))) { "nothing saved" }
+        val drawn = runBlocking { withViewerDocument(edited) { document -> countPixels(document, document.pageMarks(0).toPage, label.area, ::isStrip) } }
+        check(drawn > 0) { "the strip is not drawn" }
+        runBlocking { project(edited) }
+        val after = recordedCells(nup)
+        for (index in before.indices) {
+            val (old, new) = before[index].area to after[index].area
+            val same = abs(old.left - new.left) + abs(old.bottom - new.bottom) + abs(old.right - new.right) + abs(old.top - new.top) <= AREA_TOLERANCE
+            check(same) { "label ${index + 1} changed size: $old -> $new" }
+        }
+        for (index in listOf(0, 2, 3)) check(!sourceHasMark(index, strip.id)) { "label ${index + 1} got a copy of the strip" }
+        check(sourceHasMark(1, strip.id)) { "the strip is missing from its own label's source" }
+        runBlocking {
+            withViewerDocument(nup) { document ->
+                val toPage = document.pageMarks(0).toPage
+                val shown = countPixels(document, toPage, label.area, ::isStrip)
+                check(abs(shown - drawn) <= drawn / STRIP_TOLERANCE_DIVISOR) { "the strip covers $shown pixels instead of $drawn" }
+                val twice = countPixels(document, toPage, label.area, ::isDoubleStrip)
+                check(twice == 0) { "$twice pixels of the strip are drawn twice" }
+            }
+        }
+        change(PdfLayoutChangeOperation.Change.Rebuild(per()), LABELS_ONE_UP)
+        change(PdfLayoutChangeOperation.Change.DeleteGroups(listOf(1)))
+        change(PdfLayoutChangeOperation.Change.Rebuild(per()), LABELS_FITTED)
+        check(PdfSourceParts.open(sourceDir).total == LABELS - 1) { "the label was not deleted" }
+        runBlocking {
+            withViewerDocument(nup) { document ->
+                val ghost = countPixels(document, document.pageMarks(0).toPage, SHEET, ::isStrip)
+                check(ghost == 0) { "$ghost pixels of the deleted label's strip are left on the sheet" }
+            }
+        }
+    }
+
+    private class RecordedCell(val matrix: DoubleArray, val area: NupArea)
+
+    private fun labelArea(file: File, pageIndex: Int): NupArea? = PdfDocument(PdfIo.reader(file.absolutePath, null)).use { pdf ->
+        val base = pdf.getPage(pageIndex + 1).pdfObject.getAsDictionary(PdfName.PieceInfo)?.getAsDictionary(PdfName(PIECE))
+            ?.getAsDictionary(PdfName.Private)?.getAsDictionary(PdfName("Base")) ?: return@use null
+        val cells = base.getAsArray(PdfName("Cells"))?.takeIf { it.size() == 7 } ?: return@use null
+        val areas = base.getAsArray(PdfName("Areas"))?.takeIf { it.size() == 8 } ?: return@use null
+        val matrix = DoubleArray(6) { cells.getAsNumber(1 + it).doubleValue() }
+        val values = FloatArray(8) { areas.getAsNumber(it).floatValue() }
+        NupCellArea.of(NupBox(values[0], values[1], values[2], values[3]), matrix, NupBox(values[4], values[5], values[6], values[7])) ?: NOTHING_VISIBLE
+    }
+
+    private fun touches(mark: PdfMark, area: NupArea): Boolean {
+        val points = mark.path.points
+        if (points.isEmpty()) return false
+        val xs = points.filterIndexed { index, _ -> index % 2 == 0 }
+        val ys = points.filterIndexed { index, _ -> index % 2 == 1 }
+        val reach = if (mark.kind == PdfMarkKind.TEXT_HIGHLIGHT) 0.0 else mark.width / 2.0
+        return area.intersects(xs.min() - reach, ys.min() - reach, xs.max() + reach, ys.max() + reach)
+    }
+
+    private fun recordedCells(file: File): List<RecordedCell> = PdfDocument(PdfIo.reader(file.absolutePath, null)).use { pdf ->
+        val base = checkNotNull(
+            pdf.getPage(1).pdfObject.getAsDictionary(PdfName.PieceInfo)?.getAsDictionary(PdfName(PIECE))
+                ?.getAsDictionary(PdfName.Private)?.getAsDictionary(PdfName("Base"))
+        ) { "no layout record" }
+        val cells = checkNotNull(base.getAsArray(PdfName("Cells"))) { "no cells" }
+        val areas = checkNotNull(base.getAsArray(PdfName("Areas"))) { "no areas" }
+        (0 until cells.size() / 7).map { index ->
+            val matrix = DoubleArray(6) { cells.getAsNumber(index * 7 + 1 + it).doubleValue() }
+            val values = FloatArray(8) { areas.getAsNumber(index * 8 + it).floatValue() }
+            val box = NupBox(values[0], values[1], values[2], values[3])
+            val slot = NupBox(values[4], values[5], values[6], values[7])
+            RecordedCell(matrix, checkNotNull(NupCellArea.of(box, matrix, slot)) { "label ${index + 1} has no visible area" })
+        }
+    }
+
+    private fun map(matrix: DoubleArray, x: Double, y: Double): Pair<Double, Double> =
+        (matrix[0] * x + matrix[2] * y + matrix[4]) to (matrix[1] * x + matrix[3] * y + matrix[5])
+
+    private suspend fun countPixels(
+        document: PdfViewerDocument<PdfRasterTarget>,
+        toPage: DoubleArray,
+        area: NupArea,
+        matches: (Int, Int, Int) -> Boolean
+    ): Int {
+        val corners = listOf(map(toPage, area.left, area.bottom), map(toPage, area.right, area.top))
+        val left = (corners.minOf { it.first } * LABEL_ZOOM).toInt()
+        val top = (corners.minOf { it.second } * LABEL_ZOOM).toInt()
+        val width = (corners.maxOf { it.first } * LABEL_ZOOM).toInt() - left
+        val height = (corners.maxOf { it.second } * LABEL_ZOOM).toInt() - top
+        check(width > 0 && height > 0) { "empty area $area" }
+        val bitmap = createBitmap(width, height)
+        try {
+            val result = document.render(0, LABEL_ZOOM, left, top, AndroidBitmapRasterTarget(bitmap))
+            if (result is PdfRenderResult.Failed) throw IllegalStateException("labels: ${result.error}", result.error)
+            check(result == PdfRenderResult.Done) { "labels: $result" }
+            val pixels = IntArray(width * height)
+            bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
+            return pixels.count { matches(Color.red(it), Color.green(it), Color.blue(it)) }
+        } finally {
+            bitmap.recycle()
+        }
+    }
+
+    private fun isPen(red: Int, green: Int, blue: Int) = red >= PROBE_STRONG && green <= PROBE_WEAK && blue <= PROBE_WEAK
+
+    private fun isStrip(red: Int, green: Int, blue: Int) = red >= PROBE_STRONG && green >= PROBE_STRONG && blue <= red - STRIP_BLUE_GAP
+
+    private fun isDoubleStrip(red: Int, green: Int, blue: Int) = isStrip(red, green, blue) && blue <= DOUBLE_STRIP_BLUE
+
+    private fun sourceHasMark(index: Int, id: String): Boolean {
+        val location = PdfSourceParts.open(sourceDir).locate(index)
+        return PdfDocument(PdfIo.reader(location.file.absolutePath, null)).use { pdf ->
+            val xObjects = pdf.getPage(location.page + 1).pdfObject.getAsDictionary(PdfName.Resources)?.getAsDictionary(PdfName.XObject)
+            xObjects?.keySet().orEmpty().any { name ->
+                val form = xObjects?.getAsStream(name)?.takeIf { it.getAsName(PdfName.Subtype) == PdfName.Form }
+                form != null && (form.getAsNumber(PdfName.Length)?.longValue() ?: Long.MAX_VALUE) <= LAYER_LIMIT &&
+                    String(form.bytes, Charsets.ISO_8859_1).contains("($id)")
+            }
+        }
     }
 
     private fun files() = PdfLayoutChangeOperation.Files(
@@ -535,7 +706,11 @@ class R8SmokeActivity : Activity() {
             }
             project(erased)
             withViewerDocument(nup) { document ->
-                for (page in pages) expectMarks(document, page, "projected", page.highlight, page.pen)
+                for (page in pages) {
+                    val area = labelArea(nup, page.index)
+                    val kept = listOf(page.highlight, page.pen).filter { area == null || touches(page.inUser(it), area) }
+                    expectMarks(document, page, "projected", *kept.toTypedArray())
+                }
                 check(saveMarks(nup, blanked, PdfMarkSave.Plan(blankAll = true))) { "editor: erasing every page saved nothing" }
             }
             checkSourceMark(pages, true, "projected")
@@ -652,17 +827,8 @@ class R8SmokeActivity : Activity() {
     }
 
     private fun checkSourceMark(pages: List<EditorPage>, expected: Boolean, label: String) {
-        val parts = PdfSourceParts.open(sourceDir)
         for (page in pages) {
-            val location = parts.locate(page.index)
-            val found = PdfDocument(PdfIo.reader(location.file.absolutePath, null)).use { pdf ->
-                val xObjects = pdf.getPage(location.page + 1).pdfObject.getAsDictionary(PdfName.Resources)?.getAsDictionary(PdfName.XObject)
-                xObjects?.keySet().orEmpty().any { name ->
-                    val form = xObjects?.getAsStream(name)?.takeIf { it.getAsName(PdfName.Subtype) == PdfName.Form }
-                    form != null && (form.getAsNumber(PdfName.Length)?.longValue() ?: Long.MAX_VALUE) <= LAYER_LIMIT &&
-                        String(form.bytes, Charsets.ISO_8859_1).contains("(${page.pen.id})")
-                }
-            }
+            val found = sourceHasMark(page.index, page.pen.id)
             check(found == expected) { "editor source page ${page.index + 1} $label: pen ${if (found) "still on" else "missing from"} the source page" }
         }
     }
@@ -678,10 +844,10 @@ class R8SmokeActivity : Activity() {
         val extraY = height * EXTRA_Y
         var background = IntArray(3)
 
-        fun added(): List<PdfMark> {
-            val toUser = checkNotNull(PdfEditProjection.inverse(toPage)) { "editor page ${index + 1}: no usable transform" }
-            return listOf(highlight, pen, extra).map { it.transformed(toUser) }
-        }
+        fun added(): List<PdfMark> = listOf(highlight, pen, extra).map(::inUser)
+
+        fun inUser(mark: PdfMark): PdfMark =
+            mark.transformed(checkNotNull(PdfEditProjection.inverse(toPage)) { "editor page ${index + 1}: no usable transform" })
 
         private fun line(kind: PdfMarkKind, color: Int, width: Float, y: Float) = PdfMark(
             PdfMark.newId(),
@@ -1020,6 +1186,19 @@ class R8SmokeActivity : Activity() {
         return file
     }
 
+    private fun labelsPdf(): File {
+        val file = File(dir, "labels.pdf")
+        PdfDocument(PdfWriter(file.absolutePath, PdfIo.writerProperties())).use { pdf ->
+            repeat(LABELS) { index ->
+                PdfCanvas(pdf.addNewPage(PageSize.A6))
+                    .setFillColorGray(LABEL_GRAY).rectangle(60.0, 150.0, 140.0, 120.0).fill()
+                    .setFillColorGray(0f).rectangle(60.0, 300.0, 40.0 + index * 10, 20.0).fill()
+                    .release()
+            }
+        }
+        return file
+    }
+
     private fun textPdf(): File {
         val file = File(dir, "text.pdf")
         val document = AndroidPdfDocument()
@@ -1107,6 +1286,26 @@ class R8SmokeActivity : Activity() {
         const val PROBE_WEAK = 90
         const val PROBE_SAME = 3
         const val LAYER_LIMIT = 1_000_000L
+        const val PIECE = "hureelee81reepdf"
+        const val LABELS = 4
+        const val LABEL_GRAY = 0.6f
+        val LABEL_CROP = PdfCropRect(0.25f, 0.25f, 0.75f, 0.75f)
+        val LABELS_SCALED = NupConfig(2, 2, 5, isLandscape = false, drawFrame = false, scaleIndividually = true, fitIndividually = false)
+        val LABELS_FITTED = NupConfig(2, 2, 5, isLandscape = false, drawFrame = false, scaleIndividually = true, fitIndividually = true)
+        val LABELS_ONE_UP = NupConfig(1, 1, 5, isLandscape = false, drawFrame = false, scaleIndividually = true, fitIndividually = true)
+        val SHEET = NupArea(0.0, 0.0, A4_WIDTH_PT.toDouble(), A4_HEIGHT_PT.toDouble())
+        val NOTHING_VISIBLE = NupArea(0.0, 0.0, 0.0, 0.0)
+        const val LABEL_ZOOM = 2f
+        const val LABEL_STROKE_INSET = 4.0
+        const val LABEL_PEN_WIDTH = 3f
+        const val LABEL_STRIP_WIDTH = 10f
+        const val LABEL_BAND_FROM = 65.0
+        const val LABEL_BAND_TO = 195.0
+        const val LABEL_BAND_Y = 285.0
+        const val AREA_TOLERANCE = 0.01
+        const val STRIP_BLUE_GAP = 40
+        const val DOUBLE_STRIP_BLUE = 125
+        const val STRIP_TOLERANCE_DIVISOR = 20
         const val HEAVY_ZOOM = 2f
         const val HEAVY_FILLS = 8_000
         const val CLOSE_AFTER_MS = 50L

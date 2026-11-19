@@ -2,6 +2,7 @@ package hu.reelee81.reepdf.pdf
 
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -52,6 +53,43 @@ class PdfPageMarksTest {
         assertArrayEquals(floatArrayOf(150f, 350f, 160f, 350f), marks.marks[1].mark.path.points, 0.001f)
         assertEquals(2f, marks.marks[0].mark.width, 0.001f)
         assertArrayEquals(intArrayOf(40, 41), marks.streams)
+    }
+
+    @Test
+    fun aLayerMarkCanOnlyBeHitWhereItsCellAndItsPieceShowIt() {
+        val toPage = doubleArrayOf(1.0, 0.0, 0.0, -1.0, 0.0, 500.0)
+        val cell = doubleArrayOf(0.5, 0.0, 0.0, 0.5, 100.0, 0.0)
+        val inverse = PdfEditProjection.inverse(cell)!!
+        val piece = "q ".toByteArray() + inverse.joinToString(" ").toByteArray() + " cm\n120 0 60 500 re W n\n".toByteArray() +
+            PdfMarkContent.write(listOf(line("c", 150f, 50f)), null) + "Q\n".toByteArray()
+        val cells = PdfPageEditData.cells(
+            floatArrayOf(0f, 0.5f, 0f, 0f, 0.5f, 100f, 0f),
+            floatArrayOf(0f, 0f, 200f, 300f, 100f, 0f, 150f, 120f)
+        )
+        val data = PdfPageEditData(toPage, cells, emptyList(), listOf(PdfPageEditData.Stream(40, piece, sourceIndex = 0)))
+
+        val clip = data.read().marks.single().clip!!
+
+        assertArrayEquals(floatArrayOf(120f, 380f, 180f, 500f), clip, 0.001f)
+    }
+
+    @Test
+    fun aRecordWithoutAreasLeavesTheMarkHittableEverywhere() {
+        val cells = PdfPageEditData.cells(floatArrayOf(0f, 1f, 0f, 0f, 1f, 0f, 0f), floatArrayOf(1f, 2f, 3f))
+        val layer = PdfMarkContent.write(listOf(line("d", 10f, 10f)), null)
+        val data = PdfPageEditData(PdfMatrix.IDENTITY, cells, emptyList(), listOf(PdfPageEditData.Stream(5, layer, sourceIndex = 0)))
+
+        assertNull(cells.single().box)
+        assertNull(data.read().marks.single().clip)
+    }
+
+    @Test
+    fun aCellWithoutAVisibleAreaHidesItsMarksFromTheEraser() {
+        val cells = PdfPageEditData.cells(floatArrayOf(0f, 1f, 0f, 0f, 1f, 1000f, 0f), floatArrayOf(0f, 0f, 100f, 100f, 0f, 0f, 100f, 100f))
+        val layer = PdfMarkContent.write(listOf(line("e", 10f, 10f)), null)
+        val data = PdfPageEditData(PdfMatrix.IDENTITY, cells, emptyList(), listOf(PdfPageEditData.Stream(5, layer, sourceIndex = 0)))
+
+        assertTrue(data.read().marks.single().clip!!.all { it.isNaN() })
     }
 
     @Test

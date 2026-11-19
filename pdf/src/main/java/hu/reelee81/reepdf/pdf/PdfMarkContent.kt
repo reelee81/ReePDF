@@ -1,5 +1,7 @@
 package hu.reelee81.reepdf.pdf
 
+import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlin.math.roundToLong
 
@@ -9,9 +11,9 @@ internal object PdfMarkContent {
     private const val COLOR_DECIMALS = 4
     private val PATH_OPERATORS = setOf("m", "l", "c", "v", "y", "h", "re")
     private val PAINT_OPERATORS = setOf("S", "s", "f", "F", "f*", "B", "B*", "b", "b*")
-    private val BLANK_OPERATORS = setOf("q", "Q", "cm")
+    private val BLANK_OPERATORS = setOf("q", "Q", "cm", "m", "l", "c", "v", "y", "h", "re", "W", "W*", "n")
 
-    class Stored(val mark: PdfMark, val start: Int, val end: Int)
+    class Stored(val mark: PdfMark, val start: Int, val end: Int, val clip: DoubleArray? = null)
 
     fun write(marks: List<PdfMark>, alpha: String?): ByteArray {
         val text = StringBuilder()
@@ -57,6 +59,20 @@ internal object PdfMarkContent {
         return out.toByteArray()
     }
 
+    fun hasOtherContent(content: ByteArray, marks: List<Stored>): Boolean {
+        if (marks.isEmpty()) return !isBlank(content)
+        val rest = java.io.ByteArrayOutputStream(content.size)
+        var from = 0
+        for (stored in marks.sortedBy { it.start }) {
+            if (stored.start < from) continue
+            rest.write(content, from, stored.start - from)
+            rest.write(' '.code)
+            from = stored.end
+        }
+        rest.write(content, from, content.size - from)
+        return !isBlank(rest.toByteArray())
+    }
+
     fun isBlank(content: ByteArray): Boolean {
         val lexer = Lexer(content)
         while (true) {
@@ -92,8 +108,11 @@ internal object PdfMarkContent {
     private class Reader(content: ByteArray) {
         private val lexer = Lexer(content)
         private val found = ArrayList<Stored>()
-        private val saved = ArrayDeque<DoubleArray>()
+        private val saved = ArrayDeque<Pair<DoubleArray, DoubleArray?>>()
         private var ctm = PdfMatrix.IDENTITY
+        private var clip: DoubleArray? = null
+        private var pathBox: DoubleArray? = null
+        private var clipping = false
         private var open: Open? = null
 
         fun read(): List<Stored> {
@@ -123,8 +142,11 @@ internal object PdfMarkContent {
 
         private fun operate(name: String, operands: List<Any?>, start: Int) {
             when (name) {
-                "q" -> saved.addLast(ctm)
-                "Q" -> saved.removeLastOrNull()?.let { ctm = it }
+                "q" -> saved.addLast(ctm to clip)
+                "Q" -> saved.removeLastOrNull()?.let { (matrix, area) ->
+                    ctm = matrix
+                    clip = area
+                }
                 "cm" -> numbers(operands, 6)?.let { ctm = PdfMatrix.concat(it, ctm) }
             }
             val current = open
@@ -133,8 +155,10 @@ internal object PdfMarkContent {
                     val properties = operands[1] as? Map<*, *>
                     val id = properties?.get("Id") as? String
                     if (!id.isNullOrEmpty() && id.all { it in 'a'..'z' || it in '0'..'9' }) {
-                        open = Open(id, PdfMarkKind.of((properties["K"] as? Name)?.value), start)
+                        open = Open(id, PdfMarkKind.of((properties["K"] as? Name)?.value), start, clip)
                     }
+                } else {
+                    outside(name, operands)
                 }
                 return
             }
@@ -150,6 +174,42 @@ internal object PdfMarkContent {
             }
         }
 
+        private fun outside(name: String, operands: List<Any?>) {
+            when (name) {
+                "re" -> numbers(operands, 4)?.let { (x, y, w, h) ->
+                    include(x, y)
+                    include(x + w, y + h)
+                    include(x + w, y)
+                    include(x, y + h)
+                }
+                in PATH_OPERATORS -> numbers(operands, operands.size)?.let { values ->
+                    var index = 0
+                    while (index + 1 < values.size) {
+                        include(values[index], values[index + 1])
+                        index += 2
+                    }
+                }
+                "W", "W*" -> clipping = true
+                "n", in PAINT_OPERATORS -> {
+                    if (clipping) {
+                        val box = pathBox ?: doubleArrayOf(0.0, 0.0, 0.0, 0.0)
+                        clip = clip?.let { area ->
+                            doubleArrayOf(max(area[0], box[0]), max(area[1], box[1]), min(area[2], box[2]), min(area[3], box[3]))
+                        } ?: box
+                    }
+                    clipping = false
+                    pathBox = null
+                }
+            }
+        }
+
+        private fun include(x: Double, y: Double) {
+            val px = ctm[0] * x + ctm[2] * y + ctm[4]
+            val py = ctm[1] * x + ctm[3] * y + ctm[5]
+            pathBox = pathBox?.let { box -> doubleArrayOf(min(box[0], px), min(box[1], py), max(box[2], px), max(box[3], py)) }
+                ?: doubleArrayOf(px, py, px, py)
+        }
+
         private fun finish(current: Open) {
             open = null
             val path = current.path.build()
@@ -160,7 +220,7 @@ internal object PdfMarkContent {
                 else -> PdfMarkKind.PEN
             }
             val mark = PdfMark(current.id, kind, current.color, if (kind.fills) 0f else current.paintedWidth.toFloat(), path)
-            found += Stored(mark, current.start, lexer.position)
+            found += Stored(mark, current.start, lexer.position, current.clip)
         }
 
         private fun numbers(operands: List<Any?>, count: Int): DoubleArray? {
@@ -175,7 +235,7 @@ internal object PdfMarkContent {
         }
     }
 
-    private class Open(val id: String, val kind: PdfMarkKind?, val start: Int) {
+    private class Open(val id: String, val kind: PdfMarkKind?, val start: Int, val clip: DoubleArray?) {
         var depth = 0
         var width = 1.0
         var paintedWidth = 0.0

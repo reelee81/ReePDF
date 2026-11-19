@@ -17,6 +17,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -70,16 +71,16 @@ class PdfMarkSaveTest {
     }
 
     @Test
-    fun savedMarksReachEverySourceOfThePageAndReadBackInPlace() {
+    fun savedMarksReachOnlyTheSourceTheyAreDrawnOnAndReadBackInPlace() {
         val drawn = pen("p", 150f, 300f)
 
         project(save(nup(), PdfMarkSave.Plan(added = mapOf(0 to listOf(drawn)))))
 
         assertEquals(listOf("p"), sourceLayerIds(0))
-        assertEquals(listOf("p"), sourceLayerIds(1))
+        assertNull(sourceLayerIds(1))
         assertNull(sourceLayerIds(2))
         val marks = editData(nup(), 0).read().marks
-        assertEquals(listOf("p", "p"), marks.map { it.mark.id })
+        assertEquals(listOf("p"), marks.map { it.mark.id })
         for (mark in marks) {
             assertEquals(PdfMarkKind.PEN, mark.mark.kind)
             assertEquals(0xDD0000, mark.mark.color)
@@ -90,8 +91,43 @@ class PdfMarkSaveTest {
     }
 
     @Test
+    fun aMarkAcrossTwoLabelsReachesBothSourcesEachCutToItsOwnLabel() {
+        val drawn = across("x", 300f)
+
+        project(save(nup(), PdfMarkSave.Plan(added = mapOf(0 to listOf(drawn)))))
+
+        assertEquals(listOf("x"), sourceLayerIds(0))
+        assertEquals(listOf("x"), sourceLayerIds(1))
+        assertNull(sourceLayerIds(2))
+        for (index in 0..1) {
+            val clip = Regex("([-0-9.]+) ([-0-9.]+) ([-0-9.]+) ([-0-9.]+) re W n").find(String(sourceLayer(index)!!, Charsets.ISO_8859_1))
+            assertNotNull("source $index has no clip", clip)
+            val left = clip!!.groupValues[1].toFloat()
+            val width = clip.groupValues[3].toFloat()
+            if (index == 0) assertTrue("left label clip $left + $width", left + width < 421f) else assertTrue("right label clip $left", left > 421f)
+        }
+        val marks = editData(nup(), 0).read().marks
+        assertEquals(listOf("x", "x"), marks.map { it.mark.id })
+        for (mark in marks) assertArrayEquals(drawn.path.points, mark.mark.path.points, 0.01f)
+        val clips = marks.map { it.clip!! }.sortedBy { it[0] }
+        assertTrue("left piece ${clips[0].toList()}", clips[0][0] > 139f && clips[0][2] < 282f && clips[0][1] > 191f && clips[0][3] < 404f)
+        assertTrue("right piece ${clips[1].toList()}", clips[1][0] > 560f && clips[1][2] < 703f)
+    }
+
+    @Test
+    fun aMarkBesideItsLabelReachesNoSource() {
+        val edited = save(nup(), PdfMarkSave.Plan(added = mapOf(0 to listOf(pen("p", 20f, 500f)))))
+
+        project(edited)
+
+        assertNull(sourceLayerIds(0))
+        assertNull(sourceLayerIds(1))
+        assertTrue(editData(nup(), 0).read().marks.isEmpty())
+    }
+
+    @Test
     fun erasingAProjectedMarkWritesTheChangedLayerBack() {
-        project(save(nup(), PdfMarkSave.Plan(added = mapOf(0 to listOf(pen("a", 150f, 300f), pen("b", 200f, 250f))))))
+        project(save(nup(), PdfMarkSave.Plan(added = mapOf(0 to listOf(pen("a", 150f, 300f), across("b", 250f))))))
         val layers = editData(nup(), 0).layers.map { it.number }
 
         val edited = save(nup(), PdfMarkSave.Plan(streams = layers.associateWith { PdfStreamEdit(false, setOf("a")) }))
@@ -111,10 +147,12 @@ class PdfMarkSaveTest {
 
     @Test
     fun erasingEveryMarkOfALayerRemovesTheLayer() {
-        project(save(nup(), PdfMarkSave.Plan(added = mapOf(0 to listOf(pen("a", 150f, 300f), pen("b", 200f, 250f))))))
+        project(save(nup(), PdfMarkSave.Plan(added = mapOf(0 to listOf(pen("a", 150f, 300f), across("b", 250f))))))
         val layers = editData(nup(), 0).layers.map { it.number }
 
         project(save(nup(), PdfMarkSave.Plan(streams = layers.associateWith { PdfStreamEdit(false, setOf("a", "b")) })))
+
+        assertEquals(2, layers.size)
 
         assertFalse(hasLayer(0))
         assertFalse(hasLayer(1))
@@ -123,7 +161,7 @@ class PdfMarkSaveTest {
 
     @Test
     fun anEditedLayerCopyWithNothingDrawnRemovesTheLayer() {
-        project(save(nup(), PdfMarkSave.Plan(added = mapOf(0 to listOf(pen("a", 150f, 300f))))))
+        project(save(nup(), PdfMarkSave.Plan(added = mapOf(0 to listOf(across("a", 300f))))))
         val layer = editData(nup(), 0).layers.first { it.sourceIndex == 0 }.number
         val edited = File(dir, "edited_blank.pdf")
         PdfDocument(PdfReader(nup()), PdfIo.workFileWriter(edited.path), StampingProperties().useAppendMode()).use { pdf ->
@@ -157,9 +195,9 @@ class PdfMarkSaveTest {
 
     @Test
     fun blankingPagesEmptiesOnlyTheirEditsAndNewMarksStillArrive() {
-        project(save(nup(), PdfMarkSave.Plan(added = mapOf(0 to listOf(pen("a", 150f, 300f)), 1 to listOf(pen("c", 100f, 300f))))))
+        project(save(nup(), PdfMarkSave.Plan(added = mapOf(0 to listOf(pen("a", 150f, 300f)), 1 to listOf(pen("c", 160f, 300f))))))
 
-        project(save(nup(), PdfMarkSave.Plan(blankPages = setOf(0), added = mapOf(0 to listOf(highlighter("d", 120f))))))
+        project(save(nup(), PdfMarkSave.Plan(blankPages = setOf(0), added = mapOf(0 to listOf(highlighter("d", 120f, 530f))))))
 
         assertEquals(listOf("d"), sourceLayerIds(0))
         assertEquals(listOf("d"), sourceLayerIds(1))
@@ -198,9 +236,14 @@ class PdfMarkSaveTest {
         PdfMarkPath.Builder().moveTo(x, y).curveTo(x + 10f, y + 10f, x + 20f, y - 10f, x + 30f, y).build()
     )
 
-    private fun highlighter(id: String, x: Float) = PdfMark(
+    private fun across(id: String, y: Float) = PdfMark(
+        id, PdfMarkKind.PEN, 0xDD0000, 3f,
+        PdfMarkPath.Builder().moveTo(200f, y).lineTo(650f, y).build()
+    )
+
+    private fun highlighter(id: String, x: Float, length: Float = 40f) = PdfMark(
         id, PdfMarkKind.HIGHLIGHTER, 0xFFED45, 20f,
-        PdfMarkPath.Builder().moveTo(x, 200f).lineTo(x + 40f, 200f).build()
+        PdfMarkPath.Builder().moveTo(x, 200f).lineTo(x + length, 200f).build()
     )
 
     private fun save(input: File, plan: PdfMarkSave.Plan): File {
@@ -271,7 +314,10 @@ class PdfMarkSaveTest {
         visit(page.resources.pdfObject, 0)
         PdfPageEditData(
             PdfMatrix.IDENTITY,
-            PdfPageEditData.cells(FloatArray(cellValues.size()) { cellValues.getAsNumber(it).floatValue() }),
+            PdfPageEditData.cells(
+                FloatArray(cellValues.size()) { cellValues.getAsNumber(it).floatValue() },
+                base.getAsArray(PdfName("Areas"))?.let { areas -> FloatArray(areas.size()) { areas.getAsNumber(it).floatValue() } }
+            ),
             appended,
             layers
         )

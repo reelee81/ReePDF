@@ -173,7 +173,11 @@ class MuPdfViewerEngine private constructor(
             val streams = base.get(STREAMS).asInteger()
             val generation = base.get(GENERATION).asString()
             val cellValues = base.get(CELLS)
-            val cells = PdfPageEditData.cells(FloatArray(cellValues.size()) { cellValues.get(it).asFloat() })
+            val areaValues = base.get(AREAS)
+            val cells = PdfPageEditData.cells(
+                FloatArray(cellValues.size()) { cellValues.get(it).asFloat() },
+                if (areaValues.isArray) FloatArray(areaValues.size()) { areaValues.get(it).asFloat() } else null
+            )
             val appended = ArrayList<PdfPageEditData.Stream>()
             val contents = dictionary.get(CONTENTS)
             if (contents.isArray) {
@@ -375,6 +379,7 @@ class MuPdfViewerEngine private constructor(
         private const val STREAMS = "Streams"
         private const val GENERATION = "Gen"
         private const val CELLS = "Cells"
+        private const val AREAS = "Areas"
         private const val LAYER = "Layer"
         private const val SOURCE = "Source"
         private const val CONTENTS = "Contents"

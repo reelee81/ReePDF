@@ -43,9 +43,9 @@ class ViewerEditorTest {
         editor.endErase()
     }
 
-    private fun savedLine(id: String, stream: Int, x: Float) = ViewerSavedMark(
+    private fun savedLine(id: String, stream: Int, x: Float, clip: FloatArray? = null) = ViewerSavedMark(
         id, stream, ViewerMarkKind.PEN, 2f,
-        ViewerMarkPath(byteArrayOf(ViewerMarkPath.MOVE, ViewerMarkPath.LINE), floatArrayOf(x, 50f, x + 20f, 50f))
+        ViewerMarkPath(byteArrayOf(ViewerMarkPath.MOVE, ViewerMarkPath.LINE), floatArrayOf(x, 50f, x + 20f, 50f)), clip
     )
 
     @Test
@@ -150,6 +150,34 @@ class ViewerEditorTest {
         assertEquals(mapOf(7 to ViewerStreamEdit.ORIGINAL, 8 to ViewerStreamEdit.ORIGINAL), document.edits.last())
         editor.redo()
         assertEquals(mapOf(7 to erased, 8 to erased), document.edits.last())
+    }
+
+    @Test
+    fun aSavedMarkIsErasedOnlyWhereItCanBeSeen() {
+        document.marks[0] = ViewerPageMarks(listOf(savedLine("a", 7, 10f, floatArrayOf(5f, 40f, 20f, 60f))), intArrayOf(7))
+        editing()
+
+        erase(27f to 50f, 29f to 50f)
+
+        assertTrue(document.edits.isEmpty())
+        assertFalse(editor.state.canUndo)
+
+        erase(21f to 50f, 21f to 50f)
+
+        assertEquals(mapOf(7 to ViewerStreamEdit(false, setOf("a"))), document.edits.single())
+    }
+
+    @Test
+    fun hittingOneVisiblePieceErasesEveryPieceOfThatMarkOnThePage() {
+        document.marks[0] = ViewerPageMarks(
+            listOf(savedLine("a", 7, 10f, floatArrayOf(5f, 40f, 20f, 60f)), savedLine("a", 8, 10f, floatArrayOf(20f, 40f, 40f, 60f))),
+            intArrayOf(7, 8)
+        )
+        editing()
+
+        erase(27f to 50f, 27f to 50f)
+
+        assertEquals(mapOf(7 to ViewerStreamEdit(false, setOf("a")), 8 to ViewerStreamEdit(false, setOf("a"))), document.edits.single())
     }
 
     @Test

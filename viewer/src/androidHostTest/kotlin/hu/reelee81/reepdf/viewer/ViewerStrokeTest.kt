@@ -93,6 +93,10 @@ class ViewerStrokeTest {
     @Test
     fun aSweepReachesTheEndInStepsNoLongerThanAsked() {
         val points = ViewerMarkHit.sweep(0f, 0f, 10f, 0f, 3f)
+        assertTrue(ViewerMarkHit.within(null, -500f, 900f, 0f))
+        assertTrue(ViewerMarkHit.within(floatArrayOf(10f, 20f, 30f, 40f), 31.5f, 20f, 2f))
+        assertFalse(ViewerMarkHit.within(floatArrayOf(10f, 20f, 30f, 40f), 32.5f, 20f, 2f))
+        assertFalse(ViewerMarkHit.within(FloatArray(4) { Float.NaN }, 0f, 0f, 5f))
 
         assertEquals(4, points.size)
         assertEquals(10f to 0f, points.last())

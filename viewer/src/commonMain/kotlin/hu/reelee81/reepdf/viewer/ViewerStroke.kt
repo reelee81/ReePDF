@@ -78,6 +78,9 @@ internal object ViewerMarkHit {
         return polygons.any { distance(it, x, y, closed = false) <= reach }
     }
 
+    fun within(clip: FloatArray?, x: Float, y: Float, tolerance: Float): Boolean =
+        clip == null || (x >= clip[0] - tolerance && x <= clip[2] + tolerance && y >= clip[1] - tolerance && y <= clip[3] + tolerance)
+
     fun sweep(fromX: Float, fromY: Float, toX: Float, toY: Float, step: Float): List<Pair<Float, Float>> {
         val length = hypot(toX - fromX, toY - fromY)
         val count = max(1, (length / max(step, 0.001f)).toInt() + 1)

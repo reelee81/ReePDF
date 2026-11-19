@@ -29,6 +29,7 @@ import com.itextpdf.kernel.pdf.canvas.parser.data.TextRenderInfo
 import com.itextpdf.kernel.pdf.canvas.parser.listener.IEventListener
 import com.itextpdf.kernel.pdf.canvas.parser.util.PdfCanvasParser
 import com.itextpdf.kernel.pdf.xobject.PdfFormXObject
+import hu.reelee81.reepdf.core.NupBox
 import java.io.File
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -1125,7 +1126,11 @@ class PdfEditProjectionTest {
                             .rectangle(20.0, 20.0, 555.0, 802.0)
                             .stroke()
                     }
-                    PdfEditProjection.markNupPage(page, listOf(PdfEditProjection.Cell(number - 1, rotatedHalf)), generation)
+                    val cell = PdfEditProjection.Cell(
+                        number - 1, rotatedHalf, NupBox(box.x, box.y, box.width, box.height),
+                        NupBox(0f, 0f, PageSize.A4.width, PageSize.A4.height)
+                    )
+                    PdfEditProjection.markNupPage(page, listOf(cell), generation)
                 }
             }
         }

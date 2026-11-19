@@ -263,7 +263,7 @@ class PdfSharingFlowTest {
 
     private fun pen(id: String) = PdfMark(
         id, PdfMarkKind.PEN, 0xDD0000, 3f,
-        PdfMarkPath.Builder().moveTo(50f, 150f).curveTo(60f, 160f, 70f, 140f, 80f, 150f).build()
+        PdfMarkPath.Builder().moveTo(200f, 300f).curveTo(210f, 310f, 220f, 290f, 230f, 300f).build()
     )
 
     private fun save(plan: PdfMarkSave.Plan): File {

@@ -42,7 +42,8 @@ class ViewerSavedMark(
     val stream: Int,
     val kind: ViewerMarkKind,
     val width: Float,
-    val path: ViewerMarkPath
+    val path: ViewerMarkPath,
+    val clip: FloatArray? = null
 )
 
 class ViewerPageMarks(val marks: List<ViewerSavedMark>, val streams: IntArray) {

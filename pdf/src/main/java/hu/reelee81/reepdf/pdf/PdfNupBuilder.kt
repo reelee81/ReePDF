@@ -143,7 +143,7 @@ object PdfNupBuilder {
 
                             val m = cell.matrix
                             PdfCopySupport.concatPlacementMatrix(canvas, m[0], m[1], m[2], m[3], m[4], m[5])
-                            editCells += PdfEditProjection.Cell(globalIdx, m)
+                            editCells += PdfEditProjection.Cell(globalIdx, m, (contentBox ?: sz).toNupBox(), NupBox(cell.x, cell.y, cell.width, cell.height))
 
                             val placed = runCatching {
                                 PdfFlatPlacement.place(sp, currentPage, canvas, sz, wholeSheet = per == 1) { original, copy ->

@@ -20,15 +20,19 @@ import com.itextpdf.kernel.pdf.PdfString
 import com.itextpdf.kernel.pdf.canvas.PdfCanvas
 import com.itextpdf.kernel.pdf.canvas.parser.util.PdfCanvasParser
 import com.itextpdf.kernel.pdf.xobject.PdfFormXObject
+import hu.reelee81.reepdf.core.NupArea
+import hu.reelee81.reepdf.core.NupBox
+import hu.reelee81.reepdf.core.NupCellArea
 import hu.reelee81.reepdf.core.SourcePartPlan
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.UUID
 import kotlin.math.abs
+import kotlin.math.max
 import kotlin.math.min
 
 object PdfEditProjection {
-    class Cell(val sourceIndex: Int, val matrix: DoubleArray)
+    class Cell(val sourceIndex: Int, val matrix: DoubleArray, val box: NupBox? = null, val slot: NupBox? = null)
 
     class NotProjectableException(message: String) : Exception(message)
 
@@ -44,6 +48,7 @@ object PdfEditProjection {
     private val STREAMS = PdfName("Streams")
     private val LENGTH = PdfName("Length")
     private val CELLS = PdfName("Cells")
+    private val AREAS = PdfName("Areas")
     internal val EDITED = PdfName("Edited")
     private val RESOURCE_KEYS = listOf(
         PdfName.ExtGState,
@@ -68,15 +73,50 @@ object PdfEditProjection {
         val array = PdfArray()
         for (cell in cells) {
             array.add(PdfNumber(cell.sourceIndex))
-            for (value in cell.matrix) array.add(PdfNumber(value))
+            for (value in cell.matrix) array.add(precise(value))
         }
-        writablePrivateData(page.pdfObject).put(BASE, PdfDictionary().apply {
+        val record = PdfDictionary().apply {
             put(STREAMS, PdfNumber(streams))
             put(LENGTH, PdfNumber(length.toDouble()))
             put(CELLS, array)
             put(GENERATION, PdfString(generation))
-        })
+        }
+        if (cells.isNotEmpty() && cells.all { it.box != null && it.slot != null }) {
+            val areas = PdfArray()
+            for (cell in cells) {
+                for ((x, y, width, height) in listOfNotNull(cell.box, cell.slot)) {
+                    for (value in floatArrayOf(x, y, width, height)) areas.add(precise(value.toDouble()))
+                }
+            }
+            record.put(AREAS, areas)
+        }
+        writablePrivateData(page.pdfObject).put(BASE, record)
     }
+
+    private fun precise(value: Double): PdfNumber {
+        val bytes = ByteArrayOutputStream()
+        PdfOutputStream(bytes).use { it.writeDouble(value, true) }
+        return PdfNumber(bytes.toByteArray())
+    }
+
+    internal fun cells(base: PdfDictionary): List<Cell> {
+        val values = base.getAsArray(CELLS) ?: return emptyList()
+        val count = values.size() / 7
+        val areas = base.getAsArray(AREAS)
+            ?.takeIf { it.size() == count * 8 }
+            ?.let { array -> DoubleArray(array.size()) { array.getAsNumber(it)?.doubleValue() ?: Double.NaN } }
+            ?.takeIf { numbers -> numbers.all { it.isFinite() } }
+        return List(count) { index ->
+            val offset = index * 7
+            val matrix = DoubleArray(6) { values.getAsNumber(offset + 1 + it).doubleValue() }
+            val box = areas?.let { box(it, index * 8) }
+            val slot = areas?.let { box(it, index * 8 + 4) }
+            Cell(values.getAsNumber(offset).intValue(), matrix, box, slot)
+        }
+    }
+
+    private fun box(values: DoubleArray, offset: Int) =
+        NupBox(values[offset].toFloat(), values[offset + 1].toFloat(), values[offset + 2].toFloat(), values[offset + 3].toFloat())
 
     fun tagLayerSource(form: PdfFormXObject, sourcePage: PdfPage, sourceIndex: Int, generation: String) {
         val layer = sourceLayer(sourcePage) ?: return
@@ -134,7 +174,11 @@ object PdfEditProjection {
         )
     }
 
-    private class Edit(val nupIndex: Int, val matrix: DoubleArray)
+    private class Piece(val stream: Int, val start: Int, val end: Int)
+
+    private class Edit(val nupIndex: Int, val matrix: DoubleArray, val area: NupArea?, val pieces: List<Piece>?)
+
+    private class StreamMarks(val index: Int, val size: Int, val marks: List<PdfMarkContent.Stored>, val other: Boolean)
 
     class Projection(val changed: Int, val source: PdfSourceParts)
 
@@ -178,14 +222,30 @@ object PdfEditProjection {
                     if (streams < 0 || length != base.getAsNumber(LENGTH)?.longValue()) {
                         throw NotProjectableException("page $number original content was modified")
                     }
-                    if ((streams until page.contentStreamCount).all { PdfMarkContent.isBlank(page.getContentStream(it).bytes) }) continue
-                    val cells = base.getAsArray(CELLS) ?: continue
-                    var offset = 0
-                    while (offset + 7 <= cells.size()) {
-                        val sourceIndex = cells.getAsNumber(offset).intValue()
-                        val matrix = DoubleArray(6) { cells.getAsNumber(offset + 1 + it).doubleValue() }
-                        bySource.getOrPut(sourceIndex) { ArrayList() } += Edit(number, matrix)
-                        offset += 7
+                    val appended = (streams until page.contentStreamCount).map { it to page.getContentStream(it).bytes }
+                    if (appended.all { PdfMarkContent.isBlank(it.second) }) continue
+                    val cells = cells(base)
+                    if (cells.any { it.box == null || it.slot == null }) {
+                        for (cell in cells) bySource.getOrPut(cell.sourceIndex) { ArrayList() } += Edit(number, cell.matrix, null, null)
+                        continue
+                    }
+                    val content = appended.map { (index, bytes) ->
+                        val marks = PdfMarkContent.read(bytes)
+                        StreamMarks(index, bytes.size, marks, PdfMarkContent.hasOtherContent(bytes, marks))
+                    }
+                    for (cell in cells) {
+                        val box = cell.box ?: continue
+                        val slot = cell.slot ?: continue
+                        val area = NupCellArea.of(box, cell.matrix, slot) ?: continue
+                        val pieces = ArrayList<Piece>()
+                        for (stream in content) {
+                            if (stream.other) {
+                                pieces += Piece(stream.index, 0, stream.size)
+                            } else {
+                                for (stored in stream.marks) if (touches(stored.mark, area)) pieces += Piece(stream.index, stored.start, stored.end)
+                            }
+                        }
+                        if (pieces.isNotEmpty()) bySource.getOrPut(cell.sourceIndex) { ArrayList() } += Edit(number, cell.matrix, area, pieces)
                     }
                 }
             }
@@ -218,7 +278,7 @@ object PdfEditProjection {
                     for (page in affected) {
                         val target = destination.getPage(firstNumber + page - first)
                         for (edit in bySource.getValue(page)) {
-                            appendEdit(target, nup.getPage(edit.nupIndex), edit.matrix)
+                            appendEdit(target, nup.getPage(edit.nupIndex), edit)
                         }
                     }
                     destination.flushCopiedObjects(nup)
@@ -226,6 +286,25 @@ object PdfEditProjection {
             }
         }
         return Projection(changed.size, written)
+    }
+
+    private fun touches(mark: PdfMark, area: NupArea): Boolean {
+        val points = mark.path.points
+        if (points.isEmpty()) return false
+        var left = Double.POSITIVE_INFINITY
+        var bottom = Double.POSITIVE_INFINITY
+        var right = Double.NEGATIVE_INFINITY
+        var top = Double.NEGATIVE_INFINITY
+        var index = 0
+        while (index + 1 < points.size) {
+            left = min(left, points[index].toDouble())
+            right = max(right, points[index].toDouble())
+            bottom = min(bottom, points[index + 1].toDouble())
+            top = max(top, points[index + 1].toDouble())
+            index += 2
+        }
+        val reach = if (mark.kind.fills) 0.0 else mark.width / 2.0
+        return area.intersects(left - reach, bottom - reach, right + reach, top + reach)
     }
 
     private fun appendedFrom(page: PdfPage): Int? {
@@ -353,8 +432,8 @@ object PdfEditProjection {
         restoreContent(page)
     }
 
-    private fun appendEdit(target: PdfPage, nupPage: PdfPage, matrix: DoubleArray) {
-        val inverse = inverse(matrix) ?: return
+    private fun appendEdit(target: PdfPage, nupPage: PdfPage, edit: Edit) {
+        val inverse = inverse(edit.matrix) ?: return
         val base = pageBase(nupPage) ?: return
         val firstNew = base.getAsNumber(STREAMS)?.intValue() ?: return
         val sourceResources = nupPage.resources.pdfObject
@@ -373,11 +452,31 @@ object PdfEditProjection {
         PdfOutputStream(chunk).use { out ->
             for (value in inverse) out.writeDouble(value, true).writeSpace()
             out.writeString("cm\n")
+            edit.area?.let { area ->
+                for (value in doubleArrayOf(area.left, area.bottom, area.right - area.left, area.top - area.bottom)) {
+                    out.writeDouble(value, true).writeSpace()
+                }
+                out.writeString("re W n\n")
+            }
         }
-        for (index in firstNew until nupPage.contentStreamCount) {
-            val bytes = nupPage.getContentStream(index).bytes
-            chunk.write(renameResources(bytes, sourceResources, formResources, destination))
-            chunk.write('\n'.code)
+        val pieces = edit.pieces
+        if (pieces == null) {
+            for (index in firstNew until nupPage.contentStreamCount) {
+                val bytes = nupPage.getContentStream(index).bytes
+                chunk.write(renameResources(bytes, sourceResources, formResources, destination))
+                chunk.write('\n'.code)
+            }
+        } else {
+            for ((stream, selected) in pieces.groupBy { it.stream }) {
+                val bytes = nupPage.getContentStream(stream).bytes
+                val joined = ByteArrayOutputStream()
+                for (piece in selected) {
+                    joined.write(bytes, piece.start, piece.end - piece.start)
+                    joined.write('\n'.code)
+                }
+                chunk.write(renameResources(joined.toByteArray(), sourceResources, formResources, destination))
+                chunk.write('\n'.code)
+            }
         }
         chunk.write("Q\n".toByteArray(Charsets.ISO_8859_1))
 
