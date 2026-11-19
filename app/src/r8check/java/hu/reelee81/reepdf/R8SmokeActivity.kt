@@ -14,6 +14,7 @@ import android.widget.ScrollView
 import android.widget.TextView
 import androidx.core.content.res.ResourcesCompat
 import androidx.core.graphics.createBitmap
+import androidx.core.graphics.get
 import com.artifex.mupdf.fitz.AbortException
 import com.itextpdf.io.image.ImageDataFactory
 import com.itextpdf.kernel.geom.PageSize
@@ -304,9 +305,10 @@ class R8SmokeActivity : Activity() {
             imageToPdf = ::imageToPdf
         )
 
+        val sourceLengths = lengths(sourceDir)
         val finished = runBlocking {
             val job = async(Dispatchers.Default) { operation.execute {} }
-            delay(CANCEL_AFTER_MS.milliseconds)
+            while (job.isActive && lengths(sourceDir) == sourceLengths) delay(2.milliseconds)
             job.cancel()
             runCatching { job.await() }.isSuccess
         }
@@ -316,6 +318,9 @@ class R8SmokeActivity : Activity() {
         check(snapshot(sourceDir) == sourceBefore) { "source not restored" }
         check(nup.readBytes().contentEquals(nupBefore)) { "layout not restored" }
     }
+
+    private fun lengths(folder: File): Map<String, Long> =
+        folder.listFiles().orEmpty().filter { it.isFile }.associate { it.name to it.length() }
 
     private fun snapshot(folder: File): Map<String, List<Byte>> =
         folder.listFiles().orEmpty().filter { it.isFile }.associate { it.name to it.readBytes().toList() }
@@ -639,7 +644,7 @@ class R8SmokeActivity : Activity() {
             val result = document.render(page.index, zoom, left, top, AndroidBitmapRasterTarget(bitmap))
             if (result is PdfRenderResult.Failed) throw IllegalStateException("$name: ${result.error}", result.error)
             check(result == PdfRenderResult.Done) { "$name: $result" }
-            val pixel = bitmap.getPixel((x - left).coerceIn(0, PROBE_PX - 1), (y - top).coerceIn(0, PROBE_PX - 1))
+            val pixel = bitmap[(x - left).coerceIn(0, PROBE_PX - 1), (y - top).coerceIn(0, PROBE_PX - 1)]
             return intArrayOf(Color.red(pixel), Color.green(pixel), Color.blue(pixel))
         } finally {
             bitmap.recycle()
@@ -1081,7 +1086,6 @@ class R8SmokeActivity : Activity() {
         const val SIGNATURE_H = 100
         const val SHOWN_LINES = 40
         const val CANCEL_FILE = "1000.pdf"
-        const val CANCEL_AFTER_MS = 3_000L
         const val SMALL_SIDE_PX = 100f
         const val ZOOMED_TILE_PX = 512
         const val CROP_GUTTER_DP = 24f

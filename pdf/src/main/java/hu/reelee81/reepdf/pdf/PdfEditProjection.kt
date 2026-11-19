@@ -40,6 +40,7 @@ object PdfEditProjection {
     private val LAYER = PdfName("Layer")
     private val SOURCE = PdfName("Source")
     private val GENERATION = PdfName("Gen")
+    private val MERGED = PdfName("Merged")
     private val STREAMS = PdfName("Streams")
     private val LENGTH = PdfName("Length")
     private val CELLS = PdfName("Cells")
@@ -95,7 +96,33 @@ object PdfEditProjection {
         }
     }
 
+    fun tagLayerCopy(original: PdfStream, copy: PdfStream, sourcePage: PdfPage, sourceIndex: Int, generation: String) {
+        val layer = sourceLayer(sourcePage) ?: return
+        val reference = layer.indirectReference
+        if (original !== layer && (reference == null || original.indirectReference != reference)) return
+        writablePrivateData(copy).apply {
+            put(LAYER, PdfBoolean.TRUE)
+            put(SOURCE, PdfNumber(sourceIndex))
+            put(GENERATION, PdfString(generation))
+        }
+    }
+
     fun isEditLayer(stream: PdfStream): Boolean = privateData(stream)?.getAsBool(LAYER) == true
+
+    internal fun isOwnLayer(page: PdfPage, stream: PdfStream): Boolean {
+        val layer = sourceLayer(page) ?: return false
+        val reference = layer.indirectReference
+        return stream === layer || (reference != null && stream.indirectReference == reference)
+    }
+
+    internal fun isMergedLayer(stream: PdfStream): Boolean = privateData(stream)?.getAsBool(MERGED) == true
+
+    internal fun tagMergedLayer(stream: PdfStream) {
+        writablePrivateData(stream).apply {
+            put(LAYER, PdfBoolean.TRUE)
+            put(MERGED, PdfBoolean.TRUE)
+        }
+    }
 
     fun inverse(m: DoubleArray): DoubleArray? {
         val det = m[0] * m[3] - m[1] * m[2]
@@ -334,8 +361,7 @@ object PdfEditProjection {
         val destination = target.document
 
         val existing = sourceLayer(target)
-        if (existing == null) PdfCopySupport.unwrapSingleFormPage(target)
-        val form = existing ?:PdfFormXObject(target.mediaBox).pdfObject.also {
+        val form = existing ?: PdfFormXObject(target.mediaBox).pdfObject.also {
             it.put(PdfName.Resources, PdfDictionary())
             writablePrivateData(it).put(LAYER, PdfBoolean.TRUE)
         }
@@ -364,30 +390,39 @@ object PdfEditProjection {
             form.setData(chunk.toByteArray())
             form.makeIndirect(destination)
             unsharePrivateData(target.pdfObject)
-            privateData(target.pdfObject)?.remove(WRAP)
+            privateData(target.pdfObject)?.apply {
+                remove(WRAP)
+                remove(CONTENT_FORM)
+            }
             val single = if (target.contentStreamCount == 1) target.getContentStream(0).bytes else null
             val content = single ?: pageContent(target)
-            val scan = PdfCopySupport.scanContent(content, target.resources.pdfObject)
-            val unclosed = scan.unclosed.takeUnless { scan.broken }
-            if (unclosed != null) {
+            val previous = target.resources.pdfObject
+            val keepsContent = PdfCopySupport.onlyPlacesForms(content, previous)
+            if (keepsContent) {
                 val wrap = target.newContentStreamBefore()
                 wrap.setData("q\n".toByteArray(Charsets.ISO_8859_1))
                 writablePrivateData(target.pdfObject).put(WRAP, wrap)
             }
             writablePrivateData(target.pdfObject).put(LAYER_FORM, form)
-            val previous = target.resources.pdfObject
             val kept = PdfDictionary()
             for (key in RESOURCE_KEYS) previous.get(key, false)?.let { kept.put(key, it) }
-            val original = if (scan.broken) {
+            val original = if (keepsContent) {
+                null
+            } else {
+                val scan = PdfCopySupport.scanContent(content, previous)
+                val unclosed = scan.unclosed.takeUnless { scan.broken } ?: 0
                 kept.makeIndirect(destination)
                 PdfFormXObject(target.mediaBox).also { original ->
-                    original.pdfObject.setData(if (single != null) single + '\n'.code.toByte() else content)
+                    val tail = (if (single != null) "\n" else "") + "Q\n".repeat(unclosed)
+                    original.pdfObject.setData(content + tail.toByteArray(Charsets.ISO_8859_1))
                     original.pdfObject.put(PdfName.Resources, kept)
+                    target.pdfObject.get(PdfName.Group, false)?.let { group ->
+                        original.pdfObject.put(PdfName.Group, group)
+                        target.pdfObject.remove(PdfName.Group)
+                    }
                     original.pdfObject.makeIndirect(destination)
                     writablePrivateData(target.pdfObject).put(CONTENT_FORM, original.pdfObject)
                 }
-            } else {
-                null
             }
             val ownResources = if (original != null) PdfDictionary() else kept
             ownResources.put(PdfName.XObject, PdfDictionary(ownResources.getAsDictionary(PdfName.XObject) ?: PdfDictionary()))
@@ -401,7 +436,7 @@ object PdfEditProjection {
                     .restoreState()
             }
             val call = target.newContentStreamAfter()
-            if (unclosed != null) call.outputStream.writeString("Q\n".repeat(unclosed + 1))
+            if (keepsContent) call.outputStream.writeString("Q\n")
             PdfCanvas(call, PdfResources(ownResources), destination)
                 .saveState()
                 .addXObjectWithTransformationMatrix(PdfFormXObject(form), 1f, 0f, 0f, 1f, 0f, 0f)
@@ -425,10 +460,11 @@ object PdfEditProjection {
         if (!ownsForm(page, original)) return
         page.pdfObject.put(PdfName.Contents, PdfStream(original.bytes).makeIndirect(page.document))
         page.pdfObject.put(PdfName.Resources, original.get(PdfName.Resources, false) ?: PdfDictionary())
+        original.get(PdfName.Group, false)?.let { page.pdfObject.put(PdfName.Group, it) }
         page.pdfObject.setModified()
     }
 
-    private fun renameResources(
+    internal fun renameResources(
         bytes: ByteArray,
         sourceResources: PdfDictionary,
         formResources: PdfDictionary,
@@ -455,7 +491,7 @@ object PdfEditProjection {
             val operands = ArrayList<PdfObject>()
             var start = 0
             while (parser.parse(operands).isNotEmpty()) {
-                val end = tokenizer.position.toInt()
+                val end = minOf(tokenizer.position.toInt(), bytes.size)
                 val operator = operands.last().toString()
                 val replacement = renameIndex(operator, operands)?.let { (index, category) ->
                     (operands[index] as? PdfName)?.let { name -> target(category, name)?.let { index to it } }

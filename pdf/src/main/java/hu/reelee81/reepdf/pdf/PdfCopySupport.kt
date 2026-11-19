@@ -48,6 +48,38 @@ object PdfCopySupport {
 
     private class Wrapper(val before: String, val name: PdfName, val after: String, val paints: Boolean)
 
+    fun onlyPlacesForms(content: ByteArray, resources: PdfDictionary): Boolean {
+        var saves = 0
+        var forms = 0
+        var pathPending = false
+        try {
+            PdfTokenizer(RandomAccessFileOrArray(RandomAccessSourceFactory().createSource(content))).use { tokenizer ->
+                val parser = PdfCanvasParser(tokenizer, PdfResources(PdfDictionary()))
+                val operands = ArrayList<PdfObject>()
+                while (parser.parse(operands).isNotEmpty()) {
+                    val operator = operands.last().toString()
+                    val arguments = operands.subList(0, operands.size - 1)
+                    if (operator in PATH_OPERATORS) pathPending = true
+                    if (operator in PATH_ENDING_OPERATORS) pathPending = false
+                    if (operator == "Do") {
+                        if (pathPending || arguments.size != 1) return false
+                        val name = arguments[0] as? PdfName ?: return false
+                        val form = resources.getAsDictionary(PdfName.XObject)?.getAsStream(name) ?: return false
+                        if (form.getAsName(PdfName.Subtype) != PdfName.Form) return false
+                        forms++
+                    } else {
+                        if (operator !in RESOURCE_FREE_OPERATORS || !arguments.all(::isNumeric)) return false
+                        if (operator == "q") saves++
+                        if (operator == "Q" && --saves < 0) return false
+                    }
+                }
+            }
+        } catch (_: Exception) {
+            return false
+        }
+        return saves == 0 && forms > 0
+    }
+
     fun flattenedFormXObject(page: PdfPage, destination: PdfDocument, bBox: Rectangle): PdfFormXObject? {
         val dictionary = page.pdfObject
         if (page.rotation % 360 != 0 || dictionary.containsKey(PdfName.Group) || dictionary.containsKey(PdfName.UserUnit)) {
@@ -106,47 +138,6 @@ object PdfCopySupport {
         return null
     }
 
-    fun unwrapSingleFormPage(page: PdfPage): Boolean {
-        val dictionary = page.pdfObject
-        val resources = dictionary.getAsDictionary(PdfName.Resources) ?: return false
-        val xObjects = resources.getAsDictionary(PdfName.XObject) ?: return false
-        if (xObjects.size() != 1) return false
-        for (category in resources.keySet()) {
-            if (category == PdfName.XObject || category == PdfName.ProcSet) continue
-            if ((resources.getAsDictionary(category)?.size() ?: 1) != 0) return false
-        }
-
-        val pageContent = ByteArrayOutputStream()
-        for (index in 0 until page.contentStreamCount) {
-            pageContent.write(page.getContentStream(index).bytes)
-            pageContent.write('\n'.code)
-        }
-        val wrapper = parseWrapper(pageContent.toByteArray()) ?: return false
-        val form = xObjects.getAsStream(wrapper.name) ?: return false
-        if (!isPlainForm(form) || form.containsKey(PdfName.Group)) return false
-        val box = form.getAsArray(PdfName.BBox)?.takeIf { it.size() == 4 }?.toRectangle() ?: return false
-        val matrix = form.getAsArray(PdfName.Matrix)?.let { matrixValues(it) ?: return false }
-        val formResources = form.getAsDictionary(PdfName.Resources) ?: return false
-        if (usesPatterns(formResources)) return false
-        val content = form.bytes
-        val unclosed = unclosedSaves(content, formResources) ?: return false
-
-        val output = ByteArrayOutputStream()
-        output.writeLatin1(wrapper.before)
-        output.writeLatin1("\nq\n")
-        if (matrix != null) output.writeOperator(matrix, "cm")
-        output.writeOperator(doubleArrayOf(box.x.toDouble(), box.y.toDouble(), box.width.toDouble(), box.height.toDouble()), "re W n")
-        output.write(content)
-        repeat(unclosed) { output.writeLatin1("\nQ") }
-        output.writeLatin1("\nQ\n")
-        output.writeLatin1(wrapper.after)
-
-        dictionary.put(PdfName.Contents, PdfStream(output.toByteArray()).makeIndirect(page.document))
-        dictionary.put(PdfName.Resources, PdfDictionary(formResources))
-        dictionary.setModified()
-        return true
-    }
-
     private fun parseWrapper(bytes: ByteArray): Wrapper? {
         var name: PdfName? = null
         var start = 0
@@ -188,7 +179,7 @@ object PdfCopySupport {
     private fun usesPatterns(resources: PdfDictionary): Boolean =
         (resources.getAsDictionary(PdfName.Pattern)?.size() ?: 0) > 0
 
-    private fun isNumeric(operand: PdfObject): Boolean =
+    internal fun isNumeric(operand: PdfObject): Boolean =
         operand is PdfNumber || (operand is PdfArray && (0 until operand.size()).all { operand.get(it) is PdfNumber })
 
     private fun refersToChain(resources: PdfDictionary, chain: Set<PdfStream>): Boolean {
@@ -213,13 +204,13 @@ object PdfCopySupport {
         return true
     }
 
-    private fun isPlainForm(form: PdfStream): Boolean =
+    internal fun isPlainForm(form: PdfStream): Boolean =
         form.getAsName(PdfName.Subtype) == PdfName.Form &&
             !form.containsKey(PdfName.OC) &&
             !form.containsKey(REF) &&
             !PdfEditProjection.isEditLayer(form)
 
-    private fun matrixValues(array: PdfArray): DoubleArray? {
+    internal fun matrixValues(array: PdfArray): DoubleArray? {
         if (array.size() != MATRIX_SIZE) return null
         val values = DoubleArray(MATRIX_SIZE)
         for (index in 0 until MATRIX_SIZE) {

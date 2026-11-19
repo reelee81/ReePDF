@@ -81,8 +81,14 @@ class PdfSourceParts private constructor(val dir: File, private val files: List<
             while (from <= to1) {
                 val to = PdfDocument(openPart(files[part])).use { src ->
                     val end = PdfPageCost.batchEnd(src, from, to1, batch, budget)
-                    src.copyPagesTo(from, end, dest)
-                    onCopied?.invoke(layout.start(part) + from - 1, layout.start(part) + end - 1, dest)
+                    if (onCopied == null) {
+                        src.copyPagesTo(from, end, dest)
+                    } else {
+                        PdfIo.withoutSharing(dest) {
+                            src.copyPagesTo(from, end, dest)
+                            onCopied(layout.start(part) + from - 1, layout.start(part) + end - 1, dest)
+                        }
+                    }
                     runCatching { PdfCopySupport.flushCopiedObjects(dest, src) }
                     end
                 }
@@ -160,7 +166,7 @@ class PdfSourceParts private constructor(val dir: File, private val files: List<
         onCopied: ((first: Int, last: Int, dest: PdfDocument) -> Unit)?
     ) {
         if (out.exists()) out.delete()
-        PdfDocument(PdfIo.workFileWriter(out.absolutePath)).use { dest ->
+        PdfDocument(PdfIo.sharingWorkFileWriter(out.absolutePath)).use { dest ->
             dest.setFlushUnusedObjects(true)
             for (piece in pieces) {
                 when (piece) {
@@ -201,10 +207,12 @@ class PdfSourceParts private constructor(val dir: File, private val files: List<
         while (from <= to1) {
             val to = PdfDocument(PdfIo.reader(input.file.absolutePath, input.password)).use { src ->
                 val end = PdfPageCost.batchEnd(src, from, to1, batch, budget)
-                src.copyPagesTo(
-                    from, end, dest,
-                    PdfVisibleAppearanceCopier(copierDir, input.onMissingAppearance, inputs.generateAppearances)
-                )
+                val copier = PdfVisibleAppearanceCopier(copierDir, input.onMissingAppearance, inputs.generateAppearances)
+                if (PdfOptionalContentFilter.of(src) != null) {
+                    PdfIo.withoutSharing(dest) { src.copyPagesTo(from, end, dest, copier) }
+                } else {
+                    src.copyPagesTo(from, end, dest, copier)
+                }
                 val firstCopied = dest.numberOfPages - (end - from)
                 for (number in firstCopied..dest.numberOfPages) {
                     val quarterTurns = runCatching { PdfOwnRotation.take(dest.getPage(number)) }.getOrDefault(0)

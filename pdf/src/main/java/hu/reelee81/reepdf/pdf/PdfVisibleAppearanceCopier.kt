@@ -33,7 +33,7 @@ class PdfVisibleAppearanceCopier(
     override fun copy(fromPage: PdfPage, toPage: PdfPage) {
         val visible = PdfCopySupport.repairInvalidBoxes(toPage)
         PdfCopySupport.repairContents(toPage)
-        PdfIdentityCMapRepair.repair(toPage)
+        PdfIdentityCMapRepair.repair(fromPage, toPage)
         val optionalContent = optionalContentFor(fromPage.document)
         if (visible) optionalContent?.filterPage(fromPage, toPage)
         val annotations = fromPage.pdfObject.getAsArray(PdfName.Annots)
@@ -221,7 +221,7 @@ class PdfVisibleAppearanceCopier(
         val bounds = stream.getAsArray(PdfName.BBox)?.toRectangle()
             ?: if (allowMissingBounds) Rectangle(0f, 0f, rect.width, rect.height) else return
         if (!validRectangle(bounds)) return
-        val copied = stream.copyTo(destination) as PdfStream
+        val copied = stream.copyTo(destination, true) as PdfStream
         if (!copied.containsKey(PdfName.BBox)) copied.put(PdfName.BBox, PdfArray(bounds))
         val xObject = PdfFormXObject(copied)
         val matrix = FloatArray(6)

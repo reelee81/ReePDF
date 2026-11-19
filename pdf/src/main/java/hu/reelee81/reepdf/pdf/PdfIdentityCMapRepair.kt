@@ -15,8 +15,11 @@ import com.itextpdf.kernel.pdf.canvas.parser.util.PdfCanvasParser
 internal object PdfIdentityCMapRepair {
     private class CorrectedMaps(val encoding: ByteArray, val unicode: ByteArray)
 
-    fun repair(page: PdfPage) {
-        val fonts = page.resources.pdfObject.getAsDictionary(PdfName.Font) ?: return
+    fun repair(page: PdfPage) = repair(page, page)
+
+    fun repair(source: PdfPage, target: PdfPage) {
+        val fonts = target.resources.pdfObject.getAsDictionary(PdfName.Font) ?: return
+        val sourceFonts = source.resources.pdfObject.getAsDictionary(PdfName.Font) ?: return
         for (key in fonts.keySet()) {
             val font = fonts.getAsDictionary(key) ?: continue
             if (font.getAsName(PdfName.Subtype) != PdfName.Type0 ||
@@ -26,7 +29,7 @@ internal object PdfIdentityCMapRepair {
             if (descendant.getAsName(PdfName.Subtype) != PdfName.CIDFontType2 ||
                 descendant.getAsDictionary(PdfName.CIDSystemInfo)?.getAsString(PdfName.Ordering)?.toUnicodeString() != "Identity"
             ) continue
-            val encoding = font.getAsStream(PdfName.Encoding) ?: continue
+            val encoding = sourceFonts.getAsDictionary(key)?.getAsStream(PdfName.Encoding) ?: continue
             val bytes = PdfBoundedStream.read(encoding, 64 * 1024) ?: continue
             val corrected = try {
                 correctedEncoding(bytes)

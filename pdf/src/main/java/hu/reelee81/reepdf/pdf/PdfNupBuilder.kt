@@ -139,18 +139,25 @@ object PdfNupBuilder {
                                 position = position.getOrElse(globalIdx) { DEFAULT_POSITION }
                             )
 
-                            val fx  = runCatching { PdfCopySupport.flattenedFormXObject(sp, pdf, sz) }.getOrNull()
-                                ?: sp.copyAsFormXObject(pdf)
-                            fx.bBox = PdfArray(sz)
-                            runCatching { PdfEditProjection.tagLayerSource(fx, sp, globalIdx, editGeneration) }
                             canvas.saveState()
 
                             val m = cell.matrix
                             PdfCopySupport.concatPlacementMatrix(canvas, m[0], m[1], m[2], m[3], m[4], m[5])
                             editCells += PdfEditProjection.Cell(globalIdx, m)
 
-                            canvas.addXObjectWithTransformationMatrix(fx, 1f, 0f, 0f, 1f, 0f, 0f)
-                            runCatching { fx.flush() }
+                            val placed = runCatching {
+                                PdfFlatPlacement.place(sp, currentPage, canvas, sz, wholeSheet = per == 1) { original, copy ->
+                                    PdfEditProjection.tagLayerCopy(original, copy, sp, globalIdx, editGeneration)
+                                }
+                            }.getOrDefault(false)
+                            if (!placed) {
+                                val fx = runCatching { PdfCopySupport.flattenedFormXObject(sp, pdf, sz) }.getOrNull()
+                                    ?: sp.copyAsFormXObject(pdf)
+                                fx.bBox = PdfArray(sz)
+                                runCatching { PdfEditProjection.tagLayerSource(fx, sp, globalIdx, editGeneration) }
+                                canvas.addXObjectWithTransformationMatrix(fx, 1f, 0f, 0f, 1f, 0f, 0f)
+                                runCatching { fx.flush() }
+                            }
                             canvas.restoreState()
 
                             if (drawFrame) {
@@ -183,7 +190,7 @@ object PdfNupBuilder {
             }
 
             PdfDocument(
-                PdfIo.workFileWriter(outFile.absolutePath)
+                PdfIo.sharingWorkFileWriter(outFile.absolutePath, readableCopies = false)
             ).use { destDoc ->
                 destDoc.setFlushUnusedObjects(true)
 

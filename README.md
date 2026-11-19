@@ -44,9 +44,12 @@ We publish the source code so that others can use it, modify it and learn from i
 - Rotate pages 90° to the left, one by one or all selected ones together
 - Add an empty page to the end of the list, with the exact size of the first page
 - The layout is rebuilt automatically whenever a setting changes
-- Repeated processing (editing, changing the layout, opening a saved result again) does not keep adding new
-  nesting levels to the page content: wrapper levels are merged when the layout is built, so the pages of large,
-  repeatedly processed files stay fast and use little memory
+- Repeated processing (editing, changing the layout, opening a saved result again) does not add new nesting levels
+  to the page content: a page that only places earlier content (a previous layout, saved edits) is drawn straight onto
+  the sheet in one flat level, the edits of a page are kept next to its content instead of inside it, and the edits of
+  earlier saves are merged into a single layer, so an edited page is no deeper than the same page without edits, its
+  structure does not grow with every save, and the pages of large, repeatedly processed files stay fast and use little
+  memory
 
 ### Page list
 

@@ -2,7 +2,6 @@ package hu.reelee81.reepdf.pdf
 
 import com.itextpdf.kernel.pdf.EncryptionConstants
 import com.itextpdf.kernel.pdf.PdfDocument
-import com.itextpdf.kernel.pdf.PdfWriter
 import hu.reelee81.reepdf.core.OutputExports
 import hu.reelee81.reepdf.core.OutputFileName
 import hu.reelee81.reepdf.core.PdfOperationResult
@@ -112,7 +111,7 @@ class PdfOutputOperation(
 
         try {
             PdfDocument(
-                PdfWriter(work.absolutePath, wp)
+                PdfIo.sameSourceWriter(work.absolutePath, wp)
             ).use { dest ->
                 dest.setFlushUnusedObjects(true)
 

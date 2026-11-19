@@ -1,17 +1,23 @@
 package hu.reelee81.reepdf.pdf
 
+import com.itextpdf.io.source.PdfTokenizer
+import com.itextpdf.io.source.RandomAccessFileOrArray
+import com.itextpdf.io.source.RandomAccessSourceFactory
 import com.itextpdf.kernel.colors.ColorConstants
 import com.itextpdf.kernel.font.PdfFontFactory
 import com.itextpdf.kernel.geom.PageSize
 import com.itextpdf.kernel.geom.Rectangle
+import com.itextpdf.kernel.geom.Vector
 import com.itextpdf.kernel.pdf.PdfArray
 import com.itextpdf.kernel.pdf.PdfDictionary
 import com.itextpdf.kernel.pdf.PdfDocument
 import com.itextpdf.kernel.pdf.PdfIndirectReference
 import com.itextpdf.kernel.pdf.PdfName
 import com.itextpdf.kernel.pdf.PdfNumber
+import com.itextpdf.kernel.pdf.PdfObject
 import com.itextpdf.kernel.pdf.PdfPage
 import com.itextpdf.kernel.pdf.PdfReader
+import com.itextpdf.kernel.pdf.PdfResources
 import com.itextpdf.kernel.pdf.PdfStream
 import com.itextpdf.kernel.pdf.PdfWriter
 import com.itextpdf.kernel.pdf.canvas.PdfCanvas
@@ -21,6 +27,7 @@ import com.itextpdf.kernel.pdf.canvas.parser.data.IEventData
 import com.itextpdf.kernel.pdf.canvas.parser.data.PathRenderInfo
 import com.itextpdf.kernel.pdf.canvas.parser.data.TextRenderInfo
 import com.itextpdf.kernel.pdf.canvas.parser.listener.IEventListener
+import com.itextpdf.kernel.pdf.canvas.parser.util.PdfCanvasParser
 import com.itextpdf.kernel.pdf.xobject.PdfFormXObject
 import java.io.File
 import org.junit.Assert.assertArrayEquals
@@ -87,8 +94,9 @@ class PdfEditProjectionTest {
             assertNotNull(editForm)
             val names = editForm!!.getAsDictionary(PdfName.Resources).getAsDictionary(PdfName.XObject).keySet()
             assertEquals(10, names.size)
-            assertEquals(1, first.getAsDictionary(PdfName.Resources).getAsDictionary(PdfName.XObject).keySet().size)
-            assertEquals(3, pdf.getPage(1).contentStreamCount)
+            assertEquals(2, first.getAsDictionary(PdfName.Resources).getAsDictionary(PdfName.XObject).keySet().size)
+            assertNotNull(contentForm(pdf.getPage(1)))
+            assertEquals(2, pdf.getPage(1).contentStreamCount)
             assertNull(layerForm(pdf.getPage(2)))
         }
     }
@@ -126,12 +134,15 @@ class PdfEditProjectionTest {
         assertEquals(150f, position!![0], 0.05f)
         assertEquals(200f, position[1], 0.05f)
         PdfDocument(PdfReader(projected)).use { pdf ->
-            assertEquals(3, pdf.getPage(1).contentStreamCount)
+            val page = pdf.getPage(1)
+            assertNull(privateData(page.pdfObject)!!.get(PdfName("Wrap")))
+            assertEquals(2, page.contentStreamCount)
+            assertTrue(String(contentForm(page)!!.bytes, Charsets.ISO_8859_1).endsWith("Q\nQ\n"))
         }
     }
 
     @Test
-    fun aSourcePageWithMoreRestoresThanSavesKeepsItsOriginalContent() {
+    fun aSourcePageWithMoreRestoresThanSavesKeepsItsOriginalContentInItsOwnForm() {
         val original = "0.5 0 0 0.5 0 0 cm\nq\nQ\nQ\n0 0 m 100 100 l S\n"
         val projected = projectEdit(rawSource(original), "EDIT", 1)
         PdfDocument(PdfReader(projected)).use { pdf ->
@@ -139,7 +150,7 @@ class PdfEditProjectionTest {
             assertNotNull(layerForm(page))
             assertNull(privateData(page.pdfObject)!!.get(PdfName("Wrap")))
             assertEquals(2, page.contentStreamCount)
-            assertEquals(original, String(page.getContentStream(0).bytes, Charsets.ISO_8859_1))
+            assertEquals("$original\n", String(contentForm(page)!!.bytes, Charsets.ISO_8859_1))
             assertFalse(String(page.getContentStream(1).bytes, Charsets.ISO_8859_1).startsWith("Q"))
         }
     }
@@ -213,9 +224,9 @@ class PdfEditProjectionTest {
         PdfDocument(PdfReader(projected)).use { pdf ->
             val page = pdf.getPage(1)
             val data = privateData(page.pdfObject)!!
-            assertNull(data.get(PdfName("ContentForm")))
-            assertNotNull(data.get(PdfName("Wrap")))
-            assertEquals(3, page.contentStreamCount)
+            assertNull(data.get(PdfName("Wrap")))
+            assertEquals(2, page.contentStreamCount)
+            assertTrue(String(contentForm(page)!!.bytes, Charsets.ISO_8859_1).endsWith("l S\n\nQ\n"))
         }
     }
 
@@ -243,7 +254,10 @@ class PdfEditProjectionTest {
         PdfDocument(PdfReader(projected)).use { pdf ->
             val page = pdf.getPage(1)
             assertTrue(page.pdfObject.get(PdfName.Resources, false) is PdfIndirectReference)
-            val resources = page.pdfObject.getAsDictionary(PdfName.Resources)
+            assertFalse(page.pdfObject.getAsDictionary(PdfName.Resources).containsKey(PdfName("Pi")))
+            val original = contentForm(page)!!
+            assertTrue(original.get(PdfName.Resources, false) is PdfIndirectReference)
+            val resources = original.getAsDictionary(PdfName.Resources)
             assertFalse(resources.containsKey(PdfName("Pi")))
             assertNotNull(resources.getAsDictionary(PdfName.Font))
             assertNotNull(layerForm(page))
@@ -281,8 +295,9 @@ class PdfEditProjectionTest {
         PdfDocument(PdfReader(projected)).use { pdf ->
             val first = pdf.getPage(1)
             assertNull(layerForm(first))
+            assertNull(contentForm(first))
             assertEquals(1, first.contentStreamCount)
-            assertEquals(0, first.pdfObject.getAsDictionary(PdfName.Resources).getAsDictionary(PdfName.XObject).size())
+            assertEquals(0, first.pdfObject.getAsDictionary(PdfName.Resources).getAsDictionary(PdfName.XObject)?.size() ?: 0)
             assertNotNull(layerForm(pdf.getPage(2)))
         }
         val finalNup = buildNup(projected)
@@ -716,6 +731,292 @@ class PdfEditProjectionTest {
         }
     }
 
+    @Test
+    fun anEditedPageWithAPageGroupStaysOneLevelDeepAcrossSavesReloadsAndEdits() {
+        var source = groupSource()
+        assertEquals(0, maxDepth(source))
+        assertEquals(1, maxDepth(buildNup(source, flatten = true)))
+
+        for (round in 1..5) {
+            val projected = projectStroke(source, round)
+            PdfDocument(PdfReader(projected)).use { pdf ->
+                val page = pdf.getPage(1)
+                if (round == 1) {
+                    assertNull(page.pdfObject.get(PdfName.Group))
+                    assertNotNull(contentForm(page)!!.getAsDictionary(PdfName.Group))
+                }
+            }
+            val exported = buildNup(projected, flatten = true)
+            assertEquals("edit in round $round", 1, maxDepth(exported))
+            assertEquals("strokes in round $round", round, strokeCount(exported))
+            assertTrue(textPositions(exported, 1).containsKey("SOURCE 1"))
+
+            val resaved = buildNup(reload(exported), flatten = true)
+            assertEquals("resave in round $round", 1, maxDepth(resaved))
+            source = reload(resaved)
+        }
+    }
+
+    @Test
+    fun clearingTheEditGivesThePageItsGroupBack() {
+        val projected = projectStroke(groupSource(), 1)
+        val cleared = erase(buildNup(projected, flatten = true), null)!!
+        val restored = temporary.newFile()
+        assertEquals(1, projectFile(projected, cleared, restored))
+        PdfDocument(PdfReader(restored)).use { pdf ->
+            val page = pdf.getPage(1)
+            assertNull(layerForm(page))
+            assertNull(contentForm(page))
+            assertEquals(1, page.contentStreamCount)
+            assertEquals(PdfName.Transparency, page.pdfObject.getAsDictionary(PdfName.Group)!!.getAsName(PdfName.S))
+        }
+        assertEquals(0, strokeCount(buildNup(restored, flatten = true)))
+    }
+
+    @Test
+    fun anEditAddsNoLevelToAPageThatAlreadyPlacesForms() {
+        var source = nestedFormSource()
+        assertEquals(2, maxDepth(source))
+        assertEquals(2, maxDepth(buildNup(source, flatten = true)))
+
+        for (round in 1..3) {
+            val projected = projectStroke(source, round)
+            PdfDocument(PdfReader(projected)).use { pdf -> assertNull(contentForm(pdf.getPage(1))) }
+            val exported = buildNup(projected, flatten = true)
+            assertEquals("edit in round $round", 2, maxDepth(exported))
+            assertEquals("strokes in round $round", round, strokeCount(exported))
+            val texts = textPositions(exported, 1)
+            assertTrue(texts.containsKey("OUTER"))
+            assertTrue(texts.containsKey("INNER"))
+            source = reload(exported)
+        }
+    }
+
+    @Test
+    fun wrapperFormsLeftByEarlierSavesAreMergedIntoTheSheet() {
+        var exported = buildNup(groupSource(), flatten = true)
+        repeat(3) {
+            val wrapped = temporary.newFile()
+            PdfDocument(PdfReader(exported)).use { src ->
+                PdfDocument(PdfWriter(wrapped)).use { out ->
+                    val form = src.getPage(1).copyAsFormXObject(out)
+                    PdfCanvas(out.addNewPage(PageSize.A4)).addXObjectWithTransformationMatrix(form, 1f, 0f, 0f, 1f, 0f, 0f)
+                }
+            }
+            exported = wrapped
+        }
+        assertEquals(4, maxDepth(exported))
+        val rebuilt = buildNup(exported, flatten = true)
+        assertEquals(1, maxDepth(rebuilt))
+        assertTrue(textPositions(rebuilt, 1).containsKey("SOURCE 1"))
+    }
+
+    @Test
+    fun layersFromEarlierSavesAreMergedIntoOneFormNextToTheContent() {
+        var source = groupSource()
+        for (round in 1..6) {
+            val exported = buildNup(projectStroke(source, round), flatten = true)
+            assertEquals("depth in round $round", 1, maxDepth(exported))
+            assertEquals("strokes in round $round", round, strokeCount(exported))
+            assertTrue(textPositions(exported, 1).containsKey("SOURCE 1"))
+            PdfDocument(PdfReader(exported)).use { pdf ->
+                val page = pdf.getPage(1)
+                val forms = page.pdfObject.getAsDictionary(PdfName.Resources).getAsDictionary(PdfName.XObject)
+                val merged = forms.keySet().count { privateData(forms.getAsStream(it))?.getAsBool(PdfName("Merged")) == true }
+                assertEquals("forms in round $round", minOf(round + 1, 3), forms.size())
+                assertEquals("merged forms in round $round", if (round >= 3) 1 else 0, merged)
+                assertEquals("saves in round $round", if (round == 1) 1 else 2, saveDepth(page))
+            }
+            source = reload(exported)
+        }
+    }
+
+    @Test
+    fun aFlatOutputDrawsEveryPathAndTextWhereTheNestedOneDoes() {
+        var source = groupSource()
+        for (round in 1..5) {
+            val projected = projectStroke(source, round)
+            val flat = buildNup(projected, flatten = true, frame = true)
+            val nested = buildNup(projected, flatten = false, frame = true)
+            val expected = paths(nested)
+            val actual = paths(flat)
+            assertEquals("paths in round $round", expected.size, actual.size)
+            for (index in expected.indices) {
+                assertEquals("operation of path $index in round $round", expected[index].first, actual[index].first)
+                assertArrayEquals("path $index in round $round", expected[index].second, actual[index].second, 0.01)
+            }
+            val expectedTexts = textPositions(nested, 1)
+            val actualTexts = textPositions(flat, 1)
+            assertEquals(expectedTexts.keys, actualTexts.keys)
+            for ((text, position) in expectedTexts) assertArrayEquals(text, position, actualTexts.getValue(text), 0.01f)
+            source = reload(flat)
+        }
+    }
+
+    @Test
+    fun theEraserRemovesOnlyTheCurrentEditNextToMergedLayers() {
+        var source = groupSource()
+        repeat(3) { source = reload(buildNup(projectStroke(source, it + 1), flatten = true)) }
+        val projected = projectStroke(source, 4)
+        val exported = buildNup(projected, flatten = true)
+        assertEquals(4, strokeCount(exported))
+        val cleared = erase(exported, null)!!
+        assertEquals(3, strokeCount(cleared))
+        val restored = temporary.newFile()
+        assertEquals(1, projectFile(projected, cleared, restored))
+        assertEquals(3, strokeCount(buildNup(restored, flatten = true)))
+        assertEquals(1, maxDepth(buildNup(restored, flatten = true)))
+    }
+
+    @Test
+    fun anEditStaysInPlaceWhenAPagePlacingOnlyFormsLeavesItsMatrixChanged() {
+        val source = temporary.newFile()
+        PdfDocument(PdfWriter(source)).use { pdf ->
+            val form = PdfFormXObject(Rectangle(PageSize.A4))
+            PdfCanvas(form, pdf).beginText().setFontAndSize(PdfFontFactory.createFont(), 12f)
+                .moveText(40.0, 780.0).showText("SOURCE 1").endText()
+            val page = pdf.addNewPage(PageSize.A4)
+            val name = page.resources.addForm(form)
+            page.getContentStream(0).setData("0.5 0 0 0.5 0 0 cm\n/${name.value} Do\n".toByteArray(Charsets.ISO_8859_1))
+        }
+        var current = source
+        for (round in 1..3) {
+            val projected = projectEdit(current, "EDIT$round", 1)
+            val plain = textPositions(buildNup(projected), 1)
+            val flat = textPositions(buildNup(projected, flatten = true), 1)
+            for (texts in listOf(plain, flat)) {
+                val edit = texts["EDIT$round"]
+                assertNotNull("round $round", edit)
+                assertEquals(150f, edit!![0], 0.05f)
+                assertEquals(200f, edit[1], 0.05f)
+            }
+            assertEquals(plain.keys, flat.keys)
+            for ((text, position) in plain) assertArrayEquals(text, position, flat.getValue(text), 0.05f)
+            current = reload(buildNup(projected, flatten = true))
+        }
+    }
+
+    @Test
+    fun aDissolvedWrapperKeepsItsBoundingBoxClipInValidContent() {
+        val source = temporary.newFile()
+        PdfDocument(PdfWriter(source)).use { pdf ->
+            val inner = PdfFormXObject(Rectangle(PageSize.A4))
+            PdfCanvas(inner, pdf).beginText().setFontAndSize(PdfFontFactory.createFont(), 12f)
+                .moveText(40.0, 780.0).showText("SOURCE 1").endText()
+            val wrapper = PdfFormXObject(Rectangle(20f, 30f, 400f, 500f))
+            wrapper.pdfObject.put(PdfName.Matrix, PdfArray(doubleArrayOf(0.9, 0.0, 0.0, 0.9, 5.0, 7.0)))
+            PdfCanvas(wrapper, pdf).addXObjectWithTransformationMatrix(inner, 1f, 0f, 0f, 1f, 0f, 0f)
+            PdfCanvas(pdf.addNewPage(PageSize.A4)).addXObjectWithTransformationMatrix(wrapper, 1f, 0f, 0f, 1f, 0f, 0f)
+        }
+        val flat = buildNup(source, flatten = true)
+        PdfDocument(PdfReader(flat)).use { pdf ->
+            val page = pdf.getPage(1)
+            assertFalse(PdfCopySupport.scanContent(page.contentBytes, page.resources.pdfObject).broken)
+            assertEquals(1, page.pdfObject.getAsDictionary(PdfName.Resources).getAsDictionary(PdfName.XObject).size())
+        }
+        val nested = textPositions(buildNup(source), 1)
+        val flatTexts = textPositions(flat, 1)
+        assertEquals(nested.keys, flatTexts.keys)
+        for ((text, position) in nested) assertArrayEquals(text, position, flatTexts.getValue(text), 0.01f)
+    }
+
+    @Test
+    fun aClipAndMatrixSharedByPlacedItemsAreWrittenOnceOnTheSheet() {
+        val source = temporary.newFile()
+        PdfDocument(PdfWriter(source)).use { pdf ->
+            val font = PdfFontFactory.createFont()
+            val page = pdf.addNewPage(PageSize.A4)
+            val names = (1..3).map { number ->
+                val form = PdfFormXObject(Rectangle(PageSize.A4))
+                PdfCanvas(form, pdf).beginText().setFontAndSize(font, 12f)
+                    .moveText(40.0, 700.0 - number * 50).showText("FORM $number").endText()
+                page.resources.addForm(form).value
+            }
+            val content = "q\n0.8 0 0 0.8 30 40 cm\n20 20 400 600 re W n\n" +
+                names.joinToString("") { "/$it Do\n10 10 m 300 300 l S\n" } + "Q\n"
+            page.getContentStream(0).setData(content.toByteArray(Charsets.ISO_8859_1))
+        }
+        val flat = buildNup(source, flatten = true)
+        PdfDocument(PdfReader(flat)).use { pdf ->
+            val text = String(pdf.getPage(1).contentBytes, Charsets.ISO_8859_1)
+            assertEquals(2, Regex("""W n""").findAll(text).count())
+            assertEquals(1, Regex("""0\.8 0 0 0\.8 30 40 cm""").findAll(text).count())
+        }
+        val nested = buildNup(source)
+        val expected = paths(nested)
+        val actual = paths(flat)
+        assertEquals(expected.size, actual.size)
+        for (index in expected.indices) assertArrayEquals(expected[index].second, actual[index].second, 0.01)
+        val nestedTexts = textPositions(nested, 1)
+        val flatTexts = textPositions(flat, 1)
+        assertEquals(nestedTexts.keys, flatTexts.keys)
+        for ((text, position) in nestedTexts) assertArrayEquals(text, position, flatTexts.getValue(text), 0.01f)
+    }
+
+    @Test(timeout = 20_000)
+    fun aPageWhoseFormsBranchIntoEachOtherFallsBackInsteadOfExploding() {
+        val source = temporary.newFile()
+        PdfDocument(PdfWriter(source)).use { pdf ->
+            var form = PdfFormXObject(Rectangle(PageSize.A4))
+            PdfCanvas(form, pdf).rectangle(10.0, 10.0, 20.0, 20.0).fill()
+            repeat(40) {
+                val outer = PdfFormXObject(Rectangle(PageSize.A4))
+                val name = outer.resources.addForm(form)
+                outer.pdfObject.setData("q\n/${name.value} Do\nQ\nq\n/${name.value} Do\nQ\n".toByteArray(Charsets.ISO_8859_1))
+                form = outer
+            }
+            PdfCanvas(pdf.addNewPage(PageSize.A4)).addXObjectWithTransformationMatrix(form, 1f, 0f, 0f, 1f, 0f, 0f)
+        }
+        val built = buildNup(source, flatten = true)
+        PdfDocument(PdfReader(built)).use { pdf ->
+            val forms = pdf.getPage(1).pdfObject.getAsDictionary(PdfName.Resources).getAsDictionary(PdfName.XObject)
+            assertEquals(1, forms.size())
+            val placed = forms.getAsStream(forms.keySet().single())
+            assertNotNull(placed.getAsDictionary(PdfName.Resources).getAsDictionary(PdfName.XObject))
+        }
+    }
+
+    private fun groupSource(): File {
+        val file = temporary.newFile()
+        PdfDocument(PdfWriter(file)).use { pdf ->
+            val page = pdf.addNewPage(PageSize.A4)
+            PdfCanvas(page).beginText().setFontAndSize(PdfFontFactory.createFont(), 12f)
+                .moveText(40.0, 780.0).showText("SOURCE 1").endText()
+            page.pdfObject.put(PdfName.Group, PdfDictionary().apply {
+                put(PdfName.Type, PdfName.Group)
+                put(PdfName.S, PdfName.Transparency)
+                put(PdfName.CS, PdfName.DeviceRGB)
+            })
+        }
+        return file
+    }
+
+    private fun nestedFormSource(): File {
+        val file = temporary.newFile()
+        PdfDocument(PdfWriter(file)).use { pdf ->
+            val font = PdfFontFactory.createFont()
+            val inner = PdfFormXObject(Rectangle(PageSize.A4))
+            PdfCanvas(inner, pdf).beginText().setFontAndSize(font, 12f).moveText(40.0, 700.0).showText("INNER").endText()
+            val outer = PdfFormXObject(Rectangle(PageSize.A4))
+            PdfCanvas(outer, pdf).beginText().setFontAndSize(font, 12f).moveText(40.0, 780.0).showText("OUTER").endText()
+                .addXObjectWithTransformationMatrix(inner, 1f, 0f, 0f, 1f, 0f, 0f)
+            PdfCanvas(pdf.addNewPage(PageSize.A4)).addXObjectWithTransformationMatrix(outer, 1f, 0f, 0f, 1f, 0f, 0f)
+        }
+        return file
+    }
+
+    private fun projectStroke(source: File, round: Int): File {
+        val edited = temporary.newFile()
+        PdfDocument(PdfReader(buildNup(source, flatten = true)), PdfWriter(edited)).use { pdf ->
+            val page = pdf.getPage(1)
+            PdfCanvas(page.newContentStreamAfter(), page.resources, pdf)
+                .moveTo(100.0, 100.0 + round * 20.0).lineTo(300.0, 120.0 + round * 20.0).stroke()
+        }
+        val projected = temporary.newFile()
+        assertEquals(1, projectFile(source, edited, projected))
+        return projected
+    }
+
     private fun strokeCount(file: File): Int {
         var count = 0
         PdfDocument(PdfReader(file)).use { pdf ->
@@ -729,6 +1030,48 @@ class PdfEditProjectionTest {
             PdfCanvasProcessor(listener).processPageContent(pdf.getPage(1))
         }
         return count
+    }
+
+    private fun paths(file: File): List<Pair<Int, DoubleArray>> {
+        val paths = ArrayList<Pair<Int, DoubleArray>>()
+        PdfDocument(PdfReader(file)).use { pdf ->
+            val listener = object : IEventListener {
+                override fun eventOccurred(data: IEventData?, type: EventType?) {
+                    if (data !is PathRenderInfo || data.operation == PathRenderInfo.NO_OP) return
+                    val ctm = data.ctm
+                    val points = data.path.subpaths.flatMap { subpath ->
+                        listOf(subpath.startPoint) + subpath.segments.flatMap { it.basePoints }
+                    }.flatMap { point ->
+                        val vector = Vector(point.x.toFloat(), point.y.toFloat(), 1f).cross(ctm)
+                        listOf(vector.get(0).toDouble(), vector.get(1).toDouble())
+                    }
+                    paths += data.operation to points.toDoubleArray()
+                }
+
+                override fun getSupportedEvents(): Set<EventType> = setOf(EventType.RENDER_PATH)
+            }
+            PdfCanvasProcessor(listener).processPageContent(pdf.getPage(1))
+        }
+        return paths
+    }
+
+    private fun saveDepth(page: PdfPage): Int {
+        var depth = 0
+        var deepest = 0
+        for (index in 1..page.contentStreamCount) {
+            val tokenizer = PdfTokenizer(RandomAccessFileOrArray(RandomAccessSourceFactory().createSource(page.getContentStream(index - 1).bytes)))
+            tokenizer.use {
+                val parser = PdfCanvasParser(tokenizer, PdfResources(PdfDictionary()))
+                val operands = ArrayList<PdfObject>()
+                while (parser.parse(operands).isNotEmpty()) {
+                    when (operands.last().toString()) {
+                        "q" -> deepest = maxOf(deepest, ++depth)
+                        "Q" -> depth--
+                    }
+                }
+            }
+        }
+        return deepest
     }
 
     private fun reload(file: File): File {
@@ -746,6 +1089,8 @@ class PdfEditProjectionTest {
 
     private fun layerForm(page: PdfPage): PdfStream? = privateData(page.pdfObject)?.getAsStream(PdfName("LayerForm"))
 
+    private fun contentForm(page: PdfPage): PdfStream? = privateData(page.pdfObject)?.getAsStream(PdfName("ContentForm"))
+
     private fun base(page: PdfPage): PdfDictionary? = privateData(page.pdfObject)?.getAsDictionary(PdfName("Base"))
 
     private fun buildNup(source: File, flatten: Boolean = false, frame: Boolean = false): File {
@@ -758,16 +1103,21 @@ class PdfEditProjectionTest {
                     val page = out.addNewPage(PageSize.A4)
                     val canvas = PdfCanvas(page)
                     val box = PdfCopySupport.visibleBox(sourcePage)
-                    val form = (if (flatten) PdfCopySupport.flattenedFormXObject(sourcePage, out, box) else null)
-                        ?: sourcePage.copyAsFormXObject(out)
-                    form.bBox = PdfArray(box)
                     canvas.saveState()
                     PdfCopySupport.concatPlacementMatrix(
                         canvas, rotatedHalf[0], rotatedHalf[1], rotatedHalf[2],
                         rotatedHalf[3], rotatedHalf[4], rotatedHalf[5]
                     )
-                    PdfEditProjection.tagLayerSource(form, sourcePage, number - 1, generation)
-                    canvas.addXObjectWithTransformationMatrix(form, 1f, 0f, 0f, 1f, 0f, 0f)
+                    val placed = flatten && PdfFlatPlacement.place(sourcePage, page, canvas, box, wholeSheet = true) { original, copy ->
+                        PdfEditProjection.tagLayerCopy(original, copy, sourcePage, number - 1, generation)
+                    }
+                    if (!placed) {
+                        val form = (if (flatten) PdfCopySupport.flattenedFormXObject(sourcePage, out, box) else null)
+                            ?: sourcePage.copyAsFormXObject(out)
+                        form.bBox = PdfArray(box)
+                        PdfEditProjection.tagLayerSource(form, sourcePage, number - 1, generation)
+                        canvas.addXObjectWithTransformationMatrix(form, 1f, 0f, 0f, 1f, 0f, 0f)
+                    }
                     canvas.restoreState()
                     if (frame) {
                         canvas.setStrokeColor(ColorConstants.BLACK)
