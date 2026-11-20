@@ -38,6 +38,8 @@
     <string name="edit_text">Szöveg</string>
     <string name="edit_underline">Aláhúzás</string>
     <string name="edit_strikethrough">Áthúzás</string>
+    <string name="edit_underline_straight">Egyenes</string>
+    <string name="edit_underline_wavy">Hullámos</string>
     <string name="edit_pen">Toll</string>
     <string name="edit_highlighter">Kiemelő</string>
     <string name="edit_vector_signature">Vektoros aláírás</string>

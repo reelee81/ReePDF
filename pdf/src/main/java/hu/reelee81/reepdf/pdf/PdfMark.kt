@@ -7,13 +7,15 @@ import kotlin.math.sqrt
 enum class PdfMarkKind(internal val code: String) {
     PEN("Pen"),
     HIGHLIGHTER("Hl"),
-    TEXT_HIGHLIGHT("Text");
+    TEXT_HIGHLIGHT("Text"),
+    UNDERLINE("Under"),
+    STRIKETHROUGH("Strike");
 
     internal val fills: Boolean
-        get() = this == TEXT_HIGHLIGHT
+        get() = this == TEXT_HIGHLIGHT || this == UNDERLINE || this == STRIKETHROUGH
 
     internal val translucent: Boolean
-        get() = this != PEN
+        get() = this == HIGHLIGHTER || this == TEXT_HIGHLIGHT
 
     companion object {
         internal fun of(code: String?): PdfMarkKind? = entries.firstOrNull { it.code == code }

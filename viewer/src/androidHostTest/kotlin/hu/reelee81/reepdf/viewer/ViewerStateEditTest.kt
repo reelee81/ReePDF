@@ -240,7 +240,9 @@ class ViewerStateEditTest {
 
         override suspend fun caret(page: Int, point: ViewerTextPoint): ViewerTextPoint? = null
 
-        override suspend fun highlight(page: Int, from: ViewerTextPoint?, to: ViewerTextPoint?) = FloatArray(0)
+        override suspend fun highlight(page: Int, from: ViewerTextPoint?, to: ViewerTextPoint?) = ViewerTextHighlight.NONE
+
+        override suspend fun baselines(page: Int, from: ViewerTextPoint?, to: ViewerTextPoint?) = FloatArray(0)
 
         override suspend fun copy(page: Int, from: ViewerTextPoint?, to: ViewerTextPoint?) = ""
 

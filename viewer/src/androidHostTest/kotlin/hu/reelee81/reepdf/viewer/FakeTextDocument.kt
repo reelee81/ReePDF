@@ -13,6 +13,7 @@ internal class FakeTextDocument(override val pageCount: Int) : ViewerDocument {
     var carets: (Int, ViewerTextPoint) -> ViewerTextPoint? = { _, _ -> null }
     val caretCalls = mutableListOf<String>()
     var pageTexts: (Int) -> String = { "p$it" }
+    var boxShift = 0f
     private val gates = ArrayDeque<CompletableDeferred<Unit>>()
 
     var counting = false
@@ -73,10 +74,18 @@ internal class FakeTextDocument(override val pageCount: Int) : ViewerDocument {
         return carets(page, point)
     }
 
-    override suspend fun highlight(page: Int, from: ViewerTextPoint?, to: ViewerTextPoint?): FloatArray {
+    override suspend fun highlight(page: Int, from: ViewerTextPoint?, to: ViewerTextPoint?): ViewerTextHighlight {
         calls += "highlight $page ${from.short()} ${to.short()}"
-        return floatArrayOf(from?.x ?: 0f, 10f, to?.x ?: 100f, 20f)
+        val left = from?.x ?: 0f
+        val right = to?.x ?: 100f
+        return ViewerTextHighlight(
+            floatArrayOf(left, 10f + boxShift, right, 20f + boxShift),
+            ViewerTextPoint(left, 15f),
+            ViewerTextPoint(right, 15f)
+        )
     }
+
+    override suspend fun baselines(page: Int, from: ViewerTextPoint?, to: ViewerTextPoint?) = FloatArray(0)
 
     override suspend fun copy(page: Int, from: ViewerTextPoint?, to: ViewerTextPoint?): String {
         calls += "copy $page ${from.short()} ${to.short()}"

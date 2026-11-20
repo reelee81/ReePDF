@@ -11,10 +11,12 @@ internal class PdfTextLetters private constructor(
     private val codes: IntArray,
     private val corners: FloatArray,
     private val sizes: FloatArray,
+    private val baselines: FloatArray,
     private val rightToLeft: BooleanArray,
     private val lineStarts: IntArray,
     private val directions: FloatArray,
-    private val halfSizes: FloatArray
+    private val halfSizes: FloatArray,
+    private val verticals: BooleanArray
 ) {
     val size: Int
         get() = codes.size
@@ -107,6 +109,39 @@ internal class PdfTextLetters private constructor(
 
     fun ends(): Pair<Point, Point>? = if (codes.isEmpty()) null else before(0) to after(codes.lastIndex)
 
+    fun baselines(quads: Array<Quad>, left: Float, top: Float): PdfTextBaselines {
+        val runs = FloatArray(quads.size * PdfTextBaselines.RUN_SIZE)
+        var estimated = 0
+        var next = 0
+        quads.forEachIndexed { index, quad ->
+            val letter = firstLetter(quad, next)
+            if (letter >= 0) next = letter + 1
+            val upX = quad.ul_x - quad.ll_x
+            val upY = quad.ul_y - quad.ll_y
+            val height = hypot(upX, upY)
+            val unitX = if (height > 0f) upX / height else 0f
+            val unitY = if (height > 0f) upY / height else -1f
+            val vertical = letter >= 0 && verticals[lineOf(letter)]
+            val known = letter >= 0 && sizes[letter] > 0f && (vertical || !baselines[letter].isNaN())
+            if (!known) estimated++
+            val lift = when {
+                known && vertical -> height / 2
+                known -> baselines[letter]
+                else -> height * ESTIMATED_LIFT
+            }
+            val offset = index * PdfTextBaselines.RUN_SIZE
+            runs[offset] = quad.ll_x + unitX * lift - left
+            runs[offset + 1] = quad.ll_y + unitY * lift - top
+            runs[offset + 2] = quad.lr_x + unitX * lift - left
+            runs[offset + 3] = quad.lr_y + unitY * lift - top
+            runs[offset + 4] = unitX
+            runs[offset + 5] = unitY
+            runs[offset + 6] = if (known) sizes[letter] else height * ESTIMATED_SIZE
+            runs[offset + 7] = if (known && vertical) 1f else 0f
+        }
+        return PdfTextBaselines(runs, estimated)
+    }
+
     fun text(first: Int, last: Int): String {
         val text = StringBuilder()
         for (letter in first..last) {
@@ -114,6 +149,67 @@ internal class PdfTextLetters private constructor(
             text.appendCodePoint(if (code < FIRST_PRINTABLE || code > Character.MAX_CODE_POINT) REPLACEMENT else code)
         }
         return text.toString()
+    }
+
+    fun centered(quads: Array<Quad>, left: Float, top: Float): FloatArray {
+        val rects = FloatArray(quads.size * PdfTextHits.RECT_SIZE)
+        var next = 0
+        quads.forEachIndexed { index, quad ->
+            val letter = firstLetter(quad, next).takeIf { it >= 0 } ?: letterInside(quad)
+            if (letter >= 0) next = letter + 1
+            val upX = quad.ul_x - quad.ll_x
+            val upY = quad.ul_y - quad.ll_y
+            val height = hypot(upX, upY)
+            val known = letter >= 0 && height > 0f && !verticals[lineOf(letter)] && !baselines[letter].isNaN() && sizes[letter] > 0f
+            val offset = index * PdfTextHits.RECT_SIZE
+            if (!known) {
+                rects[offset] = minOf(quad.ul_x, quad.ur_x, quad.ll_x, quad.lr_x) - left
+                rects[offset + 1] = minOf(quad.ul_y, quad.ur_y, quad.ll_y, quad.lr_y) - top
+                rects[offset + 2] = maxOf(quad.ul_x, quad.ur_x, quad.ll_x, quad.lr_x) - left
+                rects[offset + 3] = maxOf(quad.ul_y, quad.ur_y, quad.ll_y, quad.lr_y) - top
+                return@forEachIndexed
+            }
+            val size = sizes[letter]
+            val tall = if (height < size * THIN_BOX) size * STANDARD_BOX else height
+            val low = baselines[letter] + LETTER_MIDDLE * size - tall / 2
+            val high = low + tall
+            val unitX = upX / height
+            val unitY = upY / height
+            val xs = floatArrayOf(quad.ll_x + unitX * low, quad.lr_x + unitX * low, quad.ll_x + unitX * high, quad.lr_x + unitX * high)
+            val ys = floatArrayOf(quad.ll_y + unitY * low, quad.lr_y + unitY * low, quad.ll_y + unitY * high, quad.lr_y + unitY * high)
+            rects[offset] = xs.min() - left
+            rects[offset + 1] = ys.min() - top
+            rects[offset + 2] = xs.max() - left
+            rects[offset + 3] = ys.max() - top
+        }
+        return rects
+    }
+
+    private fun letterInside(quad: Quad): Int {
+        val left = minOf(quad.ul_x, quad.ur_x, quad.ll_x, quad.lr_x)
+        val right = maxOf(quad.ul_x, quad.ur_x, quad.ll_x, quad.lr_x)
+        val top = minOf(quad.ul_y, quad.ur_y, quad.ll_y, quad.lr_y)
+        val bottom = maxOf(quad.ul_y, quad.ur_y, quad.ll_y, quad.lr_y)
+        for (letter in codes.indices) {
+            if (codes[letter] == SPACE) continue
+            val x = centre(letter, X)
+            val y = centre(letter, Y)
+            if (x in left..right && y in top..bottom) return letter
+        }
+        return -1
+    }
+
+    private fun firstLetter(quad: Quad, from: Int): Int {
+        for (step in codes.indices) {
+            val letter = (from + step) % codes.size
+            val offset = letter * STRIDE
+            if (corners[offset + UL_X] == quad.ul_x && corners[offset + UL_Y] == quad.ul_y &&
+                corners[offset + LL_X] == quad.ll_x && corners[offset + LL_Y] == quad.ll_y
+            ) {
+                return letter
+            }
+        }
+        return -1
     }
 
     private fun wordStart(letter: Int): Int {
@@ -235,23 +331,27 @@ internal class PdfTextLetters private constructor(
         private var codes = IntArray(INITIAL_LETTERS)
         private var corners = FloatArray(INITIAL_LETTERS * STRIDE)
         private var sizes = FloatArray(INITIAL_LETTERS)
+        private var baselines = FloatArray(INITIAL_LETTERS)
         private var rightToLeft = BooleanArray(INITIAL_LETTERS)
         private var count = 0
         private var lineStarts = IntArray(INITIAL_LINES)
         private var directions = FloatArray(INITIAL_LINES * 2)
         private var halfSizes = FloatArray(INITIAL_LINES)
+        private var verticals = BooleanArray(INITIAL_LINES)
         private var lines = 0
         private var lineStart = 0
         private var dirX = 1f
         private var dirY = 0f
+        private var vertical = false
 
-        fun startLine(dirX: Float, dirY: Float) {
+        fun startLine(dirX: Float, dirY: Float, vertical: Boolean) {
             lineStart = count
             this.dirX = dirX
             this.dirY = dirY
+            this.vertical = vertical
         }
 
-        fun add(code: Int, quad: Quad, size: Float, rightToLeft: Boolean) {
+        fun add(code: Int, quad: Quad, size: Float, rightToLeft: Boolean, origin: Point?) {
             if (count == codes.size) growLetters()
             codes[count] = code
             val offset = count * STRIDE
@@ -264,6 +364,14 @@ internal class PdfTextLetters private constructor(
             corners[offset + LR_X] = quad.lr_x
             corners[offset + LR_Y] = quad.lr_y
             sizes[count] = size
+            val upX = quad.ul_x - quad.ll_x
+            val upY = quad.ul_y - quad.ll_y
+            val height = hypot(upX, upY)
+            baselines[count] = if (origin == null || height <= 0f) {
+                Float.NaN
+            } else {
+                ((origin.x - quad.ll_x) * upX + (origin.y - quad.ll_y) * upY) / height
+            }
             this.rightToLeft[count] = rightToLeft
             count++
         }
@@ -274,6 +382,7 @@ internal class PdfTextLetters private constructor(
                 lineStarts = lineStarts.copyOf(lineStarts.size * 2)
                 directions = directions.copyOf(directions.size * 2)
                 halfSizes = halfSizes.copyOf(halfSizes.size * 2)
+                verticals = verticals.copyOf(verticals.size * 2)
             }
             lineStarts[lines] = lineStart
             directions[lines * 2] = dirX
@@ -281,6 +390,7 @@ internal class PdfTextLetters private constructor(
             var largest = 0f
             for (letter in lineStart until count) largest = max(largest, sizes[letter])
             halfSizes[lines] = largest / 2
+            verticals[lines] = vertical
             lines++
         }
 
@@ -291,10 +401,12 @@ internal class PdfTextLetters private constructor(
                 codes.copyOf(count),
                 corners.copyOf(count * STRIDE),
                 sizes.copyOf(count),
+                baselines.copyOf(count),
                 rightToLeft.copyOf(count),
                 starts,
                 directions.copyOf(lines * 2),
-                halfSizes.copyOf(lines)
+                halfSizes.copyOf(lines),
+                verticals.copyOf(lines)
             )
         }
 
@@ -303,6 +415,7 @@ internal class PdfTextLetters private constructor(
             codes = codes.copyOf(capacity)
             corners = corners.copyOf(capacity * STRIDE)
             sizes = sizes.copyOf(capacity)
+            baselines = baselines.copyOf(capacity)
             rightToLeft = rightToLeft.copyOf(capacity)
         }
     }
@@ -328,6 +441,11 @@ internal class PdfTextLetters private constructor(
         const val CLEAR_SPAN = 0.9f
         const val CLEAR_MARGIN = 0.25f
         const val CLEAR_PULL = 0.001f
+        const val ESTIMATED_LIFT = 0.2f
+        const val LETTER_MIDDLE = 0.27f
+        const val THIN_BOX = 0.5f
+        const val STANDARD_BOX = 1.17f
+        const val ESTIMATED_SIZE = 0.8f
         const val INITIAL_LETTERS = 256
         const val INITIAL_LINES = 32
         val PUNCTUATION = setOf(

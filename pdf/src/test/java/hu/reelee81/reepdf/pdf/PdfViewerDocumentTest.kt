@@ -68,9 +68,14 @@ class PdfViewerDocumentTest {
             return PdfTextPoint(point.x + 2f, point.y)
         }
 
-        override fun highlight(pageIndex: Int, from: PdfTextPoint?, to: PdfTextPoint?): FloatArray {
+        override fun highlight(pageIndex: Int, from: PdfTextPoint?, to: PdfTextPoint?): PdfTextHighlight {
             record("highlight $pageIndex ${from?.x} ${to?.x}")
-            return floatArrayOf(5f, 6f, 7f, 8f)
+            return PdfTextHighlight(floatArrayOf(5f, 6f, 7f, 8f), floatArrayOf(5f, 5f, 7f, 9f))
+        }
+
+        override fun baselines(pageIndex: Int, from: PdfTextPoint?, to: PdfTextPoint?): PdfTextBaselines {
+            record("baselines $pageIndex ${from?.x} ${to?.x}")
+            return PdfTextBaselines(floatArrayOf(1f, 2f, 3f, 4f, 0f, -1f, 12f, 0f), 1)
         }
 
         override fun copy(pageIndex: Int, from: PdfTextPoint?, to: PdfTextPoint?): String {
@@ -782,6 +787,7 @@ class PdfViewerDocumentTest {
         val word = document.word(2, PdfTextPoint(3f, 4f), 5f)
         val caret = document.caret(1, PdfTextPoint(6f, 7f))
         val rects = document.highlight(0, null, PdfTextPoint(9f, 9f))
+        val lines = document.baselines(2, PdfTextPoint(4f, 4f), null)
         val copied = document.copy(1, PdfTextPoint(1f, 1f), null)
         val text = document.text(2)
         document.shut()
@@ -793,7 +799,11 @@ class PdfViewerDocumentTest {
         assertEquals(4f, word.to.x, 0f)
         assertEquals(8f, caret!!.x, 0f)
         assertEquals(7f, caret.y, 0f)
-        assertArrayEquals(floatArrayOf(5f, 6f, 7f, 8f), rects, 0f)
+        assertArrayEquals(floatArrayOf(5f, 6f, 7f, 8f), rects.rects, 0f)
+        assertEquals(listOf(5f, 7f, 7f, 7f), listOf(rects.start!!.x, rects.start!!.y, rects.end!!.x, rects.end!!.y))
+        assertNull(PdfTextHighlight.NONE.start)
+        assertArrayEquals(floatArrayOf(1f, 2f, 3f, 4f, 0f, -1f, 12f, 0f), lines.runs, 0f)
+        assertEquals(1, lines.estimated)
         assertEquals("text 1", copied)
         assertEquals("text 2", text)
         assertEquals(1, engine.threads.size)
@@ -805,6 +815,7 @@ class PdfViewerDocumentTest {
             "word 2 3.0 4.0 5.0",
             "caret 1 6.0 7.0",
             "highlight 0 null 9.0",
+            "baselines 2 4.0 null",
             "copy 1 1.0 null",
             "text 2",
             "close"

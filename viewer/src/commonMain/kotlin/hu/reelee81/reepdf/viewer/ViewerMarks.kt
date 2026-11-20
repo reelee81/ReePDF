@@ -1,6 +1,18 @@
 package hu.reelee81.reepdf.viewer
 
-enum class ViewerMarkKind { PEN, HIGHLIGHTER, TEXT_HIGHLIGHT }
+enum class ViewerMarkKind {
+    PEN,
+    HIGHLIGHTER,
+    TEXT_HIGHLIGHT,
+    UNDERLINE,
+    STRIKETHROUGH;
+
+    internal val fills: Boolean
+        get() = this == TEXT_HIGHLIGHT || this == UNDERLINE || this == STRIKETHROUGH
+
+    internal val translucent: Boolean
+        get() = this == HIGHLIGHTER || this == TEXT_HIGHLIGHT
+}
 
 class ViewerMarkPath(val verbs: ByteArray, val points: FloatArray) {
     init {

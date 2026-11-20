@@ -48,8 +48,8 @@ class ViewerEditBarLayoutTest {
 
     @Test
     fun onANarrowScreenThePanelIsCenteredAndItsTailPointsAtTheIcon() {
-        val place = ViewerEditPanelPlace.of(width = 393f, panelWidth = 352f, iconCenter = 66f, margin = 16f, corner = 20f)
-        val small = ViewerEditPanelPlace.of(width = 360f, panelWidth = 328f, iconCenter = 66f, margin = 16f, corner = 20f)
+        val place = ViewerEditPanelPlace.of(width = 393f, panelWidth = 352f, iconCenter = 66f, margin = 16f, corner = 20f, underIcon = false)
+        val small = ViewerEditPanelPlace.of(width = 360f, panelWidth = 328f, iconCenter = 66f, margin = 16f, corner = 20f, underIcon = false)
 
         assertEquals(20.5f, place.left, 0.001f)
         assertEquals(45.5f, place.tail, 0.001f)
@@ -57,10 +57,24 @@ class ViewerEditBarLayoutTest {
     }
 
     @Test
+    fun onANarrowScreenTheUnderlinePanelSitsUnderItsIconAsFarAsTheEdgesAllow() {
+        val middle = ViewerEditPanelPlace.of(width = 393f, panelWidth = 208f, iconCenter = 123f, margin = 16f, corner = 20f, underIcon = true)
+        val nearLeft = ViewerEditPanelPlace.of(width = 393f, panelWidth = 208f, iconCenter = 66f, margin = 16f, corner = 20f, underIcon = true)
+        val nearRight = ViewerEditPanelPlace.of(width = 393f, panelWidth = 208f, iconCenter = 300f, margin = 16f, corner = 20f, underIcon = true)
+
+        assertEquals(19f, middle.left, 0.001f)
+        assertEquals(104f, middle.tail, 0.001f)
+        assertEquals(16f, nearLeft.left, 0.001f)
+        assertEquals(50f, nearLeft.tail, 0.001f)
+        assertEquals(169f, nearRight.left, 0.001f)
+        assertEquals(131f, nearRight.tail, 0.001f)
+    }
+
+    @Test
     fun onAWideScreenThePanelSitsUnderTheIconAndStaysOnScreen() {
-        val under = ViewerEditPanelPlace.of(width = 873f, panelWidth = 352f, iconCenter = 400f, margin = 16f, corner = 20f)
-        val left = ViewerEditPanelPlace.of(width = 873f, panelWidth = 352f, iconCenter = 120f, margin = 16f, corner = 20f)
-        val right = ViewerEditPanelPlace.of(width = 873f, panelWidth = 352f, iconCenter = 860f, margin = 16f, corner = 20f)
+        val under = ViewerEditPanelPlace.of(width = 873f, panelWidth = 352f, iconCenter = 400f, margin = 16f, corner = 20f, underIcon = false)
+        val left = ViewerEditPanelPlace.of(width = 873f, panelWidth = 352f, iconCenter = 120f, margin = 16f, corner = 20f, underIcon = false)
+        val right = ViewerEditPanelPlace.of(width = 873f, panelWidth = 352f, iconCenter = 860f, margin = 16f, corner = 20f, underIcon = false)
 
         assertEquals(224f, under.left, 0.001f)
         assertEquals(176f, under.tail, 0.001f)

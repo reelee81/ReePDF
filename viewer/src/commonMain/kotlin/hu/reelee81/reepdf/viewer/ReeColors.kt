@@ -6,6 +6,11 @@ class ReeColors private constructor(night: Boolean) {
     val alertdialogBackgroundColor = ReeColor(if (night) p.darkLight025 else p.darkLight100)
     val appControlActivatedBgColor = ReeColor(if (night) p.teal050 else p.teal150)
     val appControlActivatedOtherColor = ReeColor(p.teal100)
+    val icCheckboxPasswordColor = ReeColor(
+        if (night) p.darkLight100 else p.darkLight025,
+        ReeColorState.DISABLED to (if (night) p.darkLight050 else p.darkLight065),
+        ReeColorState.CHECKED to p.teal100
+    )
     val materialTextbuttonRippleColor = ReeColor(if (night) p.darkLight050 else p.darkLight065)
     val materialTextbuttonTextColor = ReeColor(
         if (night) p.darkLight100 else p.darkLight000,

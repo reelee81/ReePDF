@@ -28,7 +28,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
@@ -290,7 +290,7 @@ private fun editGrab(state: ViewerState, position: Offset, touch: ViewerTouch): 
     if (state.isWaiting || editor.paused) return null
     val tool = editor.settings.tool
     val erasing = tool == ViewerEditTool.ERASER
-    if (!erasing && tool != ViewerEditTool.PEN && tool != ViewerEditTool.HIGHLIGHTER) return null
+    if (!erasing && !tool.draws) return null
     val (page, point) = state.pageHit(position.x, position.y) ?: return null
     if (page in state.failedPages) return null
     val zoom = state.viewport?.zoom ?: return null
@@ -361,8 +361,8 @@ private fun DrawScope.drawMark(mark: ViewerMark, left: Float, top: Float, zoom: 
         }
         index += ViewerMarkPath.pointsOf(verb)
     }
-    val color = Color(OPAQUE or mark.color).copy(alpha = if (mark.kind == ViewerMarkKind.PEN) 1f else MARK_ALPHA)
-    if (mark.kind == ViewerMarkKind.TEXT_HIGHLIGHT) {
+    val color = Color(OPAQUE or mark.color).copy(alpha = if (mark.kind.translucent) MARK_ALPHA else 1f)
+    if (mark.kind.fills) {
         drawPath(path, color)
     } else {
         drawPath(path, color, style = Stroke(width = maxOf(mark.width * zoom, 1f), cap = StrokeCap.Round, join = StrokeJoin.Round))
@@ -393,14 +393,17 @@ private fun DrawScope.drawTextRects(
     zoom: Float,
     color: Color
 ) {
+    if (from >= until) return
+    val area = Path()
     for (index in from until until) {
         val offset = index * ViewerTextHits.RECT_SIZE
         val left = (x + rects[offset] * zoom).toFloat()
         val top = (y + rects[offset + 1] * zoom).toFloat()
         val right = (x + rects[offset + 2] * zoom).toFloat()
         val bottom = (y + rects[offset + 3] * zoom).toFloat()
-        drawRect(color, Offset(left, top), Size(right - left, bottom - top), blendMode = BlendMode.Multiply)
+        area.addRect(Rect(left, top, right, bottom))
     }
+    drawPath(area, color, blendMode = BlendMode.Multiply)
 }
 
 @Composable

@@ -252,6 +252,20 @@ class ViewerSelectionTest {
     }
 
     @Test
+    fun aHandleDragKeepsTheOtherEndOnTheTextLineEvenWhenItsBoxIsMoved() {
+        val doc = document()
+        doc.boxShift = 5f
+        selection.onVisible(2..4)
+        selection.selectAll(3)
+
+        assertTrue(selection.beginDrag(ViewerSelection.Handle.END))
+        selection.dragTo(3, ViewerTextPoint(60f, 15f))
+
+        assertArrayEquals(floatArrayOf(0f, 15f, 60f, 25f), selection.rectsOf(3), 0f)
+        assertEquals("highlight 3 0.0,15.0 60.0,15.0", doc.calls.last())
+    }
+
+    @Test
     fun clearForgetsTheSelection() {
         document()
         selection.onVisible(0..3)

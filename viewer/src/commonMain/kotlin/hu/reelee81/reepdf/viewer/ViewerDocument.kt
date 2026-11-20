@@ -29,7 +29,9 @@ interface ViewerDocument : ViewerPageSource {
 
     suspend fun caret(page: Int, point: ViewerTextPoint): ViewerTextPoint?
 
-    suspend fun highlight(page: Int, from: ViewerTextPoint?, to: ViewerTextPoint?): FloatArray
+    suspend fun highlight(page: Int, from: ViewerTextPoint?, to: ViewerTextPoint?): ViewerTextHighlight
+
+    suspend fun baselines(page: Int, from: ViewerTextPoint?, to: ViewerTextPoint?): FloatArray
 
     suspend fun copy(page: Int, from: ViewerTextPoint?, to: ViewerTextPoint?): String
 

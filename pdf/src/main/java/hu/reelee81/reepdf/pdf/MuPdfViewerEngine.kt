@@ -72,6 +72,7 @@ class MuPdfViewerEngine private constructor(
         try {
             val bounds = page.bounds
             val hits = page.search(needle, StructuredText.SEARCH_IGNORE_CASE) ?: return PdfTextHits.NONE
+            val letters = pageText(pageIndex).letters
             val starts = IntArray(hits.size + 1)
             var count = 0
             hits.forEachIndexed { index, hit ->
@@ -82,7 +83,8 @@ class MuPdfViewerEngine private constructor(
             val rects = FloatArray(count * PdfTextHits.RECT_SIZE)
             var next = 0
             for (hit in hits) {
-                for (quad in hit) PdfTextQuads.put(rects, next++, quad, bounds.x0, bounds.y0)
+                letters.centered(hit, bounds.x0, bounds.y0).copyInto(rects, next * PdfTextHits.RECT_SIZE)
+                next += hit.size
             }
             return PdfTextHits(rects, starts)
         } finally {
@@ -111,7 +113,7 @@ class MuPdfViewerEngine private constructor(
         }
         val quads = page.text.highlight(from, to) ?: return null
         if (quads.none { word.touches(it, tolerance) }) return null
-        val rects = rects(page, quads)
+        val rects = page.letters.centered(quads, page.left, page.top)
         if (rects.isEmpty()) return null
         return PdfTextSpan(page.relative(from), page.relative(to), rects)
     }
@@ -131,10 +133,20 @@ class MuPdfViewerEngine private constructor(
         return page.relative(chosen)
     }
 
-    override fun highlight(pageIndex: Int, from: PdfTextPoint?, to: PdfTextPoint?): FloatArray {
+    override fun highlight(pageIndex: Int, from: PdfTextPoint?, to: PdfTextPoint?): PdfTextHighlight {
         val page = pageText(pageIndex)
-        val ends = page.letters.ends() ?: return FloatArray(0)
-        return rects(page, page.text.highlight(page.absolute(from) ?: ends.first, page.absolute(to) ?: ends.second))
+        val ends = page.letters.ends() ?: return PdfTextHighlight.NONE
+        val quads = page.text.highlight(page.absolute(from) ?: ends.first, page.absolute(to) ?: ends.second)
+        if (quads.isNullOrEmpty()) return PdfTextHighlight.NONE
+        return PdfTextHighlight(page.letters.centered(quads, page.left, page.top), rects(page, quads))
+    }
+
+    override fun baselines(pageIndex: Int, from: PdfTextPoint?, to: PdfTextPoint?): PdfTextBaselines {
+        val page = pageText(pageIndex)
+        val ends = page.letters.ends() ?: return PdfTextBaselines.NONE
+        val quads = page.text.highlight(page.absolute(from) ?: ends.first, page.absolute(to) ?: ends.second)
+            ?: return PdfTextBaselines.NONE
+        return page.letters.baselines(quads, page.left, page.top)
     }
 
     override fun copy(pageIndex: Int, from: PdfTextPoint?, to: PdfTextPoint?): String {
@@ -352,7 +364,7 @@ class MuPdfViewerEngine private constructor(
         override fun endTextBlock() = Unit
 
         override fun beginLine(bbox: Rect?, wmode: Int, dir: Point) {
-            letters.startLine(dir.x, dir.y)
+            letters.startLine(dir.x, dir.y, wmode == 1)
         }
 
         override fun endLine() {
@@ -361,7 +373,7 @@ class MuPdfViewerEngine private constructor(
 
         override fun onChar(c: Int, origin: Point?, font: Font?, size: Float, q: Quad, argb: Int, flags: Int, bidi: Int) {
             font?.destroy()
-            letters.add(c, q, size, (bidi and 1) != 0)
+            letters.add(c, q, size, (bidi and 1) != 0, origin)
         }
 
         override fun beginStruct(standard: String?, raw: String?, index: Int) = Unit

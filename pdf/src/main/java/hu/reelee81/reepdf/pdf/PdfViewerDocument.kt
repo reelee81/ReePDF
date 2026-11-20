@@ -114,8 +114,11 @@ class PdfViewerDocument<T> private constructor(
     suspend fun caret(pageIndex: Int, point: PdfTextPoint): PdfTextPoint? =
         readText(pageIndex) { engine.caret(pageIndex, point) }
 
-    suspend fun highlight(pageIndex: Int, from: PdfTextPoint?, to: PdfTextPoint?): FloatArray =
+    suspend fun highlight(pageIndex: Int, from: PdfTextPoint?, to: PdfTextPoint?): PdfTextHighlight =
         readText(pageIndex) { engine.highlight(pageIndex, from, to) }
+
+    suspend fun baselines(pageIndex: Int, from: PdfTextPoint?, to: PdfTextPoint?): PdfTextBaselines =
+        readText(pageIndex) { engine.baselines(pageIndex, from, to) }
 
     suspend fun copy(pageIndex: Int, from: PdfTextPoint?, to: PdfTextPoint?): String =
         readText(pageIndex) { engine.copy(pageIndex, from, to) }

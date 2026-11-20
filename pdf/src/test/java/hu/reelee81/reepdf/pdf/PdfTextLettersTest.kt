@@ -2,6 +2,7 @@ package hu.reelee81.reepdf.pdf
 
 import com.artifex.mupdf.fitz.Point
 import com.artifex.mupdf.fitz.Quad
+import kotlin.math.roundToInt
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -23,8 +24,8 @@ class PdfTextLettersTest {
     @Test
     fun aSlantedLetterKeepsItsCaretsAtItsBottomCorners() {
         val letters = page {
-            startLine(1f, 0f)
-            add('f'.code, Quad(15f, 100f, 21f, 100f, 10f, 112f, 16f, 112f), SIZE, false)
+            startLine(1f, 0f, false)
+            add('f'.code, Quad(15f, 100f, 21f, 100f, 10f, 112f, 16f, 112f), SIZE, false, null)
             endLine()
         }
 
@@ -35,8 +36,8 @@ class PdfTextLettersTest {
     @Test
     fun aRightToLeftLetterStartsAtItsRightCorner() {
         val letters = page {
-            startLine(1f, 0f)
-            add(0x5D0, box(10f, 100f, 6f, 12f), SIZE, true)
+            startLine(1f, 0f, false)
+            add(0x5D0, box(10f, 100f, 6f, 12f), SIZE, true, null)
             endLine()
         }
 
@@ -47,10 +48,10 @@ class PdfTextLettersTest {
     @Test
     fun theCaretsOfALineLieOnTheMidlineOfItsFirstLetter() {
         val letters = page {
-            startLine(1f, 0f)
-            add('k'.code, box(10f, 100f, 5f, 10f), SIZE, false)
-            add('S'.code, box(15f, 102f, 8f, 16f), SIZE, false)
-            add('k'.code, box(23f, 110f, 5f, 10f), SIZE, false)
+            startLine(1f, 0f, false)
+            add('k'.code, box(10f, 100f, 5f, 10f), SIZE, false, null)
+            add('S'.code, box(15f, 102f, 8f, 16f), SIZE, false, null)
+            add('k'.code, box(23f, 110f, 5f, 10f), SIZE, false, null)
             endLine()
         }
 
@@ -60,9 +61,9 @@ class PdfTextLettersTest {
     @Test
     fun aDownwardLineProjectsTheCaretsAlongItsDirection() {
         val letters = page {
-            startLine(0f, 1f)
-            add('a'.code, Quad(112f, 10f, 112f, 16f, 100f, 10f, 100f, 16f), SIZE, false)
-            add('b'.code, Quad(112f, 16f, 112f, 22f, 100f, 16f, 100f, 22f), SIZE, false)
+            startLine(0f, 1f, false)
+            add('a'.code, Quad(112f, 10f, 112f, 16f, 100f, 10f, 100f, 16f), SIZE, false, null)
+            add('b'.code, Quad(112f, 16f, 112f, 22f, 100f, 16f, 100f, 22f), SIZE, false, null)
             endLine()
         }
 
@@ -73,9 +74,9 @@ class PdfTextLettersTest {
     @Test
     fun theTextReplacesControlAndInvalidCodesLikeTheMuPdfCopy() {
         val letters = page {
-            startLine(1f, 0f)
+            startLine(1f, 0f, false)
             for ((index, code) in listOf('A'.code, 0x0D, 0x1F600, 0x110000).withIndex()) {
-                add(code, box(10f + index * 6f, 100f, 6f, 12f), SIZE, false)
+                add(code, box(10f + index * 6f, 100f, 6f, 12f), SIZE, false, null)
             }
             endLine()
         }
@@ -98,9 +99,9 @@ class PdfTextLettersTest {
     @Test
     fun aGapWiderThanASpaceSeparatesASignFromTheWord() {
         val letters = page {
-            startLine(1f, 0f)
-            add(0xF8E7, box(67.3f, 104f, 6f, 6f), 6f, false)
-            "gyártási".forEachIndexed { index, char -> add(char.code, box(79.3f + index * 6f, 100f, 6f, 12f), SIZE, false) }
+            startLine(1f, 0f, false)
+            add(0xF8E7, box(67.3f, 104f, 6f, 6f), 6f, false, null)
+            "gyártási".forEachIndexed { index, char -> add(char.code, box(79.3f + index * 6f, 100f, 6f, 12f), SIZE, false, null) }
             endLine()
         }
 
@@ -111,10 +112,10 @@ class PdfTextLettersTest {
     @Test
     fun onlyAGapWiderThanASpaceSplitsTheLetters() {
         val letters = page {
-            startLine(1f, 0f)
-            add('a'.code, box(10f, 100f, 6f, 12f), SIZE, false)
-            add('b'.code, box(17.7f, 100f, 6f, 12f), SIZE, false)
-            add('c'.code, box(25.6f, 100f, 6f, 12f), SIZE, false)
+            startLine(1f, 0f, false)
+            add('a'.code, box(10f, 100f, 6f, 12f), SIZE, false, null)
+            add('b'.code, box(17.7f, 100f, 6f, 12f), SIZE, false, null)
+            add('c'.code, box(25.6f, 100f, 6f, 12f), SIZE, false, null)
             endLine()
         }
 
@@ -125,10 +126,10 @@ class PdfTextLettersTest {
     @Test
     fun rightToLeftLettersMeasureTheirGapBackwards() {
         val letters = page {
-            startLine(1f, 0f)
-            add(0x5D0, box(40f, 100f, 6f, 12f), SIZE, true)
-            add(0x5D1, box(34f, 100f, 6f, 12f), SIZE, true)
-            add(0x5D2, box(10f, 100f, 6f, 12f), SIZE, true)
+            startLine(1f, 0f, false)
+            add(0x5D0, box(40f, 100f, 6f, 12f), SIZE, true, null)
+            add(0x5D1, box(34f, 100f, 6f, 12f), SIZE, true, null)
+            add(0x5D2, box(10f, 100f, 6f, 12f), SIZE, true, null)
             endLine()
         }
 
@@ -150,8 +151,8 @@ class PdfTextLettersTest {
     @Test
     fun aRightToLeftLetterEndsOnItsLeftHalf() {
         val letters = page {
-            startLine(1f, 0f)
-            add(0x5D0, box(10f, 100f, 6f, 12f), SIZE, true)
+            startLine(1f, 0f, false)
+            add(0x5D0, box(10f, 100f, 6f, 12f), SIZE, true, null)
             endLine()
         }
 
@@ -246,26 +247,26 @@ class PdfTextLettersTest {
     }
 
     private fun PdfTextLetters.Builder.label() {
-        startLine(1f, 0f)
-        "Handling".forEachIndexed { index, char -> add(char.code, box(77f + index * 5f, 332.1f, 5f, 6f), 6f, false) }
+        startLine(1f, 0f, false)
+        "Handling".forEachIndexed { index, char -> add(char.code, box(77f + index * 5f, 332.1f, 5f, 6f), 6f, false, null) }
         endLine()
     }
 
     private fun PdfTextLetters.Builder.filler(left: Float = 75f) {
-        startLine(1f, 0f)
-        repeat(40) { add(' '.code, box(left + it * 5f, 333.2f, 5f, 10f), 10f, false) }
+        startLine(1f, 0f, false)
+        repeat(40) { add(' '.code, box(left + it * 5f, 333.2f, 5f, 10f), 10f, false, null) }
         endLine()
     }
 
     @Test
     fun theEndsAreTheStartOfTheFirstLineAndTheEndOfTheLast() {
         val letters = page {
-            startLine(1f, 0f)
+            startLine(1f, 0f, false)
             endLine()
             line("first")
             line("middle", top = 120f)
             line("last", top = 140f)
-            startLine(1f, 0f)
+            startLine(1f, 0f, false)
             endLine()
         }
 
@@ -278,7 +279,7 @@ class PdfTextLettersTest {
     @Test
     fun aPageWithoutLettersHasNoEndsNoWordAndNoCaret() {
         val letters = page {
-            startLine(1f, 0f)
+            startLine(1f, 0f, false)
             endLine()
         }
 
@@ -298,6 +299,175 @@ class PdfTextLettersTest {
         assertPoint(190f, 1392f, letters.after(2_999))
     }
 
+    @Test
+    fun aRunLiesOnTheBaselineOfItsFirstLetterFromItsStartToItsEnd() {
+        val letters = page {
+            startLine(1f, 0f, false)
+            add('a'.code, box(10f, 100f, 6f, 12f), SIZE, false, Point(10f, 109f))
+            add('b'.code, box(16f, 100f, 6f, 12f), SIZE, false, Point(16f, 109f))
+            endLine()
+        }
+
+        val lines = letters.baselines(arrayOf(box(10f, 100f, 12f, 12f)), 5f, 50f)
+
+        assertEquals(0, lines.estimated)
+        assertRun(floatArrayOf(5f, 59f, 17f, 59f, 0f, -1f, SIZE, 0f), lines.runs, 0)
+    }
+
+    @Test
+    fun turnedAndMirroredLinesKeepTheirBaselineOnTheSideOfTheirText() {
+        val letters = page {
+            startLine(0f, 1f, false)
+            add('a'.code, Quad(112f, 10f, 112f, 16f, 100f, 10f, 100f, 16f), SIZE, false, Point(103f, 10f))
+            add('b'.code, Quad(112f, 16f, 112f, 22f, 100f, 16f, 100f, 22f), SIZE, false, Point(103f, 16f))
+            endLine()
+            startLine(-1f, 0f, false)
+            add('c'.code, Quad(50f, 212f, 44f, 212f, 50f, 200f, 44f, 200f), 10f, false, Point(50f, 203f))
+            endLine()
+            startLine(1f, 0f, false)
+            add('d'.code, Quad(10f, 312f, 16f, 312f, 10f, 300f, 16f, 300f), 8f, false, Point(10f, 302f))
+            endLine()
+        }
+
+        val lines = letters.baselines(
+            arrayOf(
+                Quad(112f, 10f, 112f, 22f, 100f, 10f, 100f, 22f),
+                Quad(50f, 212f, 44f, 212f, 50f, 200f, 44f, 200f),
+                Quad(10f, 312f, 16f, 312f, 10f, 300f, 16f, 300f)
+            ),
+            0f, 0f
+        )
+
+        assertEquals(0, lines.estimated)
+        assertRun(floatArrayOf(103f, 10f, 103f, 22f, 1f, 0f, SIZE, 0f), lines.runs, 0)
+        assertRun(floatArrayOf(50f, 203f, 44f, 203f, 0f, 1f, 10f, 0f), lines.runs, 1)
+        assertRun(floatArrayOf(10f, 302f, 16f, 302f, 0f, 1f, 8f, 0f), lines.runs, 2)
+    }
+
+    @Test
+    fun anUprightColumnRunsAlongItsMiddleAndPointsToItsRightSide() {
+        val letters = page {
+            startLine(0f, 1f, true)
+            add(0x3042, Quad(110f, 30f, 110f, 20f, 100f, 30f, 100f, 20f), 10f, false, Point(100f, 30f))
+            endLine()
+        }
+
+        val lines = letters.baselines(arrayOf(Quad(110f, 30f, 110f, 20f, 100f, 30f, 100f, 20f)), 0f, 0f)
+
+        assertEquals(0, lines.estimated)
+        assertRun(floatArrayOf(105f, 30f, 105f, 20f, 1f, 0f, 10f, 1f), lines.runs, 0)
+    }
+
+    @Test
+    fun runsInAnyOrderFindTheirOwnFirstLetter() {
+        val letters = page {
+            startLine(1f, 0f, false)
+            add('a'.code, box(10f, 100f, 6f, 12f), SIZE, false, Point(10f, 109f))
+            endLine()
+            startLine(1f, 0f, false)
+            add('b'.code, box(10f, 120f, 6f, 10f), 9f, false, Point(10f, 128f))
+            endLine()
+        }
+
+        val lines = letters.baselines(arrayOf(box(10f, 120f, 6f, 10f), box(10f, 100f, 6f, 12f)), 0f, 0f)
+
+        assertEquals(0, lines.estimated)
+        assertRun(floatArrayOf(10f, 128f, 16f, 128f, 0f, -1f, 9f, 0f), lines.runs, 0)
+        assertRun(floatArrayOf(10f, 109f, 16f, 109f, 0f, -1f, SIZE, 0f), lines.runs, 1)
+    }
+
+    @Test
+    fun aRunWithoutAKnownFirstLetterIsEstimatedFromItsBox() {
+        val letters = page {
+            startLine(1f, 0f, false)
+            add('a'.code, box(10f, 100f, 6f, 12f), SIZE, false, null)
+            endLine()
+        }
+
+        val lines = letters.baselines(arrayOf(box(10f, 100f, 6f, 12f), box(200f, 100f, 30f, 10f)), 0f, 0f)
+
+        assertEquals(2, lines.estimated)
+        assertRun(floatArrayOf(10f, 109.6f, 16f, 109.6f, 0f, -1f, 9.6f, 0f), lines.runs, 0)
+        assertRun(floatArrayOf(200f, 108f, 230f, 108f, 0f, -1f, 8f, 0f), lines.runs, 1)
+        assertEquals(1, page {}.baselines(arrayOf(box(0f, 0f, 5f, 5f)), 0f, 0f).estimated)
+    }
+
+    @Test
+    fun aBoxMovesSoThatItsMiddleSitsOnTheMiddleOfTheLetters() {
+        val letters = page {
+            startLine(1f, 0f, false)
+            add('a'.code, box(10f, 100f, 6f, 12f), SIZE, false, Point(10f, 109f))
+            add('b'.code, box(16f, 100f, 6f, 12f), SIZE, false, Point(16f, 109f))
+            endLine()
+        }
+
+        val rects = letters.centered(arrayOf(box(10f, 100f, 12f, 12f)), 5f, 50f)
+
+        assertRect(floatArrayOf(5f, 49.76f, 17f, 61.76f), rects, 0)
+    }
+
+    @Test
+    fun aSearchBoxFindsItsLetterByItsMiddleAndATurnedLineMovesAlongItsText() {
+        val letters = page {
+            startLine(1f, 0f, false)
+            add('a'.code, box(10f, 100f, 6f, 12f), SIZE, false, Point(10f, 109f))
+            endLine()
+            startLine(0f, 1f, false)
+            add('b'.code, Quad(112f, 10f, 112f, 16f, 100f, 10f, 100f, 16f), SIZE, false, Point(103f, 10f))
+            endLine()
+        }
+
+        val rects = letters.centered(arrayOf(box(10.5f, 100f, 5f, 12f), Quad(112f, 10f, 112f, 16f, 100f, 10f, 100f, 16f)), 0f, 0f)
+
+        assertRect(floatArrayOf(10.5f, 99.76f, 15.5f, 111.76f), rects, 0)
+        assertRect(floatArrayOf(100.24f, 10f, 112.24f, 16f), rects, 1)
+    }
+
+    @Test
+    fun aFlatBoxGetsAStandardHeightAroundTheMiddleOfTheLetters() {
+        val letters = page {
+            startLine(1f, 0f, false)
+            add('a'.code, box(10f, 100f, 6f, 0.6f), SIZE, false, Point(10f, 100.6f))
+            endLine()
+        }
+
+        val rects = letters.centered(arrayOf(box(10f, 100f, 6f, 0.6f)), 0f, 0f)
+
+        assertRect(floatArrayOf(10f, 90.34f, 16f, 104.38f), rects, 0)
+    }
+
+    @Test
+    fun uprightColumnsAndLettersWithoutABaselineKeepTheirBoxes() {
+        val letters = page {
+            startLine(0f, 1f, true)
+            add(0x3042, Quad(110f, 30f, 110f, 20f, 100f, 30f, 100f, 20f), 10f, false, Point(100f, 30f))
+            endLine()
+            startLine(1f, 0f, false)
+            add('a'.code, box(10f, 100f, 6f, 12f), SIZE, false, null)
+            endLine()
+        }
+
+        val rects = letters.centered(
+            arrayOf(Quad(110f, 30f, 110f, 20f, 100f, 30f, 100f, 20f), box(10f, 100f, 6f, 12f), box(300f, 300f, 6f, 12f)),
+            0f,
+            0f
+        )
+
+        assertRect(floatArrayOf(100f, 20f, 110f, 30f), rects, 0)
+        assertRect(floatArrayOf(10f, 100f, 16f, 112f), rects, 1)
+        assertRect(floatArrayOf(300f, 300f, 306f, 312f), rects, 2)
+    }
+
+    private fun assertRect(expected: FloatArray, rects: FloatArray, index: Int) {
+        val size = PdfTextHits.RECT_SIZE
+        assertEquals(expected.toList(), rects.copyOfRange(index * size, index * size + size).map { (it * 1000f).roundToInt() / 1000f })
+    }
+
+    private fun assertRun(expected: FloatArray, runs: FloatArray, index: Int) {
+        val size = PdfTextBaselines.RUN_SIZE
+        assertEquals(expected.toList(), runs.copyOfRange(index * size, index * size + size).map { (it * 1000f).roundToInt() / 1000f })
+    }
+
     private fun assertPoint(x: Float, y: Float, point: Point) {
         assertEquals(x, point.x, 0.001f)
         assertEquals(y, point.y, 0.001f)
@@ -314,8 +484,8 @@ class PdfTextLettersTest {
             PdfTextLetters.Builder().apply(build).build()
 
         internal fun PdfTextLetters.Builder.line(text: String, left: Float = 10f, top: Float = 100f, width: Float = 6f) {
-            startLine(1f, 0f)
-            text.forEachIndexed { index, char -> add(char.code, box(left + index * width, top, width, SIZE), SIZE, false) }
+            startLine(1f, 0f, false)
+            text.forEachIndexed { index, char -> add(char.code, box(left + index * width, top, width, SIZE), SIZE, false, null) }
             endLine()
         }
     }

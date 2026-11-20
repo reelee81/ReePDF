@@ -42,7 +42,9 @@ class PdfSearchCounterTest {
 
         override fun caret(pageIndex: Int, point: PdfTextPoint): PdfTextPoint? = null
 
-        override fun highlight(pageIndex: Int, from: PdfTextPoint?, to: PdfTextPoint?) = FloatArray(0)
+        override fun highlight(pageIndex: Int, from: PdfTextPoint?, to: PdfTextPoint?) = PdfTextHighlight.NONE
+
+        override fun baselines(pageIndex: Int, from: PdfTextPoint?, to: PdfTextPoint?) = PdfTextBaselines.NONE
 
         override fun copy(pageIndex: Int, from: PdfTextPoint?, to: PdfTextPoint?) = ""
 

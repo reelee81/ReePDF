@@ -15,7 +15,9 @@ interface PdfViewerEngine<T> {
 
     fun caret(pageIndex: Int, point: PdfTextPoint): PdfTextPoint?
 
-    fun highlight(pageIndex: Int, from: PdfTextPoint?, to: PdfTextPoint?): FloatArray
+    fun highlight(pageIndex: Int, from: PdfTextPoint?, to: PdfTextPoint?): PdfTextHighlight
+
+    fun baselines(pageIndex: Int, from: PdfTextPoint?, to: PdfTextPoint?): PdfTextBaselines
 
     fun copy(pageIndex: Int, from: PdfTextPoint?, to: PdfTextPoint?): String
 

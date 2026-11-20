@@ -22,6 +22,7 @@ class ViewerSelection(private val scope: CoroutineScope) {
     private var document: ViewerDocument? = null
     private var wanted: IntRange = IntRange.EMPTY
     private val pageRects = mutableStateMapOf<Int, FloatArray>()
+    private val pageEnds = HashMap<Int, Pair<ViewerTextPoint, ViewerTextPoint>>()
     private val shownParts = HashMap<Int, Part>()
     private val fetching = HashMap<Int, Pair<Part, Job>>()
     private var wordJob: Job? = null
@@ -68,6 +69,7 @@ class ViewerSelection(private val scope: CoroutineScope) {
             first = Anchor(page, span.from)
             last = Anchor(page, span.to)
             pageRects[page] = span.rects
+            pageEnds[page] = span.from to span.to
             shownParts[page] = Part(span.from, span.to)
             refresh()
         }
@@ -117,13 +119,9 @@ class ViewerSelection(private val scope: CoroutineScope) {
         val a = first ?: return false
         val b = last ?: return false
         val other = if (a.page == b.page) {
-            val start = startHandle() ?: return false
-            val end = endHandle() ?: return false
-            if (handle == Handle.START) {
-                Anchor(end.page, ViewerTextPoint(end.x, end.y - end.lineHeight / 2))
-            } else {
-                Anchor(start.page, ViewerTextPoint(start.x, start.y - start.lineHeight / 2))
-            }
+            if (startHandle() == null || endHandle() == null) return false
+            val (start, end) = pageEnds[a.page] ?: return false
+            Anchor(a.page, if (handle == Handle.START) end else start)
         } else {
             val (low, high) = if (a.page < b.page) a to b else b to a
             if (handle == Handle.START) high else low
@@ -197,6 +195,7 @@ class ViewerSelection(private val scope: CoroutineScope) {
         val range = pages
         pageRects.keys.filter { it !in wanted || it !in range }.forEach {
             pageRects.remove(it)
+            pageEnds.remove(it)
             shownParts.remove(it)
         }
         val iterator = fetching.entries.iterator()
@@ -217,16 +216,19 @@ class ViewerSelection(private val scope: CoroutineScope) {
 
     private fun fetch(doc: ViewerDocument, page: Int, part: Part) {
         val job = scope.launch(start = CoroutineStart.LAZY) {
-            val rects = try {
+            val shown = try {
                 doc.highlight(page, part.from, part.to)
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
-                FloatArray(0)
+                ViewerTextHighlight.NONE
             }
             fetching.remove(page)
             if (page in wanted && partOn(page) == part) {
-                pageRects[page] = rects
+                pageRects[page] = shown.rects
+                val start = shown.start
+                val end = shown.end
+                if (start != null && end != null) pageEnds[page] = start to end else pageEnds.remove(page)
                 shownParts[page] = part
             }
         }
@@ -241,6 +243,7 @@ class ViewerSelection(private val scope: CoroutineScope) {
         fetching.values.forEach { it.second.cancel() }
         fetching.clear()
         pageRects.clear()
+        pageEnds.clear()
         shownParts.clear()
         fixed = null
         dragged = null

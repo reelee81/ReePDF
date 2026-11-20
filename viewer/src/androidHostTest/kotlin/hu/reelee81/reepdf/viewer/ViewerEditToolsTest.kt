@@ -11,6 +11,8 @@ import org.junit.Test
 class ViewerEditToolsTest {
     private val pen = ViewerEditPalettes.pen
     private val highlighter = ViewerEditPalettes.highlighter
+    private val underline = ViewerEditPalettes.underline
+    private val strikethrough = ViewerEditPalettes.strikethrough
 
     @Test
     fun thePalettesHoldTheAndroidxColorsInTheirOrder() {
@@ -34,7 +36,7 @@ class ViewerEditToolsTest {
 
     @Test
     fun everyColorOfAPaletteHasItsOwnName() {
-        for (palette in listOf(pen, highlighter)) {
+        for (palette in listOf(pen, highlighter, underline, strikethrough)) {
             val names = (0 until palette.size).map { palette.name(it).key }
             assertEquals(names.size, names.toSet().size)
         }
@@ -52,19 +54,46 @@ class ViewerEditToolsTest {
         assertEquals(0xFFED45, settings.color(ViewerEditTool.HIGHLIGHTER))
         assertEquals(24f, settings.width(ViewerEditTool.HIGHLIGHTER), 0f)
         assertFalse(settings.undoPanelTop)
+        assertEquals(ViewerUnderlineStyle.STRAIGHT, settings.underlineStyle)
     }
 
     @Test
-    fun onlyThePenTheHighlighterAndTheEraserCanBeChosen() {
-        assertEquals(listOf(ViewerEditTool.PEN, ViewerEditTool.HIGHLIGHTER, ViewerEditTool.ERASER), ViewerEditTool.entries.filter { it.enabled })
+    fun theTextAndTheSignatureToolsCannotBeChosenYet() {
+        assertEquals(
+            listOf(ViewerEditTool.UNDERLINE, ViewerEditTool.STRIKETHROUGH, ViewerEditTool.PEN, ViewerEditTool.HIGHLIGHTER, ViewerEditTool.ERASER),
+            ViewerEditTool.entries.filter { it.enabled }
+        )
         val settings = ViewerEditSettings()
         assertSame(settings, settings.withTool(ViewerEditTool.TEXT))
-        assertSame(settings, settings.withTool(ViewerEditTool.UNDERLINE))
-        assertSame(settings, settings.withTool(ViewerEditTool.STRIKETHROUGH))
         assertSame(settings, settings.withTool(ViewerEditTool.SIGNATURE))
+        assertSame(underline, ViewerEditTool.UNDERLINE.palette)
+        assertSame(strikethrough, ViewerEditTool.STRIKETHROUGH.palette)
         assertSame(pen, ViewerEditTool.PEN.palette)
         assertSame(highlighter, ViewerEditTool.HIGHLIGHTER.palette)
         assertNull(ViewerEditTool.ERASER.palette)
+        assertEquals(
+            listOf(ViewerEditTool.UNDERLINE, ViewerEditTool.STRIKETHROUGH, ViewerEditTool.PEN, ViewerEditTool.HIGHLIGHTER),
+            ViewerEditTool.entries.filter { it.draws }
+        )
+        assertEquals(listOf(ViewerEditTool.UNDERLINE, ViewerEditTool.STRIKETHROUGH), ViewerEditTool.entries.filter { it.onlyOnText })
+    }
+
+    @Test
+    fun theTextLineToolsUseThePenColorsWithoutWidths() {
+        for (palette in listOf(underline, strikethrough)) {
+            assertEquals((0 until pen.size).map(pen::color), (0 until palette.size).map(palette::color))
+            assertEquals((0 until pen.size).map { pen.name(it) }, (0 until palette.size).map { palette.name(it) })
+            assertFalse(palette.hasWidths)
+        }
+        assertTrue(pen.hasWidths)
+        assertTrue(highlighter.hasWidths)
+        val settings = ViewerEditSettings()
+        assertEquals(0x35C369, settings.color(ViewerEditTool.UNDERLINE))
+        assertEquals(0xDD0000, settings.color(ViewerEditTool.STRIKETHROUGH))
+        assertEquals(0f, settings.width(ViewerEditTool.UNDERLINE), 0f)
+        assertEquals(0f, settings.width(ViewerEditTool.STRIKETHROUGH), 0f)
+        assertSame(settings, settings.withWidth(ViewerEditTool.UNDERLINE, 0))
+        assertEquals(ViewerEditTool.UNDERLINE, settings.withTool(ViewerEditTool.UNDERLINE).drawingTool)
     }
 
     @Test
@@ -89,12 +118,17 @@ class ViewerEditToolsTest {
             .withWidth(ViewerEditTool.PEN, 4)
             .withColor(ViewerEditTool.HIGHLIGHTER, 0)
             .withWidth(ViewerEditTool.HIGHLIGHTER, 0)
+            .withColor(ViewerEditTool.UNDERLINE, 1)
+            .withColor(ViewerEditTool.STRIKETHROUGH, 27)
 
+        assertEquals(0x202FB0, settings.color(ViewerEditTool.UNDERLINE))
+        assertEquals(0xED9D82, settings.color(ViewerEditTool.STRIKETHROUGH))
         assertEquals(0xDD0000, settings.color(ViewerEditTool.PEN))
         assertEquals(10f, settings.width(ViewerEditTool.PEN), 0f)
         assertEquals(0x000000, settings.color(ViewerEditTool.HIGHLIGHTER))
         assertEquals(14f, settings.width(ViewerEditTool.HIGHLIGHTER), 0f)
         assertSame(settings, settings.withColor(ViewerEditTool.PEN, 28))
+        assertSame(settings, settings.withColor(ViewerEditTool.UNDERLINE, 28))
         assertSame(settings, settings.withWidth(ViewerEditTool.HIGHLIGHTER, -1))
     }
 
@@ -107,6 +141,8 @@ class ViewerEditToolsTest {
             penWidth = -1,
             highlighterColor = 21,
             highlighterWidth = 5,
+            underlineColor = 28,
+            strikethroughColor = -1,
             undoPanelTop = true
         )
 

@@ -1,6 +1,7 @@
 package hu.reelee81.reepdf.viewer
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -12,6 +13,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
@@ -29,12 +31,14 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathOperation
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
@@ -57,6 +61,8 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import hu.reelee81.reepdf.viewer.resources.Res
 import hu.reelee81.reepdf.viewer.resources.edit_line_width
+import hu.reelee81.reepdf.viewer.resources.edit_underline_straight
+import hu.reelee81.reepdf.viewer.resources.edit_underline_wavy
 import kotlin.math.roundToInt
 import org.jetbrains.compose.resources.stringResource
 
@@ -79,7 +85,8 @@ internal fun ViewerEditPanels(
         if (panel == null) return@BoxWithConstraints
         val palette = tool.palette ?: return@BoxWithConstraints
         val cell = minOf(CELL, (maxWidth - PANEL_EDGE * 2 - PANEL_PADDING * 2) / COLUMNS)
-        val underRow = row && panel == ViewerEditPanel.WIDTH
+        val contentWidth = if (panel == ViewerEditPanel.STYLE) STYLE_WIDTH else cell * COLUMNS
+        val underRow = row && (panel == ViewerEditPanel.WIDTH || panel == ViewerEditPanel.STYLE)
         val iconCenter = when {
             underRow -> ViewerEditBarLayout.rowCenter(tool, maxWidth.value)
             panel == ViewerEditPanel.COLORS -> ViewerEditBarLayout.center(ViewerEditBarLayout.SWATCH, maxWidth.value)
@@ -88,10 +95,11 @@ internal fun ViewerEditPanels(
         val top = if (underRow) ViewerEditBarLayout.ROW_HEIGHT.dp + PANEL_MARGIN else PANEL_MARGIN
         val place = ViewerEditPanelPlace.of(
             width = maxWidth.value,
-            panelWidth = (cell * COLUMNS + PANEL_PADDING * 2).value,
+            panelWidth = (contentWidth + PANEL_PADDING * 2).value,
             iconCenter = iconCenter,
             margin = PANEL_EDGE.value,
-            corner = PANEL_RADIUS.value + TAIL_HEIGHT.value
+            corner = PANEL_RADIUS.value + TAIL_HEIGHT.value,
+            underIcon = panel == ViewerEditPanel.STYLE
         )
         val shape = BubbleShape(with(LocalDensity.current) { place.tail.dp.toPx() }, TAIL_HEIGHT, PANEL_RADIUS)
         Box(
@@ -104,6 +112,7 @@ internal fun ViewerEditPanels(
             when (panel) {
                 ViewerEditPanel.COLORS -> Palette(editor, tool, palette, colors, viewerColors, cell)
                 ViewerEditPanel.WIDTH -> Widths(state, tool, palette, colors, fontFamily, cell * COLUMNS)
+                ViewerEditPanel.STYLE -> Styles(editor, colors)
             }
         }
     }
@@ -113,8 +122,8 @@ internal class ViewerEditPanelPlace(val left: Float, val tail: Float) {
     companion object {
         const val WIDE = 600f
 
-        fun of(width: Float, panelWidth: Float, iconCenter: Float, margin: Float, corner: Float): ViewerEditPanelPlace {
-            val left = if (width < WIDE) {
+        fun of(width: Float, panelWidth: Float, iconCenter: Float, margin: Float, corner: Float, underIcon: Boolean): ViewerEditPanelPlace {
+            val left = if (width < WIDE && !underIcon) {
                 ((width - panelWidth) / 2).coerceAtLeast(margin)
             } else {
                 (iconCenter - panelWidth / 2).coerceIn(margin, (width - margin - panelWidth).coerceAtLeast(margin))
@@ -276,6 +285,65 @@ private fun Widths(
     }
 }
 
+@Composable
+private fun Styles(editor: ViewerEditor, colors: ReeColors) {
+    val chosen = editor.settings.underlineStyle
+    val sample = colors.normalTextColor.default
+    val check = colors.icCheckboxPasswordColor
+    Row(Modifier.height(ROW_HEIGHT).padding(horizontal = SIDE_INSET), verticalAlignment = Alignment.CenterVertically) {
+        for ((index, entry) in UNDERLINE_STYLES.withIndex()) {
+            val (option, label) = entry
+            val checked = option == chosen
+            val name = stringResource(label)
+            if (index > 0) Spacer(Modifier.width(STYLE_GAP))
+            Row(
+                Modifier.fillMaxHeight()
+                    .clickable(interactionSource = null, indication = null, role = Role.RadioButton) { editor.chooseUnderlineStyle(option) }
+                    .semantics {
+                        contentDescription = name
+                        selected = checked
+                    },
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Canvas(Modifier.size(STYLE_SAMPLE_WIDTH, ROW_HEIGHT)) {
+                    val letter = STYLE_SAMPLE_LETTER.toPx()
+                    val run = floatArrayOf(0f, 0f, size.width, 0f, 0f, -1f, letter, 0f)
+                    drawPath(centeredPath(ViewerTextLines.path(run, ViewerMarkKind.UNDERLINE, option == ViewerUnderlineStyle.WAVY, ViewerTextLines.SAMPLES), size.height), sample)
+                }
+                Spacer(Modifier.width(CHECK_GAP))
+                Image(
+                    rememberVectorPainter(if (checked) ViewerIcons.checkOn else ViewerIcons.checkOff),
+                    null,
+                    Modifier.size(CHECK_SIZE),
+                    colorFilter = ColorFilter.tint(if (checked) check.of(ReeColorState.CHECKED) else check.default)
+                )
+            }
+        }
+    }
+}
+
+private fun centeredPath(shape: ViewerMarkPath, height: Float): Path {
+    val points = shape.points
+    var top = Float.MAX_VALUE
+    var bottom = -Float.MAX_VALUE
+    for (index in 1 until points.size step 2) {
+        top = minOf(top, points[index])
+        bottom = maxOf(bottom, points[index])
+    }
+    val shift = height / 2 - (top + bottom) / 2
+    val path = Path()
+    var index = 0
+    for (verb in shape.verbs) {
+        when (verb) {
+            ViewerMarkPath.MOVE -> path.moveTo(points[index], points[index + 1] + shift)
+            ViewerMarkPath.LINE -> path.lineTo(points[index], points[index + 1] + shift)
+            ViewerMarkPath.CLOSE -> path.close()
+        }
+        index += ViewerMarkPath.pointsOf(verb)
+    }
+    return path
+}
+
 private fun stopAt(x: Float, width: Int, stops: Int, inset: Float): Int {
     val step = (width - inset * 2) / (stops - 1)
     return ((x - inset) / step).roundToInt().coerceIn(0, stops - 1)
@@ -310,3 +378,13 @@ private val STOP_INSET = SLIDER_GAP - SIDE_INSET + STOP_RADIUS
 private val THUMB_RADIUS = 10.dp
 private val TRACK_WIDTH = 4.dp
 private val VALUE_TEXT_SIZE = 16.dp
+private val CHECK_GAP = 8.dp
+private val CHECK_SIZE = 24.dp
+private val STYLE_GAP = 32.dp
+private val STYLE_SAMPLE_WIDTH = 40.dp
+private val STYLE_SAMPLE_LETTER = 32.dp
+private val STYLE_WIDTH = SIDE_INSET * 2 + (STYLE_SAMPLE_WIDTH + CHECK_GAP + CHECK_SIZE) * 2 + STYLE_GAP
+private val UNDERLINE_STYLES = listOf(
+    ViewerUnderlineStyle.STRAIGHT to Res.string.edit_underline_straight,
+    ViewerUnderlineStyle.WAVY to Res.string.edit_underline_wavy
+)

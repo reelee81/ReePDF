@@ -51,47 +51,51 @@ class ViewerEditPalette internal constructor(
     val size: Int
         get() = entries.size
 
+    val hasWidths: Boolean
+        get() = widths.isNotEmpty()
+
     fun color(index: Int): Int = entries[index].first
 
     fun name(index: Int): StringResource = entries[index].second
 }
 
 object ViewerEditPalettes {
-    val pen = ViewerEditPalette(
-        listOf(
-            0x000000 to Res.string.mark_color_black,
-            0x202FB0 to Res.string.mark_color_dark_blue,
-            0xDD0000 to Res.string.mark_color_red,
-            0x00854C to Res.string.mark_color_dark_green,
-            0xD9C300 to Res.string.mark_color_mustard,
-            0xC2C44D to Res.string.mark_color_light_olive,
-            0x7B4B19 to Res.string.mark_color_brown,
-            0x757575 to Res.string.mark_color_gray,
-            0x3D5FEC to Res.string.mark_color_blue,
-            0xFF4365 to Res.string.mark_color_rose_red,
-            0x35C369 to Res.string.mark_color_green,
-            0xF9E100 to Res.string.mark_color_yellow,
-            0xD7E871 to Res.string.mark_color_pale_lime,
-            0xC48150 to Res.string.mark_color_light_brown,
-            0xC7C7C7 to Res.string.mark_color_light_gray,
-            0x9976FF to Res.string.mark_color_purple,
-            0xFF8FEA to Res.string.mark_color_pink,
-            0x9BEEC7 to Res.string.mark_color_mint,
-            0xFAB400 to Res.string.mark_color_amber,
-            0x5888B2 to Res.string.mark_color_steel_blue,
-            0xB8372F to Res.string.mark_color_brick_red,
-            0xFFFFFF to Res.string.mark_color_white,
-            0xC6B9FF to Res.string.mark_color_lavender,
-            0xFFD4F8 to Res.string.mark_color_pale_pink,
-            0xDEFFC9 to Res.string.mark_color_pale_green,
-            0xFFC8A0 to Res.string.mark_color_peach,
-            0xD1E5EE to Res.string.mark_color_pale_blue,
-            0xED9D82 to Res.string.mark_color_salmon
-        ),
-        floatArrayOf(1f, 2f, 3f, 5f, 10f),
-        defaultColor = 0,
-        defaultWidth = 1
+    private val penColors = listOf(
+        0x000000 to Res.string.mark_color_black,
+        0x202FB0 to Res.string.mark_color_dark_blue,
+        0xDD0000 to Res.string.mark_color_red,
+        0x00854C to Res.string.mark_color_dark_green,
+        0xD9C300 to Res.string.mark_color_mustard,
+        0xC2C44D to Res.string.mark_color_light_olive,
+        0x7B4B19 to Res.string.mark_color_brown,
+        0x757575 to Res.string.mark_color_gray,
+        0x3D5FEC to Res.string.mark_color_blue,
+        0xFF4365 to Res.string.mark_color_rose_red,
+        0x35C369 to Res.string.mark_color_green,
+        0xF9E100 to Res.string.mark_color_yellow,
+        0xD7E871 to Res.string.mark_color_pale_lime,
+        0xC48150 to Res.string.mark_color_light_brown,
+        0xC7C7C7 to Res.string.mark_color_light_gray,
+        0x9976FF to Res.string.mark_color_purple,
+        0xFF8FEA to Res.string.mark_color_pink,
+        0x9BEEC7 to Res.string.mark_color_mint,
+        0xFAB400 to Res.string.mark_color_amber,
+        0x5888B2 to Res.string.mark_color_steel_blue,
+        0xB8372F to Res.string.mark_color_brick_red,
+        0xFFFFFF to Res.string.mark_color_white,
+        0xC6B9FF to Res.string.mark_color_lavender,
+        0xFFD4F8 to Res.string.mark_color_pale_pink,
+        0xDEFFC9 to Res.string.mark_color_pale_green,
+        0xFFC8A0 to Res.string.mark_color_peach,
+        0xD1E5EE to Res.string.mark_color_pale_blue,
+        0xED9D82 to Res.string.mark_color_salmon
     )
+
+    val pen = ViewerEditPalette(penColors, floatArrayOf(1f, 2f, 3f, 5f, 10f), defaultColor = 0, defaultWidth = 1)
+
+    val underline = ViewerEditPalette(penColors, FloatArray(0), defaultColor = 10, defaultWidth = 0)
+
+    val strikethrough = ViewerEditPalette(penColors, FloatArray(0), defaultColor = 2, defaultWidth = 0)
 
     val highlighter = ViewerEditPalette(
         listOf(
@@ -125,8 +129,8 @@ object ViewerEditPalettes {
 
 enum class ViewerEditTool(val enabled: Boolean) {
     TEXT(false),
-    UNDERLINE(false),
-    STRIKETHROUGH(false),
+    UNDERLINE(true),
+    STRIKETHROUGH(true),
     PEN(true),
     HIGHLIGHTER(true),
     SIGNATURE(false),
@@ -134,11 +138,21 @@ enum class ViewerEditTool(val enabled: Boolean) {
 
     val palette: ViewerEditPalette?
         get() = when (this) {
+            UNDERLINE -> ViewerEditPalettes.underline
+            STRIKETHROUGH -> ViewerEditPalettes.strikethrough
             PEN -> ViewerEditPalettes.pen
             HIGHLIGHTER -> ViewerEditPalettes.highlighter
             else -> null
         }
+
+    val draws: Boolean
+        get() = this == UNDERLINE || this == STRIKETHROUGH || this == PEN || this == HIGHLIGHTER
+
+    val onlyOnText: Boolean
+        get() = this == UNDERLINE || this == STRIKETHROUGH
 }
+
+enum class ViewerUnderlineStyle { STRAIGHT, WAVY }
 
 data class ViewerEditSettings(
     val tool: ViewerEditTool = ViewerEditTool.PEN,
@@ -147,18 +161,30 @@ data class ViewerEditSettings(
     val penWidth: Int = ViewerEditPalettes.pen.defaultWidth,
     val highlighterColor: Int = ViewerEditPalettes.highlighter.defaultColor,
     val highlighterWidth: Int = ViewerEditPalettes.highlighter.defaultWidth,
+    val underlineColor: Int = ViewerEditPalettes.underline.defaultColor,
+    val strikethroughColor: Int = ViewerEditPalettes.strikethrough.defaultColor,
+    val underlineStyle: ViewerUnderlineStyle = ViewerUnderlineStyle.STRAIGHT,
     val undoPanelTop: Boolean = false
 ) {
     val swatchTool: ViewerEditTool
         get() = if (tool.palette != null) tool else drawingTool
 
-    fun colorIndex(tool: ViewerEditTool): Int = if (drawing(tool) == ViewerEditTool.HIGHLIGHTER) highlighterColor else penColor
+    fun colorIndex(tool: ViewerEditTool): Int = when (drawing(tool)) {
+        ViewerEditTool.HIGHLIGHTER -> highlighterColor
+        ViewerEditTool.UNDERLINE -> underlineColor
+        ViewerEditTool.STRIKETHROUGH -> strikethroughColor
+        else -> penColor
+    }
 
-    fun widthIndex(tool: ViewerEditTool): Int = if (drawing(tool) == ViewerEditTool.HIGHLIGHTER) highlighterWidth else penWidth
+    fun widthIndex(tool: ViewerEditTool): Int = when (drawing(tool)) {
+        ViewerEditTool.HIGHLIGHTER -> highlighterWidth
+        ViewerEditTool.PEN -> penWidth
+        else -> 0
+    }
 
     fun color(tool: ViewerEditTool): Int = paletteOf(tool).color(colorIndex(tool))
 
-    fun width(tool: ViewerEditTool): Float = paletteOf(tool).widths[widthIndex(tool)]
+    fun width(tool: ViewerEditTool): Float = paletteOf(tool).widths.getOrElse(widthIndex(tool)) { 0f }
 
     fun withTool(chosen: ViewerEditTool): ViewerEditSettings {
         if (!chosen.enabled) return this
@@ -167,7 +193,12 @@ data class ViewerEditSettings(
 
     fun withColor(tool: ViewerEditTool, index: Int): ViewerEditSettings {
         if (index !in 0 until paletteOf(tool).size) return this
-        return if (drawing(tool) == ViewerEditTool.HIGHLIGHTER) copy(highlighterColor = index) else copy(penColor = index)
+        return when (drawing(tool)) {
+            ViewerEditTool.HIGHLIGHTER -> copy(highlighterColor = index)
+            ViewerEditTool.UNDERLINE -> copy(underlineColor = index)
+            ViewerEditTool.STRIKETHROUGH -> copy(strikethroughColor = index)
+            else -> copy(penColor = index)
+        }
     }
 
     fun withWidth(tool: ViewerEditTool, index: Int): ViewerEditSettings {
@@ -178,13 +209,17 @@ data class ViewerEditSettings(
     fun sanitized(): ViewerEditSettings {
         val pen = ViewerEditPalettes.pen
         val highlighter = ViewerEditPalettes.highlighter
+        val underline = ViewerEditPalettes.underline
+        val strikethrough = ViewerEditPalettes.strikethrough
         return copy(
             tool = tool.takeIf { it.enabled } ?: ViewerEditTool.PEN,
             drawingTool = drawingTool.takeIf { it.palette != null } ?: ViewerEditTool.PEN,
             penColor = penColor.takeIf { it in 0 until pen.size } ?: pen.defaultColor,
             penWidth = penWidth.takeIf { it in pen.widths.indices } ?: pen.defaultWidth,
             highlighterColor = highlighterColor.takeIf { it in 0 until highlighter.size } ?: highlighter.defaultColor,
-            highlighterWidth = highlighterWidth.takeIf { it in highlighter.widths.indices } ?: highlighter.defaultWidth
+            highlighterWidth = highlighterWidth.takeIf { it in highlighter.widths.indices } ?: highlighter.defaultWidth,
+            underlineColor = underlineColor.takeIf { it in 0 until underline.size } ?: underline.defaultColor,
+            strikethroughColor = strikethroughColor.takeIf { it in 0 until strikethrough.size } ?: strikethrough.defaultColor
         )
     }
 

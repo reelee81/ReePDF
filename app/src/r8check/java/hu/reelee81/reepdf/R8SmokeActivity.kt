@@ -58,8 +58,10 @@ import hu.reelee81.reepdf.pdf.PdfSearchCounter
 import hu.reelee81.reepdf.pdf.PdfSignOperation
 import hu.reelee81.reepdf.pdf.PdfSourceParts
 import hu.reelee81.reepdf.pdf.PdfStreamEdit
+import hu.reelee81.reepdf.pdf.PdfTextBaselines
 import hu.reelee81.reepdf.pdf.PdfTextHits
 import hu.reelee81.reepdf.pdf.PdfTextPoint
+import hu.reelee81.reepdf.pdf.PdfTextSpan
 import hu.reelee81.reepdf.pdf.PdfThumbnailScheduler
 import hu.reelee81.reepdf.pdf.PdfViewerDocument
 import hu.reelee81.reepdf.pdf.PdfViewerEditOperation
@@ -325,7 +327,7 @@ class R8SmokeActivity : Activity() {
         if (points.isEmpty()) return false
         val xs = points.filterIndexed { index, _ -> index % 2 == 0 }
         val ys = points.filterIndexed { index, _ -> index % 2 == 1 }
-        val reach = if (mark.kind == PdfMarkKind.TEXT_HIGHLIGHT) 0.0 else mark.width / 2.0
+        val reach = if (mark.kind == PdfMarkKind.PEN || mark.kind == PdfMarkKind.HIGHLIGHTER) mark.width / 2.0 else 0.0
         return area.intersects(xs.min() - reach, ys.min() - reach, xs.max() + reach, ys.max() + reach)
     }
 
@@ -687,7 +689,7 @@ class R8SmokeActivity : Activity() {
             withViewerDocument(saved) { document ->
                 val erase = HashMap<Int, PdfStreamEdit>()
                 for (page in pages) {
-                    val marks = expectMarks(document, page, "saved", page.highlight, page.pen, page.extra)
+                    val marks = expectMarks(document, page, "saved", page.highlight, page.underline, page.pen, page.strikethrough, page.extra)
                     checkColor(probe(document, page, page.extraY), EXTRA_COLOR) { "editor page ${page.index + 1} saved: extra pen not drawn ($it)" }
                     val stream = marks.single { it.mark.id == page.extra.id }.stream
                     val edit = PdfStreamEdit(false, setOf(page.extra.id))
@@ -700,7 +702,7 @@ class R8SmokeActivity : Activity() {
             }
             withViewerDocument(erased) { document ->
                 for (page in pages) {
-                    expectMarks(document, page, "erased", page.highlight, page.pen)
+                    expectMarks(document, page, "erased", page.highlight, page.underline, page.pen, page.strikethrough)
                     checkErased(document, page, "erased")
                 }
             }
@@ -708,7 +710,8 @@ class R8SmokeActivity : Activity() {
             withViewerDocument(nup) { document ->
                 for (page in pages) {
                     val area = labelArea(nup, page.index)
-                    val kept = listOf(page.highlight, page.pen).filter { area == null || touches(page.inUser(it), area) }
+                    val kept = listOf(page.highlight, page.underline, page.pen, page.strikethrough)
+                        .filter { area == null || touches(page.inUser(it), area) }
                     expectMarks(document, page, "projected", *kept.toTypedArray())
                 }
                 check(saveMarks(nup, blanked, PdfMarkSave.Plan(blankAll = true))) { "editor: erasing every page saved nothing" }
@@ -837,14 +840,16 @@ class R8SmokeActivity : Activity() {
     private class EditorPage(val index: Int, width: Float, height: Float, private val toPage: DoubleArray) {
         private val markWidth = (min(width, height) * MARK_WIDTH_RATIO).coerceIn(MIN_MARK_WIDTH, MAX_MARK_WIDTH)
         val highlight = line(PdfMarkKind.HIGHLIGHTER, HIGHLIGHT_COLOR, width, height * HIGHLIGHT_Y)
+        val underline = band(PdfMarkKind.UNDERLINE, UNDERLINE_COLOR, width, height * UNDERLINE_Y)
         val pen = line(PdfMarkKind.PEN, PEN_COLOR, width, height * PEN_Y)
+        val strikethrough = band(PdfMarkKind.STRIKETHROUGH, STRIKETHROUGH_COLOR, width, height * STRIKETHROUGH_Y)
         val extra = line(PdfMarkKind.PEN, EXTRA_COLOR, width, height * EXTRA_Y)
         val centerX = width / 2f
         val centerY = height * PEN_Y
         val extraY = height * EXTRA_Y
         var background = IntArray(3)
 
-        fun added(): List<PdfMark> = listOf(highlight, pen, extra).map(::inUser)
+        fun added(): List<PdfMark> = listOf(highlight, underline, pen, strikethrough, extra).map(::inUser)
 
         fun inUser(mark: PdfMark): PdfMark =
             mark.transformed(checkNotNull(PdfEditProjection.inverse(toPage)) { "editor page ${index + 1}: no usable transform" })
@@ -855,6 +860,15 @@ class R8SmokeActivity : Activity() {
             color,
             markWidth,
             PdfMarkPath.Builder().moveTo(width * LINE_FROM, y).lineTo(width * LINE_TO, y).build()
+        )
+
+        private fun band(kind: PdfMarkKind, color: Int, width: Float, y: Float) = PdfMark(
+            PdfMark.newId(),
+            kind,
+            color,
+            0f,
+            PdfMarkPath.Builder().moveTo(width * LINE_FROM, y - markWidth / 2).lineTo(width * LINE_TO, y - markWidth / 2)
+                .lineTo(width * LINE_TO, y + markWidth / 2).lineTo(width * LINE_FROM, y + markWidth / 2).close().build()
         )
     }
 
@@ -913,7 +927,11 @@ class R8SmokeActivity : Activity() {
     private suspend fun pageText(document: PdfViewerDocument<PdfRasterTarget>, sizes: PdfViewerPageSizes, index: Int) {
         val label = "viewer page ${index + 1}"
         val limit = TEXT_RECT_LIMIT * max(sizes.widths[index], sizes.heights[index])
-        checkRects(document.highlight(index, null, null), limit) { "$label select all" }
+        val all = document.highlight(index, null, null)
+        checkRects(all.rects, limit) { "$label select all" }
+        val lines = document.baselines(index, null, null)
+        checkBaselines(lines, all.boxes) { "$label baselines" }
+        checkCentered(lines, all.rects) { "$label centered boxes" }
         val word = document.copy(index, null, null).split(WHITESPACE)
             .firstOrNull { it.length >= 2 && it.all(Char::isLetterOrDigit) } ?: return
         val hits = document.search(index, word)
@@ -921,6 +939,55 @@ class R8SmokeActivity : Activity() {
         val counted = document.count(index, word)
         check(counted == hits.count) { "$label: '$word' counts $counted, the search finds ${hits.count}" }
         checkRects(hits.rects, limit) { "$label search" }
+    }
+
+    private fun checkBaselines(lines: PdfTextBaselines, rects: FloatArray, label: () -> String) {
+        val count = rects.size / PdfTextHits.RECT_SIZE
+        check(lines.count == count) { "${label()}: ${lines.count} lines for $count highlighted lines" }
+        check(lines.estimated == 0) { "${label()}: ${lines.estimated} of ${lines.count} lines without their first letter" }
+        for (line in 0 until count) {
+            val run = line * PdfTextBaselines.RUN_SIZE
+            val rect = line * PdfTextHits.RECT_SIZE
+            for (end in 0..1) {
+                val x = lines.runs[run + end * 2]
+                val y = lines.runs[run + end * 2 + 1]
+                val inside = x >= rects[rect] - BASELINE_SLACK_PT && x <= rects[rect + 2] + BASELINE_SLACK_PT &&
+                    y >= rects[rect + 1] - BASELINE_SLACK_PT && y <= rects[rect + 3] + BASELINE_SLACK_PT
+                check(inside) { "${label()}: line ${line + 1} baseline $x, $y outside its box ${rects.copyOfRange(rect, rect + 4).joinToString()}" }
+            }
+        }
+    }
+
+    private fun checkCentered(lines: PdfTextBaselines, rects: FloatArray, label: () -> String) {
+        check(rects.size / PdfTextHits.RECT_SIZE == lines.count) { "${label()}: ${rects.size / PdfTextHits.RECT_SIZE} boxes for ${lines.count} lines" }
+        for (line in 0 until lines.count) {
+            val run = line * PdfTextBaselines.RUN_SIZE
+            if (lines.runs[run + 7] != 0f) continue
+            val rect = line * PdfTextHits.RECT_SIZE
+            val size = lines.runs[run + 6]
+            val middleX = (lines.runs[run] + lines.runs[run + 2]) / 2
+            val middleY = (lines.runs[run + 1] + lines.runs[run + 3]) / 2
+            val boxX = (rects[rect] + rects[rect + 2]) / 2
+            val boxY = (rects[rect + 1] + rects[rect + 3]) / 2
+            val lift = (boxX - middleX) * lines.runs[run + 4] + (boxY - middleY) * lines.runs[run + 5]
+            check(abs(lift - TEXT_MIDDLE * size) <= CENTER_TOLERANCE * size + CENTER_TOLERANCE_PT) {
+                "${label()}: line ${line + 1} box middle $lift above its baseline, wanted ${TEXT_MIDDLE * size}"
+            }
+        }
+    }
+
+    private suspend fun checkWordBaseline(document: PdfViewerDocument<PdfRasterTarget>, word: PdfTextSpan) {
+        val lines = document.baselines(0, word.from, word.to)
+        check(lines.count == 1 && lines.estimated == 0) { "the word's baseline: ${lines.count} lines, ${lines.estimated} estimated" }
+        checkBaselines(lines, word.rects) { "the word's baseline" }
+        val run = lines.runs
+        val onBaseline = abs(run[1] - TEXT_BASELINE_PT) <= BASELINE_TOLERANCE_PT && abs(run[3] - TEXT_BASELINE_PT) <= BASELINE_TOLERANCE_PT
+        check(onBaseline) { "the word's baseline is at ${run[1]} to ${run[3]}, the text is drawn at $TEXT_BASELINE_PT" }
+        val upright = abs(run[4]) <= BASELINE_TOLERANCE_PT && abs(run[5] + 1f) <= BASELINE_TOLERANCE_PT
+        check(upright && abs(run[6] - TEXT_SIZE_PT) <= BASELINE_TOLERANCE_PT) { "the word's baseline points ${run[4]}, ${run[5]} at size ${run[6]}" }
+        val middle = (word.rects[1] + word.rects[3]) / 2
+        val wanted = TEXT_BASELINE_PT - TEXT_MIDDLE * TEXT_SIZE_PT
+        check(abs(middle - wanted) <= BASELINE_TOLERANCE_PT) { "the word's box is centered at $middle, the letters at $wanted" }
     }
 
     private fun checkRects(rects: FloatArray, limit: Float, label: () -> String) {
@@ -969,11 +1036,12 @@ class R8SmokeActivity : Activity() {
                 val word = checkNotNull(document.word(0, center, WORD_TOLERANCE_PT)) { "no word under the second hit" }
                 val copied = document.copy(0, word.from, word.to).trim()
                 check(copied == "őrség") { "the selected word copies as '$copied'" }
+                checkWordBaseline(document, word)
                 val empty = document.word(0, PdfTextPoint(TEXT_X_PT, EMPTY_Y_PT), WORD_TOLERANCE_PT)
                 check(empty == null) { "a word was selected on an empty area" }
                 selectEveryWord(document)
                 dragBetweenStaggeredLines(document)
-                checkRects(document.highlight(0, null, null), limit) { "select all" }
+                checkRects(document.highlight(0, null, null).rects, limit) { "select all" }
                 check(TEXT in document.copy(0, null, null)) { "select all does not copy the line" }
                 check(TEXT in document.text(0)) { "the page text misses the line" }
             } finally {
@@ -1275,10 +1343,14 @@ class R8SmokeActivity : Activity() {
         const val LINE_FROM = 0.3f
         const val LINE_TO = 0.7f
         const val HIGHLIGHT_Y = 0.25f
+        const val UNDERLINE_Y = 0.375f
         const val PEN_Y = 0.5f
+        const val STRIKETHROUGH_Y = 0.625f
         const val EXTRA_Y = 0.75f
         const val HIGHLIGHT_COLOR = 0xFFFF00
+        const val UNDERLINE_COLOR = 0x35C369
         const val PEN_COLOR = 0xFF0000
+        const val STRIKETHROUGH_COLOR = 0xDD0000
         const val EXTRA_COLOR = 0x0000FF
         const val PROBE_PX = 5
         const val PROBE_LINE_PX = 12f
@@ -1315,6 +1387,11 @@ class R8SmokeActivity : Activity() {
         const val IMAGE_ABORT_LIMIT_MS = 300L
         const val THUMBNAIL_WAIT_S = 120L
         const val TEXT_RECT_LIMIT = 100f
+        const val BASELINE_SLACK_PT = 0.5f
+        const val BASELINE_TOLERANCE_PT = 0.05f
+        const val TEXT_MIDDLE = 0.27f
+        const val CENTER_TOLERANCE = 0.01f
+        const val CENTER_TOLERANCE_PT = 0.001f
         val WHITESPACE = Regex("\\s+")
         const val TEXT = "ŐRSÉG őrség ORSEG"
         const val TEXT_SIZE_PT = 24f

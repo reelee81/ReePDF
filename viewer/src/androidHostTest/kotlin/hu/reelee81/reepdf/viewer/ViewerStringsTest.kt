@@ -86,6 +86,8 @@ class ViewerStringsTest {
             "edit_text",
             "edit_underline",
             "edit_strikethrough",
+            "edit_underline_straight",
+            "edit_underline_wavy",
             "edit_pen",
             "edit_highlighter",
             "edit_vector_signature",

@@ -22,6 +22,7 @@ import hu.reelee81.reepdf.viewer.ViewerPageSizes
 import hu.reelee81.reepdf.viewer.ViewerRender
 import hu.reelee81.reepdf.viewer.ViewerSavedMark
 import hu.reelee81.reepdf.viewer.ViewerStreamEdit
+import hu.reelee81.reepdf.viewer.ViewerTextHighlight
 import hu.reelee81.reepdf.viewer.ViewerTextHits
 import hu.reelee81.reepdf.viewer.ViewerTextPoint
 import hu.reelee81.reepdf.viewer.ViewerTextSpan
@@ -62,8 +63,11 @@ class AndroidViewerDocument private constructor(
     override suspend fun caret(page: Int, point: ViewerTextPoint): ViewerTextPoint? =
         document.caret(page, point.toPdf())?.toViewer()
 
-    override suspend fun highlight(page: Int, from: ViewerTextPoint?, to: ViewerTextPoint?): FloatArray =
-        document.highlight(page, from?.toPdf(), to?.toPdf())
+    override suspend fun highlight(page: Int, from: ViewerTextPoint?, to: ViewerTextPoint?): ViewerTextHighlight =
+        document.highlight(page, from?.toPdf(), to?.toPdf()).let { ViewerTextHighlight(it.rects, it.start?.toViewer(), it.end?.toViewer()) }
+
+    override suspend fun baselines(page: Int, from: ViewerTextPoint?, to: ViewerTextPoint?): FloatArray =
+        document.baselines(page, from?.toPdf(), to?.toPdf()).runs
 
     override suspend fun copy(page: Int, from: ViewerTextPoint?, to: ViewerTextPoint?): String =
         document.copy(page, from?.toPdf(), to?.toPdf())

@@ -81,7 +81,10 @@ class ViewerEditor(private val scope: CoroutineScope, private val onPagesChanged
         if (!tool.enabled) return
         if (tool == ViewerEditTool.ERASER) rowOpen = false
         if (tool == settings.tool) {
-            if (tool.palette != null) togglePanel(ViewerEditPanel.WIDTH)
+            when {
+                tool.palette?.hasWidths == true -> togglePanel(ViewerEditPanel.WIDTH)
+                tool == ViewerEditTool.UNDERLINE -> togglePanel(ViewerEditPanel.STYLE)
+            }
         } else {
             panel = null
             selectTool(tool)
@@ -117,21 +120,24 @@ class ViewerEditor(private val scope: CoroutineScope, private val onPagesChanged
 
     fun chooseWidth(index: Int) = update(settings.withWidth(settings.swatchTool, index))
 
+    fun chooseUnderlineStyle(style: ViewerUnderlineStyle) = update(settings.copy(underlineStyle = style))
+
     fun placeUndoPanel(top: Boolean) = update(settings.copy(undoPanelTop = top))
 
     fun beginStroke(page: Int, point: ViewerTextPoint, minDistance: Float, textTolerance: Float) {
         if (!isActive || paused) return
         cancelGesture()
         val tool = settings.tool
-        if (tool != ViewerEditTool.PEN && tool != ViewerEditTool.HIGHLIGHTER) return
-        val started = Stroke(page, tool, settings.color(tool), settings.width(tool), ViewerStrokeBuilder(minDistance))
+        if (!tool.draws) return
+        val wavy = tool == ViewerEditTool.UNDERLINE && settings.underlineStyle == ViewerUnderlineStyle.WAVY
+        val started = Stroke(page, tool, settings.color(tool), settings.width(tool), wavy, ViewerStrokeBuilder(minDistance))
         started.builder.add(point.x, point.y)
         stroke = started
         if (tool == ViewerEditTool.PEN) {
             started.mode = Mode.FREE
             wet = started.freehand()
         } else {
-            wet = started.freehand()
+            if (!tool.onlyOnText) wet = started.freehand()
             decide(started, point, textTolerance)
         }
     }
@@ -143,7 +149,7 @@ class ViewerEditor(private val scope: CoroutineScope, private val onPagesChanged
         when (current.mode) {
             Mode.FREE -> wet = current.freehand()
             Mode.TEXT -> requestRects(current, point)
-            Mode.UNDECIDED -> wet = current.freehand()
+            Mode.UNDECIDED -> if (!current.tool.onlyOnText) wet = current.freehand()
         }
     }
 
@@ -265,7 +271,7 @@ class ViewerEditor(private val scope: CoroutineScope, private val onPagesChanged
     private fun decide(current: Stroke, start: ViewerTextPoint, tolerance: Float) {
         val doc = document
         if (doc == null) {
-            current.mode = Mode.FREE
+            if (current.tool.onlyOnText) stroke = null else current.mode = Mode.FREE
             return
         }
         current.job = scope.launch {
@@ -278,6 +284,10 @@ class ViewerEditor(private val scope: CoroutineScope, private val onPagesChanged
             }
             if (stroke !== current) return@launch
             if (anchor == null) {
+                if (current.tool.onlyOnText) {
+                    stroke = null
+                    return@launch
+                }
                 current.mode = Mode.FREE
                 wet = current.freehand()
                 if (current.ending) commit(current)
@@ -301,15 +311,17 @@ class ViewerEditor(private val scope: CoroutineScope, private val onPagesChanged
             while (true) {
                 val target = current.target ?: break
                 current.target = null
-                val rects = try {
-                    doc.caret(current.page, target)?.let { caret -> doc.highlight(current.page, anchor, caret) }
+                val found = try {
+                    doc.caret(current.page, target)?.let { caret ->
+                        if (current.tool.onlyOnText) doc.baselines(current.page, anchor, caret) else doc.highlight(current.page, anchor, caret).rects
+                    }
                 } catch (e: CancellationException) {
                     throw e
                 } catch (_: Exception) {
                     null
                 } ?: continue
                 if (stroke !== current) return@launch
-                current.rects = rects
+                current.text = found
                 wet = current.textMark()
             }
             if (stroke === current && current.ending) commit(current)
@@ -450,6 +462,7 @@ class ViewerEditor(private val scope: CoroutineScope, private val onPagesChanged
         val tool: ViewerEditTool,
         val color: Int,
         val width: Float,
+        val wavy: Boolean,
         val builder: ViewerStrokeBuilder
     ) {
         var mode = Mode.UNDECIDED
@@ -457,7 +470,7 @@ class ViewerEditor(private val scope: CoroutineScope, private val onPagesChanged
         var last: ViewerTextPoint? = null
         var anchor: ViewerTextPoint? = null
         var target: ViewerTextPoint? = null
-        var rects: FloatArray? = null
+        var text: FloatArray? = null
         var job: Job? = null
 
         fun freehand(): ViewerMark {
@@ -466,7 +479,12 @@ class ViewerEditor(private val scope: CoroutineScope, private val onPagesChanged
         }
 
         fun textMark(): ViewerMark? {
-            val shown = rects ?: return null
+            val shown = text ?: return null
+            if (tool.onlyOnText) {
+                if (shown.isEmpty()) return null
+                val kind = if (tool == ViewerEditTool.UNDERLINE) ViewerMarkKind.UNDERLINE else ViewerMarkKind.STRIKETHROUGH
+                return ViewerMark(page, kind, color, 0f, ViewerTextLines.path(shown, kind, wavy, ViewerTextLines.MARKS))
+            }
             if (ViewerTextRects.count(shown) == 0) return null
             return ViewerMark(page, ViewerMarkKind.TEXT_HIGHLIGHT, color, 0f, ViewerMarkPath.rects(shown))
         }
@@ -475,6 +493,6 @@ class ViewerEditor(private val scope: CoroutineScope, private val onPagesChanged
     private class Eraser(var page: Int, var last: ViewerTextPoint, val tolerance: Float)
 }
 
-enum class ViewerEditPanel { COLORS, WIDTH }
+enum class ViewerEditPanel { COLORS, WIDTH, STYLE }
 
 enum class ViewerEditQuestion { EXIT, ERASE_ALL }

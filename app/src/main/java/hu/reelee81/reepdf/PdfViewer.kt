@@ -26,6 +26,7 @@ import hu.reelee81.reepdf.viewer.ViewerEditSaveResult
 import hu.reelee81.reepdf.viewer.ViewerEditSettings
 import hu.reelee81.reepdf.viewer.ViewerEditTool
 import hu.reelee81.reepdf.viewer.ViewerState
+import hu.reelee81.reepdf.viewer.ViewerUnderlineStyle
 import hu.reelee81.reepdf.viewer.ViewerWait
 import hu.reelee81.reepdf.viewer.viewerView
 import java.io.File
@@ -55,6 +56,9 @@ class PdfViewer : AppCompatActivity(), ViewerActions {
         private const val KEY_PEN_WIDTH = "pen_width"
         private const val KEY_HIGHLIGHTER_COLOR = "highlighter_color"
         private const val KEY_HIGHLIGHTER_WIDTH = "highlighter_width"
+        private const val KEY_UNDERLINE_COLOR = "underline_color"
+        private const val KEY_STRIKETHROUGH_COLOR = "strikethrough_color"
+        private const val KEY_UNDERLINE_STYLE = "underline_style"
         private const val KEY_UNDO_PANEL_TOP = "undo_panel_top"
     }
 
@@ -230,6 +234,10 @@ class PdfViewer : AppCompatActivity(), ViewerActions {
             penWidth = prefs.getInt(KEY_PEN_WIDTH, defaults.penWidth),
             highlighterColor = prefs.getInt(KEY_HIGHLIGHTER_COLOR, defaults.highlighterColor),
             highlighterWidth = prefs.getInt(KEY_HIGHLIGHTER_WIDTH, defaults.highlighterWidth),
+            underlineColor = prefs.getInt(KEY_UNDERLINE_COLOR, defaults.underlineColor),
+            strikethroughColor = prefs.getInt(KEY_STRIKETHROUGH_COLOR, defaults.strikethroughColor),
+            underlineStyle = prefs.getString(KEY_UNDERLINE_STYLE, null)
+                ?.let { name -> ViewerUnderlineStyle.entries.firstOrNull { it.name == name } } ?: defaults.underlineStyle,
             undoPanelTop = prefs.getBoolean(KEY_UNDO_PANEL_TOP, defaults.undoPanelTop)
         )
     }
@@ -242,6 +250,9 @@ class PdfViewer : AppCompatActivity(), ViewerActions {
             putInt(KEY_PEN_WIDTH, settings.penWidth)
             putInt(KEY_HIGHLIGHTER_COLOR, settings.highlighterColor)
             putInt(KEY_HIGHLIGHTER_WIDTH, settings.highlighterWidth)
+            putInt(KEY_UNDERLINE_COLOR, settings.underlineColor)
+            putInt(KEY_STRIKETHROUGH_COLOR, settings.strikethroughColor)
+            putString(KEY_UNDERLINE_STYLE, settings.underlineStyle.name)
             putBoolean(KEY_UNDO_PANEL_TOP, settings.undoPanelTop)
         }
     }

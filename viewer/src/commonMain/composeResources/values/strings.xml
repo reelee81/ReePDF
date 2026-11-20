@@ -38,6 +38,8 @@
     <string name="edit_text">Text</string>
     <string name="edit_underline">Underline</string>
     <string name="edit_strikethrough">Strikethrough</string>
+    <string name="edit_underline_straight">Straight</string>
+    <string name="edit_underline_wavy">Wavy</string>
     <string name="edit_pen">Pen</string>
     <string name="edit_highlighter">Highlighter</string>
     <string name="edit_vector_signature">Vector signature</string>

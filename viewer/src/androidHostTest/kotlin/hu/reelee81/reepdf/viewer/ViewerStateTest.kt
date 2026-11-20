@@ -411,7 +411,18 @@ class ViewerStateTest {
 
         override suspend fun caret(page: Int, point: ViewerTextPoint): ViewerTextPoint? = null
 
-        override suspend fun highlight(page: Int, from: ViewerTextPoint?, to: ViewerTextPoint?) = highlights(page)
+        override suspend fun highlight(page: Int, from: ViewerTextPoint?, to: ViewerTextPoint?): ViewerTextHighlight {
+            val rects = highlights(page)
+            if (rects.isEmpty()) return ViewerTextHighlight.NONE
+            val last = rects.size - ViewerTextHits.RECT_SIZE
+            return ViewerTextHighlight(
+                rects,
+                ViewerTextPoint(rects[0], (rects[1] + rects[3]) / 2),
+                ViewerTextPoint(rects[last + 2], (rects[last + 1] + rects[last + 3]) / 2)
+            )
+        }
+
+        override suspend fun baselines(page: Int, from: ViewerTextPoint?, to: ViewerTextPoint?) = FloatArray(0)
 
         override suspend fun copy(page: Int, from: ViewerTextPoint?, to: ViewerTextPoint?) = ""
 

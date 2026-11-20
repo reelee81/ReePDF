@@ -71,7 +71,7 @@ internal object ViewerMarkHit {
 
     fun hits(kind: ViewerMarkKind, path: ViewerMarkPath, width: Float, x: Float, y: Float, tolerance: Float): Boolean {
         val polygons = flatten(path)
-        if (kind == ViewerMarkKind.TEXT_HIGHLIGHT) {
+        if (kind.fills) {
             return polygons.any { inside(it, x, y) || distance(it, x, y, closed = true) <= tolerance }
         }
         val reach = width / 2 + tolerance

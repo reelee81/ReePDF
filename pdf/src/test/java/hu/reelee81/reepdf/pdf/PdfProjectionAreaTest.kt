@@ -232,6 +232,22 @@ class PdfProjectionAreaTest {
     }
 
     @Test
+    fun anUnderlineAndAStrikethroughDrawnAgainAndAgainKeepTheSheetDepthAndStayOnTheirOwnLabels() {
+        build(scaled)
+        var depthAfterFirst = -1
+        for (round in 0 until 8) {
+            val area = areas()[round % 4]
+            val kind = if (round % 2 == 0) PdfMarkKind.UNDERLINE else PdfMarkKind.STRIKETHROUGH
+            project(save(band("r$round", kind, area.left + 10, mid(area) + round, area.right - 10)))
+            build(scaled)
+            val depth = maxDepth(nup())
+            if (round == 0) depthAfterFirst = depth else assertEquals("round $round", depthAfterFirst, depth)
+        }
+
+        for (index in 0..3) assertEquals(listOf("r$index", "r${index + 4}"), layerIds(index))
+    }
+
+    @Test
     fun erasingEveryMarkOfAProjectedPieceRemovesTheLayer() {
         build(scaled)
         val area = areas()[2]
@@ -319,6 +335,12 @@ class PdfProjectionAreaTest {
     private fun highlighter(x1: Double, y1: Double, x2: Double, y2: Double) = PdfMark(
         "h", PdfMarkKind.HIGHLIGHTER, 0xFFFF00, 14f,
         PdfMarkPath.Builder().moveTo(x1.toFloat(), y1.toFloat()).lineTo(x2.toFloat(), y2.toFloat()).build()
+    )
+
+    private fun band(id: String, kind: PdfMarkKind, x1: Double, y: Double, x2: Double) = PdfMark(
+        id, kind, 0x35C369, 0f,
+        PdfMarkPath.Builder().moveTo(x1.toFloat(), y.toFloat()).lineTo(x2.toFloat(), y.toFloat())
+            .lineTo(x2.toFloat(), (y + 1).toFloat()).lineTo(x1.toFloat(), (y + 1).toFloat()).close().build()
     )
 
     private fun save(vararg marks: PdfMark): File = write(PdfMarkSave.Plan(added = mapOf(0 to marks.toList())))

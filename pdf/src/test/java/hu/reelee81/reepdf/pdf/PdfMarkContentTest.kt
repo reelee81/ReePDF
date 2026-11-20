@@ -36,6 +36,44 @@ class PdfMarkContentTest {
     }
 
     @Test
+    fun everyKindIsWrittenWithItsOwnPaint() {
+        val content = String(PdfMarkContent.write(listOf(pen, highlighter, text), "GS1"), Charsets.ISO_8859_1)
+
+        assertEquals(
+            "/ReePDF <</Id(pen1)/K/Pen>> BDC\nq\n0.1255 0.1843 0.6902 RG\n2 w 1 J 1 j\n" +
+                "10 20 m\n15.5 25.25 30.125 40 50 60.5 c\n-3.5 0.001 l\nS\nQ\nEMC\n" +
+                "/ReePDF <</Id(hl2)/K/Hl>> BDC\nq\n/GS1 gs\n1 0.9294 0.2706 RG\n24 w 1 J 1 j\n" +
+                "100 100 m\n100 100 l\nS\nQ\nEMC\n" +
+                "/ReePDF <</Id(text3)/K/Text>> BDC\nq\n/GS1 gs\n0.6471 0.1647 0.1647 rg\n" +
+                "1 2 m\n11 2 l\n11 7 l\n1 7 l\nh\nf\nQ\nEMC\n",
+            content
+        )
+    }
+
+    @Test
+    fun anUnderlineAndAStrikethroughAreOpaqueFillsReadBackAsTheirKind() {
+        val underline = PdfMark(
+            "u4", PdfMarkKind.UNDERLINE, 0x35C369, 0f,
+            PdfMarkPath.Builder().moveTo(1f, 10f).lineTo(11f, 10f).lineTo(11f, 10.5f).lineTo(1f, 10.5f).close().build()
+        )
+        val strikethrough = PdfMark(
+            "s5", PdfMarkKind.STRIKETHROUGH, 0xDD0000, 0f,
+            PdfMarkPath.Builder().moveTo(1f, 20f).lineTo(11f, 22f).lineTo(11f, 23f).lineTo(1f, 21f).close().build()
+        )
+
+        val content = PdfMarkContent.write(listOf(underline, strikethrough), null)
+        val read = PdfMarkContent.read(content)
+
+        assertEquals(
+            "/ReePDF <</Id(u4)/K/Under>> BDC\nq\n0.2078 0.7647 0.4118 rg\n1 10 m\n11 10 l\n11 10.5 l\n1 10.5 l\nh\nf\nQ\nEMC\n" +
+                "/ReePDF <</Id(s5)/K/Strike>> BDC\nq\n0.8667 0 0 rg\n1 20 m\n11 22 l\n11 23 l\n1 21 l\nh\nf\nQ\nEMC\n",
+            String(content, Charsets.ISO_8859_1)
+        )
+        assertSameMark(underline, read[0].mark)
+        assertSameMark(strikethrough, read[1].mark)
+    }
+
+    @Test
     fun aMarkIsReadInTheSpaceOfTheTransformsAroundIt() {
         val mark = PdfMarkContent.write(listOf(pen), null)
         val content = "q 2 0 0 2 10 20 cm\n".toByteArray() + mark + "Q\n".toByteArray()

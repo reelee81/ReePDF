@@ -91,6 +91,18 @@ class ViewerStrokeTest {
     }
 
     @Test
+    fun aTextLineIsHitOnItsThinBandAndNearIt() {
+        val underline = ViewerTextLines.path(floatArrayOf(10f, 50f, 60f, 50f, 0f, -1f, 10f, 0f), ViewerMarkKind.UNDERLINE, false, ViewerTextLines.MARKS)
+        val strikethrough = ViewerTextLines.path(floatArrayOf(10f, 50f, 60f, 50f, 0f, -1f, 10f, 0f), ViewerMarkKind.STRIKETHROUGH, false, ViewerTextLines.MARKS)
+
+        assertTrue(ViewerMarkHit.hits(ViewerMarkKind.UNDERLINE, underline, 0f, 30f, 51.5f, 0f))
+        assertTrue(ViewerMarkHit.hits(ViewerMarkKind.UNDERLINE, underline, 0f, 30f, 53f, 2f))
+        assertFalse(ViewerMarkHit.hits(ViewerMarkKind.UNDERLINE, underline, 0f, 30f, 55f, 2f))
+        assertTrue(ViewerMarkHit.hits(ViewerMarkKind.STRIKETHROUGH, strikethrough, 0f, 30f, 47.5f, 0f))
+        assertFalse(ViewerMarkHit.hits(ViewerMarkKind.STRIKETHROUGH, strikethrough, 0f, 30f, 51f, 0f))
+    }
+
+    @Test
     fun aSweepReachesTheEndInStepsNoLongerThanAsked() {
         val points = ViewerMarkHit.sweep(0f, 0f, 10f, 0f, 3f)
         assertTrue(ViewerMarkHit.within(null, -500f, 900f, 0f))

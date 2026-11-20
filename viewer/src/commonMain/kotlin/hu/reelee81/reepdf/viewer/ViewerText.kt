@@ -8,6 +8,12 @@ data class ViewerTextPoint(val x: Float, val y: Float)
 
 class ViewerTextSpan(val from: ViewerTextPoint, val to: ViewerTextPoint, val rects: FloatArray)
 
+class ViewerTextHighlight(val rects: FloatArray, val start: ViewerTextPoint?, val end: ViewerTextPoint?) {
+    companion object {
+        val NONE = ViewerTextHighlight(FloatArray(0), null, null)
+    }
+}
+
 class ViewerTextHits(val rects: FloatArray, val starts: IntArray) {
     init {
         require(starts.isNotEmpty() && starts.first() == 0 && starts.last() * RECT_SIZE == rects.size) {

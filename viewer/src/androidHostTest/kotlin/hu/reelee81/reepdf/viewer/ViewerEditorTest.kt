@@ -121,6 +121,99 @@ class ViewerEditorTest {
     }
 
     @Test
+    fun anUnderlineFollowsTheTextJustBelowItsBaselineInItsOwnColor() {
+        document.words = { _, point -> ViewerTextSpan(point, point, FloatArray(0)) }
+        editing()
+        editor.selectTool(ViewerEditTool.UNDERLINE)
+
+        editor.beginStroke(0, ViewerTextPoint(10f, 15f), 1f, 5f)
+        val before = editor.wet
+        editor.extendStroke(ViewerTextPoint(40f, 16f))
+        val wet = editor.wet
+        editor.endStroke()
+
+        assertNull(before)
+        assertEquals(ViewerMarkKind.UNDERLINE, wet?.kind)
+        val mark = editor.addedMarks(0).single()
+        assertEquals(ViewerMarkKind.UNDERLINE, mark.kind)
+        assertEquals(0x35C369, mark.color)
+        assertEquals(0f, mark.width, 0f)
+        assertArrayEquals(floatArrayOf(10f, 31.85f, 40f, 31.85f, 40f, 30.95f, 10f, 30.95f), mark.path.points, 0.001f)
+        editor.undo()
+        assertTrue(editor.addedMarks(0).isEmpty())
+    }
+
+    @Test
+    fun aStrikethroughCrossesTheLettersAndLeavesNothingAwayFromText() {
+        editing()
+        editor.selectTool(ViewerEditTool.STRIKETHROUGH)
+
+        editor.beginStroke(0, ViewerTextPoint(10f, 15f), 1f, 5f)
+        editor.extendStroke(ViewerTextPoint(40f, 16f))
+        val away = editor.wet
+        editor.endStroke()
+        document.words = { _, point -> ViewerTextSpan(point, point, FloatArray(0)) }
+        draw(0, 50f to 50f)
+        val tapped = editor.addedMarks(0).isEmpty()
+        draw(0, 10f to 15f, 40f to 16f)
+
+        assertNull(away)
+        assertTrue(tapped)
+        val mark = editor.addedMarks(0).single()
+        assertEquals(ViewerMarkKind.STRIKETHROUGH, mark.kind)
+        assertEquals(0xDD0000, mark.color)
+        assertArrayEquals(floatArrayOf(10f, 27.85f, 40f, 27.85f, 40f, 26.95f, 10f, 26.95f), mark.path.points, 0.001f)
+    }
+
+    @Test
+    fun theUnderlineOpensItsStylesTheStrikethroughNothingAndBothKeepTheirColors() {
+        editing()
+
+        editor.tapTool(ViewerEditTool.UNDERLINE)
+        editor.tapTool(ViewerEditTool.UNDERLINE)
+        val secondTap = editor.panel
+        editor.tapTool(ViewerEditTool.UNDERLINE)
+        val thirdTap = editor.panel
+        editor.tapSwatch()
+        val swatch = editor.panel
+        editor.chooseColor(5)
+        editor.tapTool(ViewerEditTool.STRIKETHROUGH)
+        editor.tapTool(ViewerEditTool.STRIKETHROUGH)
+        val strikethroughTap = editor.panel
+        editor.chooseColor(7)
+
+        assertEquals(ViewerEditPanel.STYLE, secondTap)
+        assertNull(thirdTap)
+        assertNull(strikethroughTap)
+        assertEquals(ViewerEditPanel.COLORS, swatch)
+        assertEquals(5, editor.settings.underlineColor)
+        assertEquals(7, editor.settings.strikethroughColor)
+        assertEquals(0, editor.settings.penColor)
+        assertEquals(ViewerEditTool.STRIKETHROUGH, editor.settings.drawingTool)
+    }
+
+    @Test
+    fun aWavyUnderlineIsRememberedAndDrawnAsAZigzagWhileTheStrikethroughStaysStraight() {
+        val stored = mutableListOf<ViewerEditSettings>()
+        editor.onSettingsChanged = { stored += it }
+        document.words = { _, point -> ViewerTextSpan(point, point, FloatArray(0)) }
+        editing()
+        editor.selectTool(ViewerEditTool.UNDERLINE)
+
+        editor.chooseUnderlineStyle(ViewerUnderlineStyle.WAVY)
+        draw(0, 10f to 15f, 40f to 16f)
+        editor.selectTool(ViewerEditTool.STRIKETHROUGH)
+        draw(0, 10f to 15f, 40f to 16f)
+
+        assertEquals(ViewerUnderlineStyle.WAVY, stored.last().underlineStyle)
+        val (underline, strikethrough) = editor.addedMarks(0)
+        assertEquals(ViewerMarkKind.UNDERLINE, underline.kind)
+        assertTrue(underline.path.points.size > 8)
+        assertEquals(ViewerMarkKind.STRIKETHROUGH, strikethrough.kind)
+        assertEquals(8, strikethrough.path.points.size)
+    }
+
+    @Test
     fun theEraserRemovesNewMarksInOneUndoableStep() {
         editing()
         draw(0, 0f to 0f, 100f to 0f)
@@ -487,7 +580,10 @@ class ViewerEditorTest {
         override suspend fun caret(page: Int, point: ViewerTextPoint): ViewerTextPoint = point
 
         override suspend fun highlight(page: Int, from: ViewerTextPoint?, to: ViewerTextPoint?) =
-            floatArrayOf(from?.x ?: 0f, 10f, to?.x ?: 0f, 20f)
+            ViewerTextHighlight(floatArrayOf(from?.x ?: 0f, 10f, to?.x ?: 0f, 20f), null, null)
+
+        override suspend fun baselines(page: Int, from: ViewerTextPoint?, to: ViewerTextPoint?) =
+            floatArrayOf(from?.x ?: 0f, 30f, to?.x ?: 0f, 30f, 0f, -1f, 10f, 0f)
 
         override suspend fun copy(page: Int, from: ViewerTextPoint?, to: ViewerTextPoint?) = ""
 

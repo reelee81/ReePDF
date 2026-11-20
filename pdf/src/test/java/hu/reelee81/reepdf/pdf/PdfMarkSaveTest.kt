@@ -91,6 +91,35 @@ class PdfMarkSaveTest {
     }
 
     @Test
+    fun anUnderlineAndAStrikethroughAreSavedOpaqueReachTheirSourceAndCanBeErased() {
+        val underline = band("u", PdfMarkKind.UNDERLINE, 0x35C369, 300f)
+        val strikethrough = band("s", PdfMarkKind.STRIKETHROUGH, 0xDD0000, 320f)
+
+        val edited = save(nup(), PdfMarkSave.Plan(added = mapOf(0 to listOf(underline, strikethrough))))
+        PdfDocument(PdfReader(edited)).use { pdf ->
+            val states = pdf.getPage(1).resources.pdfObject.getAsDictionary(PdfName.ExtGState)
+            val alphas = states?.keySet()?.map { states.getAsDictionary(it).getAsNumber(PdfName.CA)?.floatValue() }.orEmpty()
+            assertFalse(alphas.toString(), PdfMark.ALPHA in alphas)
+        }
+        project(edited)
+
+        assertEquals(listOf("u", "s"), sourceLayerIds(0))
+        assertNull(sourceLayerIds(1))
+        val marks = editData(nup(), 0).read().marks.map { it.mark }
+        assertEquals(listOf("u", "s"), marks.map { it.id })
+        for ((read, drawn) in marks.zip(listOf(underline, strikethrough))) {
+            assertEquals(drawn.kind, read.kind)
+            assertEquals(drawn.color, read.color)
+            assertEquals(0f, read.width, 0f)
+            assertArrayEquals(drawn.path.verbs, read.path.verbs)
+            assertArrayEquals(drawn.path.points, read.path.points, 0.01f)
+        }
+        val layers = editData(nup(), 0).layers.map { it.number }
+        project(save(nup(), PdfMarkSave.Plan(streams = layers.associateWith { PdfStreamEdit(false, setOf("u")) })))
+        assertEquals(listOf("s"), sourceLayerIds(0))
+    }
+
+    @Test
     fun aMarkAcrossTwoLabelsReachesBothSourcesEachCutToItsOwnLabel() {
         val drawn = across("x", 300f)
 
@@ -244,6 +273,11 @@ class PdfMarkSaveTest {
     private fun highlighter(id: String, x: Float, length: Float = 40f) = PdfMark(
         id, PdfMarkKind.HIGHLIGHTER, 0xFFED45, 20f,
         PdfMarkPath.Builder().moveTo(x, 200f).lineTo(x + length, 200f).build()
+    )
+
+    private fun band(id: String, kind: PdfMarkKind, color: Int, y: Float) = PdfMark(
+        id, kind, color, 0f,
+        PdfMarkPath.Builder().moveTo(150f, y).lineTo(190f, y).lineTo(190f, y + 0.7f).lineTo(150f, y + 0.7f).close().build()
     )
 
     private fun save(input: File, plan: PdfMarkSave.Plan): File {
