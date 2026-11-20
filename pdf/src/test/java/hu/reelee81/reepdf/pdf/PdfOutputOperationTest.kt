@@ -5,6 +5,7 @@ import com.itextpdf.kernel.geom.PageSize
 import com.itextpdf.kernel.pdf.PdfDocument
 import com.itextpdf.kernel.pdf.PdfName
 import com.itextpdf.kernel.pdf.PdfReader
+import com.itextpdf.kernel.pdf.PdfVersion
 import com.itextpdf.kernel.pdf.ReaderProperties
 import com.itextpdf.kernel.pdf.canvas.PdfCanvas
 import java.io.File
@@ -16,6 +17,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -93,6 +95,50 @@ class PdfOutputOperationTest {
         assertEquals(pageMarkers(nup(), null), pageMarkers(result.file, password))
         assertFalse(File(dir, "output_pack.work").exists())
         assertEquals(5, PdfDocument(PdfReader(nup())).use { it.numberOfPages })
+    }
+
+    @Test
+    fun aPasswordExportIsPdf20WithRevision6AndNoMac() {
+        writeLayout(3)
+
+        val result = runBlocking { operation(password = password, packed = true).execute {} }
+
+        assertEquals("%PDF-2.0", header(result.file))
+        PdfDocument(reader(result.file, password)).use { pdf ->
+            assertEquals(PdfVersion.PDF_2_0, pdf.pdfVersion)
+            val encrypt = pdf.trailer.getAsDictionary(PdfName.Encrypt)
+            assertEquals(5, encrypt.getAsNumber(PdfName.V).intValue())
+            assertEquals(6, encrypt.getAsNumber(PdfName.R).intValue())
+            assertEquals(PdfName.AESV3, encrypt.getAsDictionary(PdfName.CF).getAsDictionary(PdfName.StdCF).getAsName(PdfName.CFM))
+            assertNull(pdf.trailer.get(PdfName.AuthCode))
+        }
+    }
+
+    @Test
+    fun aPackedExportWithoutPasswordStaysUnencryptedPdf17() {
+        writeLayout(3)
+
+        val result = runBlocking { operation(packed = true).execute {} }
+
+        assertEquals("%PDF-1.7", header(result.file))
+        PdfDocument(reader(result.file, null)).use { pdf ->
+            assertEquals(PdfVersion.PDF_1_7, pdf.pdfVersion)
+            assertFalse(pdf.reader.isEncrypted)
+            assertNull(pdf.trailer.get(PdfName.Encrypt))
+        }
+    }
+
+    @Test
+    fun anAccentedPasswordOpensTheExportOnlyAsUtf8() {
+        writeLayout(2)
+        val accented = "árvíztűrő tükörfúrógép"
+
+        val result = runBlocking { operation(password = accented.toByteArray(Charsets.UTF_8), packed = true).execute {} }
+
+        assertEquals(pageContents(nup(), null), pageContents(result.file, accented.toByteArray(Charsets.UTF_8)))
+        for (wrong in listOf(accented.toByteArray(Charsets.ISO_8859_1), "arvizturo tukorfurogep".toByteArray(Charsets.UTF_8))) {
+            assertTrue(runCatching { pageContents(result.file, wrong) }.exceptionOrNull() is BadPasswordException)
+        }
     }
 
     @Test
@@ -240,6 +286,8 @@ class PdfOutputOperationTest {
             }
         }
     }
+
+    private fun header(file: File): String = String(file.readBytes().copyOf(8), Charsets.ISO_8859_1)
 
     private fun reader(file: File, password: ByteArray?): PdfReader =
         PdfReader(file.absolutePath, ReaderProperties().apply { if (password != null) setPassword(password) })

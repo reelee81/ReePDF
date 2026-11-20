@@ -94,7 +94,8 @@ We publish the source code so that others can use it, modify it and learn from i
 - **Print** with the Android print service
 - **Save** to any location with the system file dialog
 - **Send** to any app that accepts PDF files
-- Optional password protection of the output (AES-256); the password has to be typed twice
+- Optional password protection of the output (AES-256, revision 6, so a password-protected file is saved as
+  PDF 2.0); the password has to be typed twice
 - File name template with date and time tokens: `[YYYY]`, `[YY]`, `[MM]`, `[DD]`, `[hh]`, `[mm]`, `[ss]`;
   characters that are not allowed in file names are replaced
 

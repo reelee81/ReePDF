@@ -213,11 +213,13 @@ class R8SmokeActivity : Activity() {
         step("output without password") {
             val file = output(null)
             check(pages(file, null) == nupPages()) { "page count differs" }
+            check(format(file, null) == "PDF-1.7 R-") { "format ${format(file, null)}" }
         }
         step("output with password (encryption)") {
             val file = output(password)
             check(runCatching { pages(file, null) }.isFailure) { "opens without password" }
             check(pages(file, password) == nupPages()) { "page count differs" }
+            check(format(file, password) == "PDF-2.0 R6") { "format ${format(file, password)}" }
             val encrypted = File(dir, "encrypted_input.pdf")
             file.copyTo(encrypted, overwrite = true)
             import(encrypted, password)
@@ -407,6 +409,13 @@ class R8SmokeActivity : Activity() {
 
     private fun pages(file: File, password: ByteArray?): Int =
         PdfDocument(PdfIo.reader(file.absolutePath, password)).use { it.numberOfPages }
+
+    private fun format(file: File, password: ByteArray?): String =
+        PdfDocument(PdfIo.reader(file.absolutePath, password)).use { pdf ->
+            val revision = pdf.trailer.getAsDictionary(PdfName.Encrypt)?.getAsNumber(PdfName.R)?.intValue()
+            val mac = if (pdf.trailer.get(PdfName.AuthCode) != null) " MAC" else ""
+            "${pdf.pdfVersion} R${revision ?: "-"}$mac"
+        }
 
     private fun take(result: PdfLayoutChangeOperation.Result?) {
         checkNotNull(result) { "no result" }

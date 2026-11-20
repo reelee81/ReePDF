@@ -2,6 +2,7 @@ package hu.reelee81.reepdf.pdf
 
 import com.itextpdf.kernel.pdf.EncryptionConstants
 import com.itextpdf.kernel.pdf.PdfDocument
+import com.itextpdf.kernel.pdf.PdfVersion
 import hu.reelee81.reepdf.core.OutputExports
 import hu.reelee81.reepdf.core.OutputFileName
 import hu.reelee81.reepdf.core.PdfOperationResult
@@ -100,11 +101,13 @@ class PdfOutputOperation(
 
         val wp = PdfIo.writerProperties().apply {
             if (password != null) {
+                setPdfVersion(PdfVersion.PDF_2_0)
                 setStandardEncryption(
                     password,
                     password,
                     0,
-                    EncryptionConstants.ENCRYPTION_AES_256
+                    EncryptionConstants.ENCRYPTION_AES_256,
+                    null
                 )
             }
         }

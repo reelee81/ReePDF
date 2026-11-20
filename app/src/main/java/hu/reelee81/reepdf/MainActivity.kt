@@ -1628,25 +1628,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun isTouchInsideView(ev: MotionEvent, view: View): Boolean {
         val location = IntArray(2)
-        view.getLocationInWindow(location)
-
-        val left = location[0].toFloat()
-        val top = location[1].toFloat()
-        val right = left + view.width
-        val bottom = top + view.height
-
-        if (ev.x in left..<right && ev.y in top..<bottom) {
-            return true
-        }
-
         view.getLocationOnScreen(location)
-
-        val screenLeft = location[0].toFloat()
-        val screenTop = location[1].toFloat()
-        val screenRight = screenLeft + view.width
-        val screenBottom = screenTop + view.height
-
-        return ev.rawX in screenLeft..<screenRight && ev.rawY in screenTop..<screenBottom
+        return TouchHit.isInside(ev.rawX, ev.rawY, location[0], location[1], view.width, view.height)
     }
 
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
