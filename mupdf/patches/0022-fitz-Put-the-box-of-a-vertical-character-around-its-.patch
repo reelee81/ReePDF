@@ -1,0 +1,89 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: reelee81 <reelee81@gmail.com>
+Date: Fri, 20 Nov 2026 11:00:00 +0100
+Subject: [PATCH 22/22] fitz: Put the box of a vertical character around its
+ vertical origin.
+
+The structured text device started the box of a vertical character one
+advance above the glyph origin, which is at the baseline of the glyph,
+and let it begin at the glyph origin across the column. A PDF places a
+vertical glyph by its vertical origin, the point its advance starts
+from, which by default (DW2) lies 880/1000 of the size above and half
+the glyph width right of the glyph origin. So the boxes of a vertical
+column sat 0.12 em above the glyphs, and a glyph narrower or wider than
+one em (a digit or a Latin letter) got a box shifted sideways from the
+column, which split the highlight of a column into several quads. The
+box is now one em wide, centred across on the vertical origin, starts
+at it and ends one advance further on. On the vertical text of the
+pdf.js test files the middle of the box is now within 0.02 em of the
+middle of the ink (median) both along and across the column, the
+highlight of a column is a single quad, and Latin letters set upright
+are no longer 0.16 em off. The glyph width comes from the width table
+of the PDF font. The device does not know the vertical metrics of a
+font, so a font with its own (W2, or another DW2) still gets the
+default. Horizontal text is unchanged.
+
+Modified for ReePDF on 2026-11-20.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ source/fitz/stext-device.c | 25 ++++++++++++++++++++-----
+ 1 file changed, 20 insertions(+), 5 deletions(-)
+
+diff --git a/source/fitz/stext-device.c b/source/fitz/stext-device.c
+index 124676b..7507286 100644
+--- a/source/fitz/stext-device.c
++++ b/source/fitz/stext-device.c
+@@ -87,6 +87,7 @@ void fz_add_layout_char(fz_context *ctx, fz_layout_block *block, float x, float
+ #define SPACE_MAX_DIST 0.8f
+ #define BASE_MAX_DIST 0.8f
+ #define FAKE_BOLD_MAX_DIST 0.1f
++#define VERTICAL_ORIGIN 0.88f
+ 
+ /* We keep a stack of the different metatexts that apply at any
+  * given point (normally none!). Whenever we get some content
+@@ -764,6 +765,16 @@ plausible_bullet(int c)
+ 		0);
+ }
+ 
++static float
++vertical_glyph_width(fz_context *ctx, fz_font *font, int glyph)
++{
++	if (glyph < 0)
++		return 1;
++	if (font->width_table)
++		return (glyph < font->width_count ? font->width_table[glyph] : font->width_default) / 1000.0f;
++	return fz_advance_glyph(ctx, font, glyph, 0);
++}
++
+ static void
+ fz_add_stext_char_imp(fz_context *ctx, fz_stext_device *dev, fz_font *font, int c, int glyph, fz_matrix trm, float adv, int wmode, int bidi, int force_new_line, int flags)
+ {
+@@ -812,7 +823,10 @@ fz_add_stext_char_imp(fz_context *ctx, fz_stext_device *dev, fz_font *font, int
+ 	 *   + p is bottom left.
+ 	 *   + q is the bottom right
+ 	 * In vertical mode:
+-	 *   + p is top left (where it advanced from)
++	 *   + p is top left (where it advanced from) of a box one em
++	 *     wide around the vertical origin, which a PDF puts half the
++	 *     glyph width right of and 880/1000 of the size above the
++	 *     glyph origin unless the font says otherwise (DW2, W2)
+ 	 *   + q is bottom left
+ 	 */
+ 	if (wmode == 0)
+@@ -824,10 +838,11 @@ fz_add_stext_char_imp(fz_context *ctx, fz_stext_device *dev, fz_font *font, int
+ 	}
+ 	else
+ 	{
+-		p.x = trm.e - adv * dir.x;
+-		p.y = trm.f - adv * dir.y;
+-		q.x = trm.e;
+-		q.y = trm.f;
++		float across = (vertical_glyph_width(ctx, font, glyph) - 1) / 2;
++		p.x = trm.e + across * trm.a - VERTICAL_ORIGIN * dir.x;
++		p.y = trm.f + across * trm.b - VERTICAL_ORIGIN * dir.y;
++		q.x = p.x + adv * dir.x;
++		q.y = p.y + adv * dir.y;
+ 	}
+ 
+ 	//printf("%g,%g \"%c\" %g,%g\n", p.x, p.y, c, q.x, q.y);

@@ -43,6 +43,22 @@ class ViewerTextLinesTest {
     }
 
     @Test
+    fun aColumnRunningDownKeepsItsUnderlineOnTheRightSide() {
+        val run = floatArrayOf(105f, 20f, 105f, 50f, 1f, 0f, 10f, 1f)
+
+        val underline = ViewerTextLines.path(run, ViewerMarkKind.UNDERLINE, false, ViewerTextLines.MARKS)
+        val strikethrough = ViewerTextLines.path(run, ViewerMarkKind.STRIKETHROUGH, false, ViewerTextLines.MARKS)
+        val wavy = ViewerTextLines.path(run, ViewerMarkKind.UNDERLINE, true, ViewerTextLines.MARKS).points
+
+        assertArrayEquals(floatArrayOf(110.95f, 20f, 110.95f, 50f, 111.85f, 50f, 111.85f, 20f), underline.points, 0.001f)
+        assertArrayEquals(floatArrayOf(104.55f, 20f, 104.55f, 50f, 105.45f, 50f, 105.45f, 20f), strikethrough.points, 0.001f)
+        for (index in wavy.indices step 2) {
+            assertTrue(wavy[index] in 110.2f..113.2f)
+            assertTrue(wavy[index + 1] in 20f..50f)
+        }
+    }
+
+    @Test
     fun aWavyUnderlineZigzagsBelowTheBaselineWithAnEvenThickness() {
         val run = floatArrayOf(0f, 100f, 3f, 100f, 0f, -1f, 10f, 0f)
 

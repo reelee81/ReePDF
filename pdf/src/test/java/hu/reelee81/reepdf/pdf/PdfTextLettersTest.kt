@@ -133,8 +133,8 @@ class PdfTextLettersTest {
             endLine()
         }
 
-        assertEquals("אב", letters.word(42f, 106f, TOLERANCE)?.text)
-        assertEquals("ג", letters.word(12f, 106f, TOLERANCE)?.text)
+        assertEquals("\u05D0\u05D1", letters.word(42f, 106f, TOLERANCE)?.text)
+        assertEquals("\u05D2", letters.word(12f, 106f, TOLERANCE)?.text)
     }
 
     @Test
@@ -345,17 +345,30 @@ class PdfTextLettersTest {
     }
 
     @Test
-    fun anUprightColumnRunsAlongItsMiddleAndPointsToItsRightSide() {
-        val letters = page {
-            startLine(0f, 1f, true)
-            add(0x3042, Quad(110f, 30f, 110f, 20f, 100f, 30f, 100f, 20f), 10f, false, Point(100f, 30f))
-            endLine()
-        }
+    fun anUprightColumnRunsDownAlongItsMiddleAndPointsToItsRightSide() {
+        val letters = page { column("あいう") }
 
-        val lines = letters.baselines(arrayOf(Quad(110f, 30f, 110f, 20f, 100f, 30f, 100f, 20f)), 0f, 0f)
+        val lines = letters.baselines(arrayOf(Quad(110f, 20f, 110f, 50f, 100f, 20f, 100f, 50f)), 0f, 0f)
 
         assertEquals(0, lines.estimated)
-        assertRun(floatArrayOf(105f, 30f, 105f, 20f, 1f, 0f, 10f, 1f), lines.runs, 0)
+        assertRun(floatArrayOf(105f, 20f, 105f, 50f, 1f, 0f, 10f, 1f), lines.runs, 0)
+    }
+
+    @Test
+    fun anUprightColumnIsOneWordWithItsCaretsDownItsMiddle() {
+        val letters = page {
+            column("あいう", left = 200f)
+            column("えお", left = 185f)
+        }
+
+        assertEquals("あいう", letters.word(205f, 35f, TOLERANCE)?.text)
+        assertEquals("えお", letters.word(190f, 22f, TOLERANCE)?.text)
+        assertPoint(205f, 20f, letters.before(0))
+        assertPoint(205f, 50f, letters.after(2))
+        assertPoint(205f, 30f, letters.caret(207f, 33f)!!.point)
+        assertPoint(205f, 40f, letters.caret(203f, 38f)!!.point)
+        assertEquals(2, letters.caret(203f, 38f)!!.index)
+        assertPoint(190f, 40f, letters.caret(190f, 45f)!!.point)
     }
 
     @Test
@@ -439,21 +452,19 @@ class PdfTextLettersTest {
     @Test
     fun uprightColumnsAndLettersWithoutABaselineKeepTheirBoxes() {
         val letters = page {
-            startLine(0f, 1f, true)
-            add(0x3042, Quad(110f, 30f, 110f, 20f, 100f, 30f, 100f, 20f), 10f, false, Point(100f, 30f))
-            endLine()
+            column("あいう")
             startLine(1f, 0f, false)
             add('a'.code, box(10f, 100f, 6f, 12f), SIZE, false, null)
             endLine()
         }
 
         val rects = letters.centered(
-            arrayOf(Quad(110f, 30f, 110f, 20f, 100f, 30f, 100f, 20f), box(10f, 100f, 6f, 12f), box(300f, 300f, 6f, 12f)),
+            arrayOf(Quad(110f, 20f, 110f, 50f, 100f, 20f, 100f, 50f), box(10f, 100f, 6f, 12f), box(300f, 300f, 6f, 12f)),
             0f,
             0f
         )
 
-        assertRect(floatArrayOf(100f, 20f, 110f, 30f), rects, 0)
+        assertRect(floatArrayOf(100f, 20f, 110f, 50f), rects, 0)
         assertRect(floatArrayOf(10f, 100f, 16f, 112f), rects, 1)
         assertRect(floatArrayOf(300f, 300f, 306f, 312f), rects, 2)
     }
@@ -486,6 +497,15 @@ class PdfTextLettersTest {
         internal fun PdfTextLetters.Builder.line(text: String, left: Float = 10f, top: Float = 100f, width: Float = 6f) {
             startLine(1f, 0f, false)
             text.forEachIndexed { index, char -> add(char.code, box(left + index * width, top, width, SIZE), SIZE, false, null) }
+            endLine()
+        }
+
+        internal fun PdfTextLetters.Builder.column(text: String, left: Float = 100f, top: Float = 20f, size: Float = 10f) {
+            startLine(0f, 1f, true)
+            text.forEachIndexed { index, char ->
+                val start = top + index * size
+                add(char.code, Quad(left + size, start, left + size, start + size, left, start, left, start + size), size, false, Point(left, start))
+            }
             endLine()
         }
     }

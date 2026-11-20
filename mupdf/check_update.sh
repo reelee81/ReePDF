@@ -32,6 +32,8 @@ upstream_fixes=(
     "0018 source/pdf/pdf-op-run.c pattern_cell_too_large"
     "0019 source/pdf/pdf-lex.c number is too long"
     "0020 source/pdf/pdf-object.c never part of the page tree"
+    "0021 source/pdf/pdf-op-run.c adv = -adv;"
+    "0022 source/fitz/stext-device.c VERTICAL_ORIGIN"
 )
 
 current=$(sed -n 's/^version=//p' "$here/build.sh")

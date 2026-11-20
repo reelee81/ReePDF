@@ -165,7 +165,7 @@ Typical build commands:
 
 In Android Studio, simply open the project directory.
 
-MuPDF does not come from Maven: the app uses its own build of MuPDF with twenty patches (the `mupdf` folder).
+MuPDF does not come from Maven: the app uses its own build of MuPDF with twenty-two patches (the `mupdf` folder).
 Gradle downloads the built AAR from the GitHub release `mupdf` of this repository automatically. To build it
 yourself (Android NDK needed), run `bash mupdf/build.sh`; `mupdf/README.md` describes the patches, the build and
 how to check for a newer MuPDF release (`bash mupdf/check_update.sh`).

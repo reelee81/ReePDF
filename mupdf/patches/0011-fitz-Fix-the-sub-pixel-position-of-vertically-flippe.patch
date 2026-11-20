@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: reelee81 <reelee81@gmail.com>
 Date: Wed, 11 Nov 2026 19:02:16 +0100
-Subject: [PATCH 11/20] fitz: Fix the sub-pixel position of vertically flipped
+Subject: [PATCH 11/22] fitz: Fix the sub-pixel position of vertically flipped
  scaled images.
 
 fz_scale_pixmap_cached() took the sub-pixel offset of a vertically

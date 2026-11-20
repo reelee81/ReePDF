@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: reelee81 <reelee81@gmail.com>
 Date: Thu, 12 Nov 2026 13:36:14 +0100
-Subject: [PATCH 15/20] fitz: Saturate the edge color values of mesh shadings.
+Subject: [PATCH 15/22] fitz: Saturate the edge color values of mesh shadings.
 
 prepare_edge() converted the color values and steps of a triangle edge
 to 16.16 fixed point with a plain cast. For an edge that is almost

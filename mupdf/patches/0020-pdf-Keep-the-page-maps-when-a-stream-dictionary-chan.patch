@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: reelee81 <reelee81@gmail.com>
 Date: Sun, 15 Nov 2026 02:05:00 +0100
-Subject: [PATCH 20/20] pdf: Keep the page maps when a stream dictionary
+Subject: [PATCH 20/22] pdf: Keep the page maps when a stream dictionary
  changes.
 
 Every change of an object linked into the document drops the page maps,

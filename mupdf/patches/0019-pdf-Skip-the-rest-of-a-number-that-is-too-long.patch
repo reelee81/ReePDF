@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: reelee81 <reelee81@gmail.com>
 Date: Sun, 15 Nov 2026 01:12:00 +0100
-Subject: [PATCH 19/20] pdf: Skip the rest of a number that is too long.
+Subject: [PATCH 19/22] pdf: Skip the rest of a number that is too long.
 
 lex_number() reads a number into the lexer buffer and stops when the
 buffer is full: the remaining digits stay in the stream and are read as

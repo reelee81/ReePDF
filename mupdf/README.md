@@ -2,9 +2,9 @@
 
 ReePDF uses its own build of the MuPDF Java bindings for Android instead of
 the `com.artifex.mupdf:fitz` package from <https://maven.ghostscript.com>.
-The build is MuPDF 1.28.6 with the twenty patches in [`patches/`](patches),
-modified for ReePDF on 2026-11-08, 2026-11-10, 2026-11-11, 2026-11-12 and
-2026-11-15.
+The build is MuPDF 1.28.6 with the twenty-two patches in
+[`patches/`](patches), modified for ReePDF on 2026-11-08, 2026-11-10,
+2026-11-11, 2026-11-12, 2026-11-15 and 2026-11-20.
 
 ## Modifications
 
@@ -128,6 +128,24 @@ and with a random function test; on Android (ARM) the output is unchanged.
     and load every page dictionary again (57 ms instead of 3 ms per page load
     on a 30 000 page document, and the dictionaries stay in memory). A stream
     is never a node of the page tree.
+21. `0021` — the PDF interpreter passes the advance of a vertical glyph with
+    the sign fitz uses (positive for text that goes down, like
+    `fz_advance_glyph()` and `fz_show_string()`). A PDF gives it as `w1`,
+    which is negative for text that goes down, so the structured text device
+    made every character of a vertical column a line of its own, with a box
+    over the next character: selecting, copying and searching more than one
+    character failed on vertical text. Drawing does not use the advance, so
+    the rendering is unchanged.
+22. `0022` — the box of a vertical character is one em wide, centered across
+    on its vertical origin, starts at it and ends one advance further on. A
+    PDF puts the vertical origin half the glyph width (from the width table
+    of the font) right of and 880/1000 of the size above the glyph origin by
+    default (`DW2`). Upstream starts the box one advance above the glyph
+    origin (0.12 em above the glyph) and at the glyph origin across the
+    column, so a digit or a Latin letter in a column got a box shifted
+    sideways and the highlight of the column split into several quads. A
+    font with its own vertical metrics (`W2`, or another `DW2`) still gets
+    the default, because the device does not know them. It needs `0021`.
 
 Everything else is unchanged upstream code. The Java package stays
 `com.artifex.mupdf.fitz`.
@@ -193,6 +211,7 @@ tools gives a byte-identical file.
 |---|---|
 | `1.28.6-reepdf` | `37d10493d432db9cce5347768ffe94078b5373c684ab5433b15e83c9ef299cc2` |
 | `1.28.6-reepdf2` | `f563508205887a1bc8c1eb3d6185c8964865d8a203a1fdf0745e1589ed221af0` |
+| `1.28.6-reepdf3` | `694aec8a79800dab126c95dc74ee468cf343b56988825b23c39bcd7eccaa79d0` |
 
 ## License
 

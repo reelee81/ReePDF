@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: reelee81 <reelee81@gmail.com>
 Date: Wed, 11 Nov 2026 12:30:14 +0100
-Subject: [PATCH 7/20] jbig2dec: Add an abort callback that stops a running
+Subject: [PATCH 7/22] jbig2dec: Add an abort callback that stops a running
  decode.
 
 jbig2_ctx_set_abort_callback() sets a callback that the decoder asks

@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: reelee81 <reelee81@gmail.com>
 Date: Thu, 12 Nov 2026 13:36:14 +0100
-Subject: [PATCH 14/20] fitz: Reset the rasterizer to an empty clip without
+Subject: [PATCH 14/22] fitz: Reset the rasterizer to an empty clip without
  overflow.
 
 fz_reset_rasterizer() multiplied the clip by the antialiasing scale even

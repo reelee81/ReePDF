@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: reelee81 <reelee81@gmail.com>
 Date: Wed, 11 Nov 2026 12:30:14 +0100
-Subject: [PATCH 6/20] openjpeg: Add an abort handler that stops a running
+Subject: [PATCH 6/22] openjpeg: Add an abort handler that stops a running
  decode.
 
 opj_set_abort_handler() sets a callback that the decoder asks before

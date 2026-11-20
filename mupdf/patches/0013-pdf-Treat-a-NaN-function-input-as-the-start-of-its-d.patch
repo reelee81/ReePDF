@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: reelee81 <reelee81@gmail.com>
 Date: Thu, 12 Nov 2026 13:36:14 +0100
-Subject: [PATCH 13/20] pdf: Treat a NaN function input as the start of its
+Subject: [PATCH 13/22] pdf: Treat a NaN function input as the start of its
  domain.
 
 The functions clamp each input to their domain with fz_clamp(), which

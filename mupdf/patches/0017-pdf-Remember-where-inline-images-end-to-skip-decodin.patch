@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: reelee81 <reelee81@gmail.com>
 Date: Thu, 12 Nov 2026 18:28:53 +0100
-Subject: [PATCH 17/20] pdf: Remember where inline images end to skip decoding
+Subject: [PATCH 17/22] pdf: Remember where inline images end to skip decoding
  them again.
 
 An inline image has no length, so every run of a content stream decodes

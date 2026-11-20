@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: reelee81 <reelee81@gmail.com>
 Date: Sun, 8 Nov 2026 19:37:17 +0100
-Subject: [PATCH 1/20] java: Add the missing JNI binding for
+Subject: [PATCH 1/22] java: Add the missing JNI binding for
  PDFDocument.setPageTreeCache.
 
 PDFDocument.java declares setPageTreeCache(boolean) and the C function

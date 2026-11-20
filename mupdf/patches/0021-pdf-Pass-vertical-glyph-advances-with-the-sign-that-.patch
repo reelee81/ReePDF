@@ -1,0 +1,44 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: reelee81 <reelee81@gmail.com>
+Date: Fri, 20 Nov 2026 11:00:00 +0100
+Subject: [PATCH 21/22] pdf: Pass vertical glyph advances with the sign that
+ fitz uses.
+
+In vertical writing mode a PDF font gives the advance of a glyph as w1
+(from W2 or DW2), which is negative when the text goes down (the default
+is -1000). pdf_show_char passed it on unchanged, but fitz expects a
+vertical advance to be positive for text that goes down: fz_show_string
+moves the pen by -adv and fz_advance_glyph returns the positive vertical
+advance of the font. So the structured text device put the start of
+every vertical character one em below its end, found the next character
+two ems away and started a new line for it: every character of a
+vertical column became a line of its own, its box covered the em below
+the glyph origin, mostly over the next character, and selecting,
+copying and searching more than one character failed on vertical text.
+The advance of a vertical glyph is now negated before it goes into the
+text object. Drawing does not use the advance, so the rendering stays
+the same.
+
+Modified for ReePDF on 2026-11-20.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ source/pdf/pdf-op-run.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/source/pdf/pdf-op-run.c b/source/pdf/pdf-op-run.c
+index 5ef4ccf..55be8e3 100644
+--- a/source/pdf/pdf-op-run.c
++++ b/source/pdf/pdf-op-run.c
+@@ -1361,6 +1361,11 @@ pdf_show_char(fz_context *ctx, pdf_run_processor *pr, int cid, fz_text_language
+ 
+ 	gid = pdf_tos_make_trm(ctx, &pr->tos, &gstate->text, fontdesc, cid, &trm, &adv);
+ 
++	/* A PDF vertical advance is negative when the text goes down, but
++	 * fitz expects it positive then, like fz_advance_glyph gives it. */
++	if (fontdesc->wmode)
++		adv = -adv;
++
+ 	/* If we are uncachable, then render direct. */
+ 	render_direct = !fz_glyph_cacheable(ctx, fontdesc->font, gid);
+ 

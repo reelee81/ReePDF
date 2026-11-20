@@ -84,6 +84,7 @@ import java.util.zip.DeflaterOutputStream
 import kotlin.concurrent.thread
 import kotlin.math.abs
 import kotlin.math.ceil
+import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.time.Duration.Companion.milliseconds
@@ -932,6 +933,7 @@ class R8SmokeActivity : Activity() {
         val lines = document.baselines(index, null, null)
         checkBaselines(lines, all.boxes) { "$label baselines" }
         checkCentered(lines, all.rects) { "$label centered boxes" }
+        checkUprightColumns(document, index, lines, label)
         val word = document.copy(index, null, null).split(WHITESPACE)
             .firstOrNull { it.length >= 2 && it.all(Char::isLetterOrDigit) } ?: return
         val hits = document.search(index, word)
@@ -939,6 +941,24 @@ class R8SmokeActivity : Activity() {
         val counted = document.count(index, word)
         check(counted == hits.count) { "$label: '$word' counts $counted, the search finds ${hits.count}" }
         checkRects(hits.rects, limit) { "$label search" }
+    }
+
+    private suspend fun checkUprightColumns(document: PdfViewerDocument<PdfRasterTarget>, index: Int, lines: PdfTextBaselines, label: String) {
+        val runs = lines.runs
+        for (line in 0 until lines.count) {
+            val run = line * PdfTextBaselines.RUN_SIZE
+            if (runs[run + 7] == 0f) continue
+            val length = hypot(runs[run + 2] - runs[run], runs[run + 3] - runs[run + 1])
+            if (length < UPRIGHT_MIN_LETTERS * runs[run + 6]) continue
+            val from = PdfTextPoint(runs[run], runs[run + 1])
+            val to = PdfTextPoint(runs[run + 2], runs[run + 3])
+            val text = document.copy(index, from, to).trim()
+            check(text.codePointCount(0, text.length) >= 2 && '\n' !in text) { "$label: upright line ${line + 1} copies '$text'" }
+            val boxes = document.highlight(index, from, to).rects.size / PdfTextHits.RECT_SIZE
+            check(boxes == 1) { "$label: upright line ${line + 1} is highlighted in $boxes boxes" }
+            val needle = text.substring(0, text.offsetByCodePoints(0, 2))
+            check(document.search(index, needle).count >= 1) { "$label: upright line ${line + 1} start '$needle' is not found" }
+        }
     }
 
     private fun checkBaselines(lines: PdfTextBaselines, rects: FloatArray, label: () -> String) {
@@ -1392,6 +1412,7 @@ class R8SmokeActivity : Activity() {
         const val TEXT_MIDDLE = 0.27f
         const val CENTER_TOLERANCE = 0.01f
         const val CENTER_TOLERANCE_PT = 0.001f
+        const val UPRIGHT_MIN_LETTERS = 1.5f
         val WHITESPACE = Regex("\\s+")
         const val TEXT = "ŐRSÉG őrség ORSEG"
         const val TEXT_SIZE_PT = 24f

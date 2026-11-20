@@ -21,7 +21,7 @@ the **Apache License 2.0**:
 - `androidx.recyclerview:recyclerview:1.4.0`
 - `androidx.fragment:fragment:1.9.1`
 - `androidx.window:window:1.5.1`
-- `androidx.lifecycle:lifecycle-runtime:2.11.0`
+- `androidx.lifecycle:lifecycle-runtime:2.11.1`
 - `androidx.autofill:autofill:1.3.0`
 
 Many additional transitive AndroidX modules may also be pulled in at build time.
@@ -53,13 +53,13 @@ References:
 
 ## iText Core for Android (AGPL-3.0)
 
-The app uses **iText Core for Android 9.8.0** via the following modules:
+The app uses **iText Core for Android 9.8.1** via the following modules:
 
-- `com.itextpdf.android:kernel-android:9.8.0`
-- `com.itextpdf.android:layout-android:9.8.0`
-- `com.itextpdf.android:forms-android:9.8.0`
-- `com.itextpdf.android:bouncy-castle-adapter-android:9.8.0`
-- `com.itextpdf.android:bouncy-castle-connector-android:9.8.0`
+- `com.itextpdf.android:kernel-android:9.8.1`
+- `com.itextpdf.android:layout-android:9.8.1`
+- `com.itextpdf.android:forms-android:9.8.1`
+- `com.itextpdf.android:bouncy-castle-adapter-android:9.8.1`
+- `com.itextpdf.android:bouncy-castle-connector-android:9.8.1`
 
 These libraries are licensed under the **GNU Affero General Public License v3**,
 or can be used under a separate commercial license purchased from iText.
@@ -77,9 +77,9 @@ built-in PDF viewer and editor, the page thumbnails, the signature placement
 and crop screens, the rendering of signed pages, the measurement of the
 visible content bounds of PDF pages and the repair of damaged PDFs:
 
-- `hu.reelee81.reepdf:mupdf-fitz:1.28.6-reepdf2` — a modified build of MuPDF
-  1.28.6 made for ReePDF: the unmodified upstream source plus twenty patches
-  (modified on 2026-11-08, 2026-11-10, 2026-11-11, 2026-11-12 and 2026-11-15): the missing
+- `hu.reelee81.reepdf:mupdf-fitz:1.28.6-reepdf3` — a modified build of MuPDF
+  1.28.6 made for ReePDF: the unmodified upstream source plus twenty-two patches
+  (modified on 2026-11-08, 2026-11-10, 2026-11-11, 2026-11-12, 2026-11-15 and 2026-11-20): the missing
   JNI binding for `PDFDocument.setPageTreeCache`, a new
   `Context.releaseFreeMemory()`, decoding JPEG 2000 images at a reduced
   resolution when they are drawn scaled down, a new `PDFDocument.clearXref()`,
@@ -94,8 +94,9 @@ visible content bounds of PDF pages and the repair of damaged PDFs:
   remembering where inline images end so that they are not decoded again
   just to find their end, drawing the repeats of a very large pattern
   cell directly instead of through one huge tile, reading a number that is
-  longer than the lexer buffer as one number, and keeping the page maps when
-  only the dictionary of a stream changes. The patches, the build script and the exact
+  longer than the lexer buffer as one number, keeping the page maps when
+  only the dictionary of a stream changes, and extracting vertical text as
+  whole columns with boxes on the glyphs. The patches, the build script and the exact
   upstream commits are in the [`mupdf`](mupdf) folder of this repository; the
   built AAR is published as an asset of the GitHub release `mupdf`.
 

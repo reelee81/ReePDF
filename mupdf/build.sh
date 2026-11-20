@@ -5,7 +5,7 @@ here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 root=$(dirname "$here")
 
 version=1.28.6
-revision=${MUPDF_REVISION:-reepdf2}
+revision=${MUPDF_REVISION:-reepdf3}
 artifact=mupdf-fitz
 api=26
 abis="armeabi-v7a arm64-v8a x86 x86_64"
