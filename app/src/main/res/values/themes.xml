@@ -144,6 +144,11 @@
         <item name="textAllCaps">false</item>
     </style>
 
+    <style name="Widget.ReePDF.Button.Icon" parent="Widget.ReePDF.Button">
+        <item name="iconGravity">textStart</item>
+        <item name="iconSize">@dimen/dp_0</item>
+    </style>
+
     <!-- text button -->
     <style name="ReePDF.TextButton" parent="Widget.Material3.Button.TextButton">
         <item name="android:textColor">@color/material_textbutton_text_color</item>
@@ -198,6 +203,45 @@
         <item name="android:backgroundTint">@color/edittext_bg_color</item>
         <item name="android:gravity">bottom|center_horizontal</item>
         <item name="android:includeFontPadding">false</item>
+
+        <item name="android:textAppearance">@style/TextAppearance.ReePDF.EditText.Normal</item>
+    </style>
+
+    <style name="TextAppearance.ReePDF.EditText.Label" parent="TextAppearance.Material3.BodySmall">
+        <item name="android:textSize">@dimen/dp_12</item>
+        <item name="fontFamily">@font/roboto</item>
+        <item name="android:fontFamily">@font/roboto</item>
+    </style>
+
+    <style name="Widget.ReePDF.TextInputLayout" parent="Widget.Material3.TextInputLayout.OutlinedBox">
+        <item name="materialThemeOverlay">@style/ThemeOverlay.ReePDF.TextInputEditText</item>
+        <item name="android:minWidth">@dimen/dp_0</item>
+        <item name="boxStrokeColor">@color/edittext_bg_color</item>
+        <item name="hintTextColor">@color/edittext_bg_color</item>
+        <item name="android:textColorHint">@color/edittext_bg_color</item>
+        <item name="hintTextAppearance">@style/TextAppearance.ReePDF.EditText.Label</item>
+        <item name="expandedHintEnabled">false</item>
+        <item name="boxCornerRadiusTopStart">@dimen/dp_8</item>
+        <item name="boxCornerRadiusTopEnd">@dimen/dp_8</item>
+        <item name="boxCornerRadiusBottomStart">@dimen/dp_8</item>
+        <item name="boxCornerRadiusBottomEnd">@dimen/dp_8</item>
+    </style>
+
+    <style name="ThemeOverlay.ReePDF.TextInputEditText" parent="">
+        <item name="editTextStyle">@style/Widget.ReePDF.TextInputEditText</item>
+    </style>
+
+    <style name="Widget.ReePDF.TextInputEditText" parent="Widget.Material3.TextInputEditText.OutlinedBox">
+        <item name="android:textColor">@color/edittext_text_color</item>
+        <item name="android:textColorHint">@color/edittext_hint_text_color</item>
+        <item name="android:gravity">center</item>
+        <item name="android:includeFontPadding">false</item>
+        <item name="android:paddingStart">@dimen/dp_4</item>
+        <item name="android:paddingEnd">@dimen/dp_4</item>
+        <item name="android:paddingLeft">@dimen/dp_4</item>
+        <item name="android:paddingRight">@dimen/dp_4</item>
+        <item name="android:paddingTop">@dimen/dp_0</item>
+        <item name="android:paddingBottom">@dimen/dp_0</item>
 
         <item name="android:textAppearance">@style/TextAppearance.ReePDF.EditText.Normal</item>
     </style>

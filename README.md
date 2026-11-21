@@ -2,7 +2,7 @@
 
 Free and open-source PDF toolkit.  
 It opens PDF documents and images, places several pages or cropped areas on one sheet (N-up),
-crops, rotates, reorders and deletes pages, signs or stamps them, and prints, saves or sends the result.
+crops, rotates, reorders and deletes pages, signs or stamps them, and prints, saves or shares the result.
 
 Currently available for Android; desktop versions (Linux, Windows, macOS) are planned.
 
@@ -72,7 +72,7 @@ We publish the source code so that others can use it, modify it and learn from i
   so the signature is not a separate object that could simply be deleted from the PDF later.
   This is not a cryptographic protection: the picture itself can still be edited, and changes are not detected
 - This saves you the usual routine of printing the document, signing it by hand, scanning it back and then
-  sending the scanned copy, for example by e-mail: with the app you sign or stamp the document and send it
+  sending the scanned copy, for example by e-mail: with the app you sign or stamp the document and share it
   right away
 
 ### Built-in PDF viewer and editor
@@ -93,7 +93,7 @@ We publish the source code so that others can use it, modify it and learn from i
 
 - **Print** with the Android print service
 - **Save** to any location with the system file dialog
-- **Send** to any app that accepts PDF files
+- **Share** with any app that accepts PDF files
 - Optional password protection of the output (AES-256, revision 6, so a password-protected file is saved as
   PDF 2.0); the password has to be typed twice
 - File name template with date and time tokens: `[YYYY]`, `[YY]`, `[MM]`, `[DD]`, `[hh]`, `[mm]`, `[ss]`;

@@ -36,6 +36,7 @@
                 android:id="@+id/top_panel"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
+                android:clipChildren="false"
                 android:gravity="center"
                 android:orientation="vertical"
                 android:paddingLeft="@dimen/dp_16"
@@ -52,87 +53,127 @@
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/save_reeprofile1_pages"
-                        android:layout_width="0dp"
-                        android:layout_height="@dimen/dp_44"
-                        android:text="@string/reeprofile1_pages"
-                        android:layout_marginRight="@dimen/dp_2"
-                        app:layout_constraintLeft_toLeftOf="parent"
-                        app:layout_constraintRight_toLeftOf="@+id/save_load_simple_text_1"
-                        app:layout_constraintTop_toTopOf="parent"
-                        app:layout_constraintBottom_toBottomOf="parent"
-                        app:layout_constraintHorizontal_weight="1"
-                        app:layout_constraintHorizontal_chainStyle="spread" />
+                        style="@style/Widget.ReePDF.Button.Icon"
+                        android:layout_width="@dimen/dp_110"
+                        android:layout_height="@dimen/dp_48"
+                        android:contentDescription="@string/save_reeprofile1"
 
-                    <com.google.android.material.textview.MaterialTextView
-                        android:id="@+id/save_load_simple_text_1"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:text="@string/save_load"
-                        android:gravity="center"
-                        android:layout_marginLeft="@dimen/dp_2"
-                        android:layout_marginRight="@dimen/dp_2"
-                        app:layout_constraintLeft_toRightOf="@id/save_reeprofile1_pages"
-                        app:layout_constraintRight_toLeftOf="@+id/load_reeprofile1_pages"
+                        app:icon="@drawable/ic_profile_1_save_56x24"
+                        app:layout_constraintLeft_toLeftOf="parent"
                         app:layout_constraintTop_toTopOf="parent"
-                        app:layout_constraintBottom_toBottomOf="parent"
-                        app:layout_constraintHorizontal_weight="1" />
+                        app:layout_constraintBottom_toBottomOf="parent" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/add_signature"
+                        style="@style/Widget.ReePDF.Button.Icon"
+                        android:layout_width="@dimen/dp_110"
+                        android:layout_height="@dimen/dp_48"
+                        android:contentDescription="@string/select_signature"
+
+                        app:icon="@drawable/ic_signature_seal_48x24"
+                        app:layout_constraintLeft_toLeftOf="parent"
+                        app:layout_constraintRight_toRightOf="parent"
+                        app:layout_constraintTop_toTopOf="parent"
+                        app:layout_constraintBottom_toBottomOf="parent" />
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/load_reeprofile1_pages"
-                        android:layout_width="0dp"
-                        android:layout_height="@dimen/dp_44"
-                        android:text="@string/reeprofile1_pages"
-                        android:layout_marginLeft="@dimen/dp_2"
-                        app:layout_constraintLeft_toRightOf="@id/save_load_simple_text_1"
+                        style="@style/Widget.ReePDF.Button.Icon"
+                        android:layout_width="@dimen/dp_110"
+                        android:layout_height="@dimen/dp_48"
+                        android:contentDescription="@string/load_reeprofile1"
+
+                        app:icon="@drawable/ic_profile_1_load_56x24"
                         app:layout_constraintRight_toRightOf="parent"
                         app:layout_constraintTop_toTopOf="parent"
-                        app:layout_constraintBottom_toBottomOf="parent"
-                        app:layout_constraintHorizontal_weight="1" />
+                        app:layout_constraintBottom_toBottomOf="parent" />
                 </androidx.constraintlayout.widget.ConstraintLayout>
 
                 <androidx.constraintlayout.widget.ConstraintLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginBottom="@dimen/dp_10">
+                    android:layout_marginBottom="@dimen/dp_10"
+                    android:clipChildren="false">
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/save_reeprofile2_pages"
-                        android:layout_width="0dp"
-                        android:layout_height="@dimen/dp_44"
-                        android:text="@string/reeprofile2_pages"
-                        android:layout_marginRight="@dimen/dp_2"
-                        app:layout_constraintLeft_toLeftOf="parent"
-                        app:layout_constraintRight_toLeftOf="@+id/save_load_simple_text_2"
-                        app:layout_constraintTop_toTopOf="parent"
-                        app:layout_constraintBottom_toBottomOf="parent"
-                        app:layout_constraintHorizontal_weight="1"
-                        app:layout_constraintHorizontal_chainStyle="spread" />
+                        style="@style/Widget.ReePDF.Button.Icon"
+                        android:layout_width="@dimen/dp_110"
+                        android:layout_height="@dimen/dp_48"
+                        android:contentDescription="@string/save_reeprofile2"
 
-                    <com.google.android.material.textview.MaterialTextView
-                        android:id="@+id/save_load_simple_text_2"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:text="@string/save_load"
-                        android:gravity="center"
-                        android:layout_marginLeft="@dimen/dp_2"
-                        android:layout_marginRight="@dimen/dp_2"
-                        app:layout_constraintLeft_toRightOf="@id/save_reeprofile2_pages"
-                        app:layout_constraintRight_toLeftOf="@+id/load_reeprofile2_pages"
+                        app:icon="@drawable/ic_profile_2_save_56x24"
+                        app:layout_constraintLeft_toLeftOf="parent"
                         app:layout_constraintTop_toTopOf="parent"
-                        app:layout_constraintBottom_toBottomOf="parent"
-                        app:layout_constraintHorizontal_weight="1" />
+                        app:layout_constraintBottom_toBottomOf="parent" />
+
+                    <androidx.constraintlayout.widget.ConstraintLayout
+                        android:id="@+id/xy_pair"
+                        android:layout_width="@dimen/dp_110"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="@dimen/dp_4"
+                        app:layout_constraintLeft_toLeftOf="parent"
+                        app:layout_constraintRight_toRightOf="parent"
+                        app:layout_constraintBottom_toBottomOf="@id/save_reeprofile2_pages">
+
+                        <com.google.android.material.textfield.TextInputLayout
+                            android:id="@+id/signature_position_x_layout"
+                            style="@style/Widget.ReePDF.TextInputLayout"
+                            android:hint="@string/position_x"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginRight="@dimen/dp_2"
+                            app:layout_constraintLeft_toLeftOf="parent"
+                            app:layout_constraintRight_toLeftOf="@+id/signature_position_y_layout"
+                            app:layout_constraintTop_toTopOf="parent"
+                            app:layout_constraintBottom_toBottomOf="parent"
+                            app:layout_constraintHorizontal_weight="1">
+
+                            <com.google.android.material.textfield.TextInputEditText
+                                android:id="@+id/signature_position_x"
+                                android:hint="@string/margin_xy_hint_text"
+                                android:layout_width="match_parent"
+                                android:layout_height="@dimen/dp_40"
+                                android:inputType="number"
+                                android:maxLength="3"
+                                android:importantForAutofill="no" />
+                        </com.google.android.material.textfield.TextInputLayout>
+
+                        <com.google.android.material.textfield.TextInputLayout
+                            android:id="@+id/signature_position_y_layout"
+                            style="@style/Widget.ReePDF.TextInputLayout"
+                            android:hint="@string/position_y"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginLeft="@dimen/dp_2"
+                            app:layout_constraintLeft_toRightOf="@id/signature_position_x_layout"
+                            app:layout_constraintRight_toRightOf="parent"
+                            app:layout_constraintTop_toTopOf="parent"
+                            app:layout_constraintBottom_toBottomOf="parent"
+                            app:layout_constraintHorizontal_weight="1">
+
+                            <com.google.android.material.textfield.TextInputEditText
+                                android:id="@+id/signature_position_y"
+                                android:hint="@string/margin_xy_hint_text"
+                                android:layout_width="match_parent"
+                                android:layout_height="@dimen/dp_40"
+                                android:inputType="number"
+                                android:maxLength="3"
+                                android:importantForAutofill="no" />
+                        </com.google.android.material.textfield.TextInputLayout>
+                    </androidx.constraintlayout.widget.ConstraintLayout>
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/load_reeprofile2_pages"
-                        android:layout_width="0dp"
-                        android:layout_height="@dimen/dp_44"
-                        android:text="@string/reeprofile2_pages"
-                        android:layout_marginLeft="@dimen/dp_2"
-                        app:layout_constraintLeft_toRightOf="@id/save_load_simple_text_2"
+                        style="@style/Widget.ReePDF.Button.Icon"
+                        android:layout_width="@dimen/dp_110"
+                        android:layout_height="@dimen/dp_48"
+                        android:contentDescription="@string/load_reeprofile2"
+
+                        app:icon="@drawable/ic_profile_2_load_56x24"
                         app:layout_constraintRight_toRightOf="parent"
                         app:layout_constraintTop_toTopOf="parent"
-                        app:layout_constraintBottom_toBottomOf="parent"
-                        app:layout_constraintHorizontal_weight="1" />
+                        app:layout_constraintBottom_toBottomOf="parent" />
                 </androidx.constraintlayout.widget.ConstraintLayout>
 
                 <androidx.constraintlayout.widget.ConstraintLayout
@@ -168,18 +209,22 @@
                             app:layout_constraintHorizontal_weight="1"
                             app:layout_constraintHorizontal_chainStyle="spread"/>
 
-                        <com.google.android.material.textview.MaterialTextView
+                        <androidx.appcompat.widget.AppCompatImageView
                             android:id="@+id/row_simple_text"
-                            android:text="@string/row"
+                            android:contentDescription="@string/row"
+
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
-                            android:textAlignment="textStart"
+                            android:scaleType="fitStart"
                             android:layout_marginLeft="@dimen/dp_2"
                             app:layout_constraintLeft_toRightOf="@id/number_of_rows"
                             app:layout_constraintRight_toRightOf="parent"
                             app:layout_constraintTop_toTopOf="parent"
                             app:layout_constraintBottom_toBottomOf="parent"
-                            app:layout_constraintHorizontal_weight="1"/>
+                            app:layout_constraintHorizontal_weight="1"
+                            app:srcCompat="@drawable/ic_row_24"
+                            app:tintMode="src_in"
+                            app:tint="@color/ic_main_label_color"/>
                     </androidx.constraintlayout.widget.ConstraintLayout>
 
                     <FrameLayout
@@ -196,11 +241,14 @@
 
                         <com.google.android.material.switchmaterial.SwitchMaterial
                             android:id="@+id/landscape"
-                            android:text="@string/landscape"
+                            android:contentDescription="@string/landscape"
+
+                            android:drawablePadding="@dimen/dp_6"
                             android:layout_width="wrap_content"
                             android:layout_height="@dimen/dp_48"
                             android:layout_gravity="center"
-                            app:switchPadding="@dimen/dp_6"/>
+                            app:drawableLeftCompat="@drawable/ic_landscape_24"
+                            app:drawableTint="@color/ic_main_label_color"/>
                     </FrameLayout>
 
                     <androidx.constraintlayout.widget.ConstraintLayout
@@ -214,18 +262,22 @@
                         app:layout_constraintBottom_toBottomOf="parent"
                         app:layout_constraintHorizontal_weight="1">
 
-                        <com.google.android.material.textview.MaterialTextView
+                        <androidx.appcompat.widget.AppCompatImageView
                             android:id="@+id/column_simple_text"
-                            android:text="@string/column"
+                            android:contentDescription="@string/column"
+
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
-                            android:textAlignment="textEnd"
+                            android:scaleType="fitEnd"
                             android:layout_marginRight="@dimen/dp_2"
                             app:layout_constraintLeft_toLeftOf="parent"
                             app:layout_constraintRight_toLeftOf="@+id/number_of_columns"
                             app:layout_constraintTop_toTopOf="parent"
                             app:layout_constraintBottom_toBottomOf="parent"
-                            app:layout_constraintHorizontal_weight="1"/>
+                            app:layout_constraintHorizontal_weight="1"
+                            app:srcCompat="@drawable/ic_column_24"
+                            app:tintMode="src_in"
+                            app:tint="@color/ic_main_label_color"/>
 
                         <com.google.android.material.textfield.TextInputEditText
                             android:id="@+id/number_of_columns"
@@ -263,13 +315,15 @@
 
                         <hu.reelee81.reepdf.TriStateSwitch
                             android:id="@+id/scale"
-                            android:text="@string/print_page_scale"
+                            android:contentDescription="@string/print_page_scale"
+                            android:drawableLeft="@drawable/ic_scale_24"
+                            android:drawablePadding="@dimen/dp_6"
+                            android:drawableTint="@color/ic_main_label_color"
                             android:entries="@array/print_page_scale_states"
                             android:layout_width="wrap_content"
                             android:layout_height="@dimen/dp_48"
                             android:layout_gravity="left|center_vertical"
-                            android:layout_marginLeft="@dimen/dp_5"
-                            app:switchPadding="@dimen/dp_6"/>
+                            android:layout_marginLeft="@dimen/dp_5"/>
                     </FrameLayout>
 
                     <FrameLayout
@@ -286,11 +340,14 @@
 
                         <com.google.android.material.switchmaterial.SwitchMaterial
                             android:id="@+id/drawframe"
-                            android:text="@string/print_page_border"
+                            android:contentDescription="@string/print_page_border"
+
+                            android:drawablePadding="@dimen/dp_6"
                             android:layout_width="wrap_content"
                             android:layout_height="@dimen/dp_48"
                             android:layout_gravity="center"
-                            app:switchPadding="@dimen/dp_6" />
+                            app:drawableLeftCompat="@drawable/ic_frame"
+                            app:drawableTint="@color/ic_main_label_color"/>
                     </FrameLayout>
 
                     <androidx.constraintlayout.widget.ConstraintLayout
@@ -304,18 +361,22 @@
                         app:layout_constraintBottom_toBottomOf="parent"
                         app:layout_constraintHorizontal_weight="1">
 
-                        <com.google.android.material.textview.MaterialTextView
+                        <androidx.appcompat.widget.AppCompatImageView
                             android:id="@+id/border_simple_text"
-                            android:text="@string/margin"
+                            android:contentDescription="@string/margin"
+
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
-                            android:textAlignment="textEnd"
+                            android:scaleType="fitEnd"
                             android:layout_marginRight="@dimen/dp_2"
                             app:layout_constraintLeft_toLeftOf="parent"
                             app:layout_constraintRight_toLeftOf="@+id/margin"
                             app:layout_constraintTop_toTopOf="parent"
                             app:layout_constraintBottom_toBottomOf="parent"
-                            app:layout_constraintHorizontal_weight="1"/>
+                            app:layout_constraintHorizontal_weight="1"
+                            app:srcCompat="@drawable/ic_margin_24"
+                            app:tintMode="src_in"
+                            app:tint="@color/ic_main_label_color"/>
 
                         <com.google.android.material.textfield.TextInputEditText
                             android:id="@+id/margin"
@@ -337,121 +398,31 @@
                 <androidx.constraintlayout.widget.ConstraintLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginBottom="@dimen/dp_10">
-
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/add_signature"
-                        android:layout_width="0dp"
-                        android:layout_height="@dimen/dp_44"
-                        android:text="@string/select_signature"
-                        android:layout_marginRight="@dimen/dp_2"
-                        app:layout_constraintLeft_toLeftOf="parent"
-                        app:layout_constraintRight_toLeftOf="@+id/add_simple_text"
-                        app:layout_constraintTop_toTopOf="parent"
-                        app:layout_constraintBottom_toBottomOf="parent"
-                        app:layout_constraintHorizontal_weight="1"
-                        app:layout_constraintHorizontal_chainStyle="spread" />
-
-                    <com.google.android.material.textview.MaterialTextView
-                        android:id="@+id/add_simple_text"
-                        android:text="@string/add"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:gravity="center"
-                        android:layout_marginLeft="@dimen/dp_2"
-                        android:layout_marginRight="@dimen/dp_2"
-                        app:layout_constraintLeft_toRightOf="@id/add_signature"
-                        app:layout_constraintRight_toLeftOf="@+id/empty_page"
-                        app:layout_constraintTop_toTopOf="parent"
-                        app:layout_constraintBottom_toBottomOf="parent"
-                        app:layout_constraintHorizontal_weight="1" />
+                    android:layout_marginBottom="@dimen/dp_12">
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/empty_page"
-                        android:text="@string/empty_page"
-                        android:layout_width="0dp"
-                        android:layout_height="@dimen/dp_44"
-                        android:layout_marginLeft="@dimen/dp_2"
-                        app:layout_constraintLeft_toRightOf="@id/add_simple_text"
-                        app:layout_constraintRight_toRightOf="parent"
-                        app:layout_constraintTop_toTopOf="parent"
-                        app:layout_constraintBottom_toBottomOf="parent"
-                        app:layout_constraintHorizontal_weight="1" />
-                </androidx.constraintlayout.widget.ConstraintLayout>
+                        style="@style/Widget.ReePDF.Button.Icon"
+                        android:contentDescription="@string/empty_page"
 
-                <androidx.constraintlayout.widget.ConstraintLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginBottom="@dimen/dp_12">
-
-                    <androidx.constraintlayout.widget.ConstraintLayout
-                        android:id="@+id/left_xy_pair"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_marginRight="@dimen/dp_2"
+                        app:icon="@drawable/ic_add_empty_page_48x24"
+                        android:layout_width="@dimen/dp_110"
+                        android:layout_height="@dimen/dp_48"
                         app:layout_constraintLeft_toLeftOf="parent"
-                        app:layout_constraintRight_toLeftOf="@+id/xy_add_simple_text"
                         app:layout_constraintTop_toTopOf="parent"
-                        app:layout_constraintBottom_toBottomOf="parent"
-                        app:layout_constraintHorizontal_weight="1"
-                        app:layout_constraintHorizontal_chainStyle="spread">
-
-                        <com.google.android.material.textfield.TextInputEditText
-                            android:id="@+id/signature_position_x"
-                            android:hint="@string/margin_xy_hint_text"
-                            android:layout_width="0dp"
-                            android:layout_height="@dimen/dp_40"
-                            android:inputType="number"
-                            android:maxLength="3"
-                            android:importantForAutofill="no"
-                            android:layout_marginRight="@dimen/dp_2"
-                            app:layout_constraintLeft_toLeftOf="parent"
-                            app:layout_constraintRight_toLeftOf="@+id/signature_position_y"
-                            app:layout_constraintTop_toTopOf="parent"
-                            app:layout_constraintBottom_toBottomOf="parent"
-                            app:layout_constraintHorizontal_weight="1" />
-
-                        <com.google.android.material.textfield.TextInputEditText
-                            android:id="@+id/signature_position_y"
-                            android:hint="@string/margin_xy_hint_text"
-                            android:layout_width="0dp"
-                            android:layout_height="@dimen/dp_40"
-                            android:inputType="number"
-                            android:maxLength="3"
-                            android:importantForAutofill="no"
-                            android:layout_marginLeft="@dimen/dp_2"
-                            app:layout_constraintLeft_toRightOf="@id/signature_position_x"
-                            app:layout_constraintRight_toRightOf="parent"
-                            app:layout_constraintTop_toTopOf="parent"
-                            app:layout_constraintBottom_toBottomOf="parent"
-                            app:layout_constraintHorizontal_weight="1" />
-                    </androidx.constraintlayout.widget.ConstraintLayout>
-
-                    <com.google.android.material.textview.MaterialTextView
-                        android:id="@+id/xy_add_simple_text"
-                        android:text="@string/xy_add"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:gravity="center"
-                        android:layout_marginLeft="@dimen/dp_2"
-                        android:layout_marginRight="@dimen/dp_2"
-                        app:layout_constraintLeft_toRightOf="@id/left_xy_pair"
-                        app:layout_constraintRight_toLeftOf="@+id/select_pdf"
-                        app:layout_constraintTop_toTopOf="parent"
-                        app:layout_constraintBottom_toBottomOf="parent"
-                        app:layout_constraintHorizontal_weight="1" />
+                        app:layout_constraintBottom_toBottomOf="parent" />
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/select_pdf"
-                        android:text="@string/select_file"
-                        android:layout_width="0dp"
-                        android:layout_height="@dimen/dp_44"
-                        android:layout_marginLeft="@dimen/dp_2"
-                        app:layout_constraintLeft_toRightOf="@id/xy_add_simple_text"
+                        style="@style/Widget.ReePDF.Button.Icon"
+                        android:contentDescription="@string/select_file"
+
+                        app:icon="@drawable/ic_add_pdf_image_64x24"
+                        android:layout_width="@dimen/dp_110"
+                        android:layout_height="@dimen/dp_48"
                         app:layout_constraintRight_toRightOf="parent"
                         app:layout_constraintTop_toTopOf="parent"
-                        app:layout_constraintBottom_toBottomOf="parent"
-                        app:layout_constraintHorizontal_weight="1" />
+                        app:layout_constraintBottom_toBottomOf="parent" />
                 </androidx.constraintlayout.widget.ConstraintLayout>
 
                 <LinearLayout
@@ -460,7 +431,7 @@
                     android:gravity="center"
                     android:orientation="vertical"
                     android:background="@color/bitmap_tv_background_color"
-                    android:layout_marginBottom="@dimen/dp_105">
+                    android:layout_marginBottom="@dimen/dp_109">
 
                     <androidx.constraintlayout.widget.ConstraintLayout
                         android:id="@+id/toolbar_row"
@@ -936,14 +907,18 @@
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="@dimen/dp_3">
 
-                <com.google.android.material.textview.MaterialTextView
+                <androidx.appcompat.widget.AppCompatImageView
                     android:id="@+id/password_out_text"
-                    android:text="@string/password_out_text"
+                    android:contentDescription="@string/password_out_text"
+
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     app:layout_constraintLeft_toLeftOf="parent"
                     app:layout_constraintTop_toTopOf="parent"
-                    app:layout_constraintBottom_toBottomOf="parent" />
+                    app:layout_constraintBottom_toBottomOf="parent"
+                    app:srcCompat="@drawable/ic_password_24"
+                    app:tintMode="src_in"
+                    app:tint="@color/ic_main_label_color"/>
 
                 <com.google.android.material.checkbox.MaterialCheckBox
                     android:id="@+id/password_out"
@@ -1002,41 +977,40 @@
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/print_pdf"
-                    android:layout_width="0dp"
-                    android:layout_height="@dimen/dp_44"
-                    android:text="@string/print"
-                    android:layout_marginRight="@dimen/dp_8"
+                    style="@style/Widget.ReePDF.Button.Icon"
+                    android:layout_width="@dimen/dp_110"
+                    android:layout_height="@dimen/dp_48"
+                    android:contentDescription="@string/print"
+
+                    app:icon="@drawable/ic_print_24"
                     app:layout_constraintLeft_toLeftOf="parent"
-                    app:layout_constraintRight_toLeftOf="@+id/save_pdf_file"
                     app:layout_constraintTop_toTopOf="parent"
-                    app:layout_constraintBottom_toBottomOf="parent"
-                    app:layout_constraintHorizontal_weight="1"
-                    app:layout_constraintHorizontal_chainStyle="spread" />
+                    app:layout_constraintBottom_toBottomOf="parent" />
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/save_pdf_file"
-                    android:layout_width="0dp"
-                    android:layout_height="@dimen/dp_44"
-                    android:text="@string/save_pdf_file"
-                    android:layout_marginLeft="@dimen/dp_8"
-                    android:layout_marginRight="@dimen/dp_8"
-                    app:layout_constraintLeft_toRightOf="@id/print_pdf"
-                    app:layout_constraintRight_toLeftOf="@+id/send_pdf"
+                    style="@style/Widget.ReePDF.Button.Icon"
+                    android:layout_width="@dimen/dp_110"
+                    android:layout_height="@dimen/dp_48"
+                    android:contentDescription="@string/save_pdf_file"
+
+                    app:icon="@drawable/ic_download_24"
                     app:layout_constraintTop_toTopOf="parent"
                     app:layout_constraintBottom_toBottomOf="parent"
-                    app:layout_constraintHorizontal_weight="1" />
+                    app:layout_constraintLeft_toLeftOf="parent"
+                    app:layout_constraintRight_toRightOf="parent" />
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/send_pdf"
-                    android:layout_width="0dp"
-                    android:layout_height="@dimen/dp_44"
-                    android:text="@string/send"
-                    android:layout_marginLeft="@dimen/dp_8"
-                    app:layout_constraintLeft_toRightOf="@id/save_pdf_file"
+                    style="@style/Widget.ReePDF.Button.Icon"
+                    android:layout_width="@dimen/dp_110"
+                    android:layout_height="@dimen/dp_48"
+                    android:contentDescription="@string/share"
+
+                    app:icon="@drawable/ic_share_24"
                     app:layout_constraintRight_toRightOf="parent"
                     app:layout_constraintTop_toTopOf="parent"
-                    app:layout_constraintBottom_toBottomOf="parent"
-                    app:layout_constraintHorizontal_weight="1" />
+                    app:layout_constraintBottom_toBottomOf="parent" />
 
             </androidx.constraintlayout.widget.ConstraintLayout>
         </LinearLayout>

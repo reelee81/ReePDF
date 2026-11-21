@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.textview.MaterialTextView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/label_tooltip_text"
+    style="@style/Widget.ReePDF.TextView"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:background="@drawable/menu_bg_overflow_popup"
+    android:textColor="@color/menu_text_color"
+    android:paddingLeft="@dimen/dp_12"
+    android:paddingRight="@dimen/dp_12"
+    android:paddingTop="@dimen/dp_8"
+    android:paddingBottom="@dimen/dp_8" />

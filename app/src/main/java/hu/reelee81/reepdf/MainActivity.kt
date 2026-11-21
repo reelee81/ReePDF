@@ -334,6 +334,7 @@ class MainActivity : AppCompatActivity() {
     private var lastRootW: Int = -1
     private var lastRootH: Int = -1
     private var bottomPanelView: View? = null
+    private val labelTooltip = LabelTooltip()
     private var hasWindowFocusFlag: Boolean = true
     private var pendingRvUpdate: Boolean = false
     private var suppressNup: Boolean = true
@@ -600,6 +601,17 @@ class MainActivity : AppCompatActivity() {
 
         signaturePosX = findViewById(R.id.signature_position_x)
         signaturePosY = findViewById(R.id.signature_position_y)
+
+        labelTooltip.attach(
+            listOf(
+                R.id.save_reeprofile1_pages, R.id.add_signature, R.id.load_reeprofile1_pages,
+                R.id.save_reeprofile2_pages, R.id.load_reeprofile2_pages,
+                R.id.row_simple_text, R.id.landscape, R.id.column_simple_text,
+                R.id.scale, R.id.drawframe, R.id.border_simple_text,
+                R.id.empty_page, R.id.select_pdf,
+                R.id.password_out_text, R.id.print_pdf, R.id.save_pdf_file, R.id.send_pdf
+            ).map { findViewById(it) }
+        )
 
         val addTimeBtn: ImageButton = findViewById(R.id.add_time)
 
@@ -1633,6 +1645,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        labelTooltip.onTouch(ev)
         if (::binding.isInitialized && binding.overlayDialogPassword.isVisible) {
             return super.dispatchTouchEvent(ev)
         }
@@ -5509,6 +5522,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onStop() {
+        labelTooltip.dismiss()
         try {
             if (::binding.isInitialized) {
                 binding.rootScroll.removeCallbacks(rvHeightUpdateRunnable)
@@ -5783,13 +5797,13 @@ class MainActivity : AppCompatActivity() {
 
     private fun shareNupPdf() {
         if (!passwordOutCb.isChecked) {
-            startOutput(PdfOperationKind.SEND, getString(R.string.in_progress_send), password = null)
+            startOutput(PdfOperationKind.SEND, getString(R.string.in_progress_share), password = null)
             return
         }
 
         val job = lifecycleScope.launch {
             val password = getConfirmedOutputPasswordOrNull() ?: return@launch
-            startOutput(PdfOperationKind.SEND, getString(R.string.in_progress_send), password)
+            startOutput(PdfOperationKind.SEND, getString(R.string.in_progress_share), password)
         }
         activeJobs.add(job)
         job.invokeOnCompletion { activeJobs.remove(job) }
@@ -6095,7 +6109,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun sharePdfWithViewOptions(uri: Uri) {
-        val chooserTitle = getString(R.string.send_pdf_file)
+        val chooserTitle = getString(R.string.share_pdf_file)
 
         val sendIntent = Intent(Intent.ACTION_SEND).apply {
             type = "application/pdf"

@@ -4,5 +4,8 @@
         <attr name="android:text" />
         <attr name="android:entries" />
         <attr name="switchPadding" />
+        <attr name="android:drawablePadding" />
+        <attr name="android:drawableLeft" />
+        <attr name="android:drawableTint" />
     </declare-styleable>
 </resources>

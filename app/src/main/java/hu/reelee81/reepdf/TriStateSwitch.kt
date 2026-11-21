@@ -19,6 +19,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.content.withStyledAttributes
 import androidx.core.graphics.createBitmap
 import androidx.core.graphics.withClip
+import androidx.core.graphics.withTranslation
 import androidx.core.os.BundleCompat
 import androidx.core.view.ViewCompat
 import com.google.android.material.switchmaterial.SwitchMaterial
@@ -50,6 +51,8 @@ class TriStateSwitch @JvmOverloads constructor(
     private val scratch = Canvas(createBitmap(1, 1))
     private var text: CharSequence = ""
     private var stateTexts: List<CharSequence> = emptyList()
+    private var icon: Drawable? = null
+    private var iconTop = 0f
     private val textPaint: TextPaint
     private val thumb: Drawable
     private val track: Drawable
@@ -69,9 +72,12 @@ class TriStateSwitch @JvmOverloads constructor(
 
     private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
     private var downX = 0f
+    private var downY = 0f
     private var downOffset = 0f
     private var downOnThumb = false
     private var dragging = false
+    private var longPressed = false
+    private val longPress = Runnable { longPressed = performLongClick(downX, downY) }
 
     private val offState = intArrayOf(android.R.attr.state_enabled)
     private val onState = intArrayOf(android.R.attr.state_enabled, android.R.attr.state_checked)
@@ -83,8 +89,12 @@ class TriStateSwitch @JvmOverloads constructor(
             text = getText(R.styleable.TriStateSwitch_android_text) ?: ""
             stateTexts = getTextArray(R.styleable.TriStateSwitch_android_entries)?.toList().orEmpty()
             probe.switchPadding = getDimensionPixelSize(R.styleable.TriStateSwitch_switchPadding, probe.switchPadding)
+            probe.compoundDrawablePadding = getDimensionPixelSize(R.styleable.TriStateSwitch_android_drawablePadding, 0)
+            val tint = getColorStateList(R.styleable.TriStateSwitch_android_drawableTint)
+            icon = getDrawable(R.styleable.TriStateSwitch_android_drawableLeft)?.mutate()?.also { it.setTintList(tint) }
         }
         probe.text = text
+        probe.setCompoundDrawablesWithIntrinsicBounds(icon, null, null, null)
         textPaint = TextPaint(probe.paint)
         thumb = requireNotNull(probe.thumbDrawable)
         track = requireNotNull(probe.trackDrawable)
@@ -110,6 +120,8 @@ class TriStateSwitch @JvmOverloads constructor(
         probe.isChecked = false
         textX = probe.compoundPaddingLeft.toFloat()
         textBaseline = probe.baseline.toFloat()
+        val iconHeight = icon?.intrinsicHeight ?: 0
+        iconTop = (probe.compoundPaddingTop + (height - probe.compoundPaddingTop - probe.compoundPaddingBottom - iconHeight) / 2).toFloat()
     }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
@@ -133,6 +145,7 @@ class TriStateSwitch @JvmOverloads constructor(
 
         textPaint.color = probe.textColors.getColorForState(drawableState, probe.currentTextColor)
         canvas.drawText(text, 0, text.length, textX, textBaseline, textPaint)
+        icon?.let { canvas.withTranslation(paddingLeft.toFloat(), iconTop) { it.draw(this) } }
 
         val shift = (offset * thumbRange).roundToInt()
         val thumbCenter = thumbOff.centerX() + shift
@@ -171,15 +184,19 @@ class TriStateSwitch @JvmOverloads constructor(
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 downX = event.x
+                downY = event.y
                 downOffset = offset
                 dragging = false
+                longPressed = false
                 val thumbLeft = thumbOff.left + offset * thumbRange
                 downOnThumb = event.x in (thumbLeft - touchSlop)..(thumbLeft + thumbOff.width() + touchSlop) &&
                     event.y in (thumbOff.top - touchSlop).toFloat()..(thumbOff.bottom + touchSlop).toFloat()
                 isPressed = true
+                postDelayed(longPress, ViewConfiguration.getLongPressTimeout().toLong())
             }
             MotionEvent.ACTION_MOVE -> {
                 val dx = event.x - downX
+                if (abs(dx) > touchSlop || abs(event.y - downY) > touchSlop) removeCallbacks(longPress)
                 if (!dragging && downOnThumb && thumbRange > 0 && abs(dx) > touchSlop) {
                     dragging = true
                     animator?.cancel()
@@ -191,6 +208,7 @@ class TriStateSwitch @JvmOverloads constructor(
                 }
             }
             MotionEvent.ACTION_UP -> {
+                removeCallbacks(longPress)
                 isPressed = false
                 if (dragging) {
                     dragging = false
@@ -198,11 +216,12 @@ class TriStateSwitch @JvmOverloads constructor(
                     val target = SwitchStep.nearest(offset, lastPosition)
                     if (target != committed) rising = target > committed
                     commit(target, animate = true)
-                } else if (abs(event.x - downX) <= touchSlop) {
+                } else if (!longPressed && abs(event.x - downX) <= touchSlop) {
                     performClick()
                 }
             }
             MotionEvent.ACTION_CANCEL -> {
+                removeCallbacks(longPress)
                 isPressed = false
                 if (dragging) {
                     dragging = false
@@ -245,6 +264,7 @@ class TriStateSwitch @JvmOverloads constructor(
     }
 
     override fun onDetachedFromWindow() {
+        removeCallbacks(longPress)
         animator?.cancel()
         animator = null
         offset = committed.toFloat()
