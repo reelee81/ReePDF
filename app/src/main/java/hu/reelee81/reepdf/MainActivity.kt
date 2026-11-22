@@ -719,6 +719,7 @@ class MainActivity : AppCompatActivity() {
             positionIconFor = { pos -> positionIcon(positionsOfNupIndices(listOf(pos))) },
             cropListener = { pos -> openPageCropper(pos) },
             isCroppedAt = { pos -> isNupGroupCropped(pos) },
+            isLandscape = { landscape.isChecked },
             clickListener = { position -> openNupPdf(position) },
             selectionChanged = { _, _ -> updateButtonsState() }
         )

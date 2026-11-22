@@ -13,7 +13,6 @@ import android.util.LruCache
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.CompoundButton
 import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.TextView
@@ -38,6 +37,7 @@ class ThumbnailAdapter(
     private val positionIconFor: (Int) -> Int,
     private val cropListener: (Int) -> Unit,
     private val isCroppedAt: (Int) -> Boolean,
+    private val isLandscape: () -> Boolean,
     private val clickListener: (Int) -> Unit,
     private val selectionChanged: (Int, Boolean) -> Unit
 ) : RecyclerView.Adapter<ThumbnailAdapter.ViewHolder>() {
@@ -228,13 +228,7 @@ class ThumbnailAdapter(
                 (ctx.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
                         Configuration.UI_MODE_NIGHT_NO
 
-            val isLandscapeChecked = try {
-                (holder.itemView.rootView
-                    ?.findViewById<CompoundButton>(R.id.landscape)
-                    ?.isChecked) == true
-            } catch (_: Exception) { false }
-
-            if (isLight && isLandscapeChecked) {
+            if (isLight && isLandscape()) {
                 val disabled = ContextCompat.getColor(ctx, R.color.dark_light_065)
                 val normal   = ContextCompat.getColor(ctx, R.color.dark_light_100)
                 val states   = arrayOf(intArrayOf(-android.R.attr.state_enabled), intArrayOf())
