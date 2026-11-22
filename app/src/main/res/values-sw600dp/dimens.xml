@@ -2,4 +2,5 @@
 <resources>
     <dimen name="dp_9999_main">520dp</dimen>
     <dimen name="dp_9999_overlay">488dp</dimen>
+    <dimen name="dp_9999_main_gap">26dp</dimen>
 </resources>

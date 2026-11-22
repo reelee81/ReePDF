@@ -2,6 +2,7 @@
 <resources>
     <dimen name="dp_9999_main">9999dp</dimen>
     <dimen name="dp_9999_overlay">9999dp</dimen>
+    <dimen name="dp_9999_main_gap">16dp</dimen>
     <dimen name="dp_0">0dp</dimen>
     <dimen name="dp_1">1dp</dimen>
     <dimen name="dp_2">2dp</dimen>
@@ -30,7 +31,6 @@
     <dimen name="dp_56">56dp</dimen>
     <dimen name="dp_64">60dp</dimen>
     <dimen name="dp_109">109dp</dimen>
-    <dimen name="dp_110">110dp</dimen>
     <dimen name="dp_112">112dp</dimen>
     <dimen name="dp_158">158dp</dimen>
     <dimen name="dp_200">200dp</dimen>

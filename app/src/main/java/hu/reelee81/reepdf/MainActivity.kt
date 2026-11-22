@@ -1274,6 +1274,24 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun reapplyMainButtonGapsFromResources() {
+        val gapPx = resources.getDimensionPixelSize(R.dimen.dp_9999_main_gap)
+
+        listOf(binding.addSignature, binding.xyPair, binding.addRowMiddle, binding.savePdfFile)
+            .forEach { updateHorizontalMargins(it, gapPx) }
+    }
+
+    private fun updateHorizontalMargins(view: View, marginPx: Int) {
+        val lp = view.layoutParams as? LayoutParams
+            ?: return
+
+        if (lp.leftMargin != marginPx || lp.rightMargin != marginPx) {
+            lp.leftMargin = marginPx
+            lp.rightMargin = marginPx
+            view.layoutParams = lp
+        }
+    }
+
     override fun onConfigurationChanged(newConfig: Configuration) {
         val prevConfig = lastConfigSnapshotForDiff?.let { Configuration(it) } ?: Configuration(newConfig)
         lastConfigSnapshotForDiff = Configuration(newConfig)
@@ -1283,6 +1301,8 @@ class MainActivity : AppCompatActivity() {
         recomputeTabletLikeFlag()
 
         reapplyPanelsMaxWidthFromResources()
+
+        reapplyMainButtonGapsFromResources()
 
         fastScroller?.refreshDisplayMetrics()
 
