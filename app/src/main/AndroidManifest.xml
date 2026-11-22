@@ -113,6 +113,11 @@
             android:exported="false"
             android:theme="@style/Theme.ReePDF.PdfViewer" />
 
+        <activity
+            android:name="hu.reelee81.reepdf.NotificationReturn"
+            android:exported="false"
+            android:theme="@android:style/Theme.NoDisplay" />
+
         <service
             android:name=".PdfProcessingForegroundService"
             android:exported="false"

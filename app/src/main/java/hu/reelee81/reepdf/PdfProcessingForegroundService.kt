@@ -29,6 +29,9 @@ class PdfProcessingForegroundService : Service() {
         const val PROGRESS_NONE = -2
         const val PROGRESS_INDETERMINATE = -1
 
+        private val screens = ShownScreens()
+        @Volatile private var running = false
+
         fun start(context: Context, message: String, progress: Int = PROGRESS_NONE) {
             if (PdfOperations.runner(context).state.value.isBusy) return
             val appCtx = context.applicationContext
@@ -55,11 +58,25 @@ class PdfProcessingForegroundService : Service() {
             context.stopService(intent)
         }
 
+        fun startIfNotRunning(context: Context, message: String, progress: Int = PROGRESS_NONE) {
+            if (!running) start(context, message, progress)
+        }
+
+        fun resumeForOperation(context: Context) {
+            if (!running && PdfOperations.runner(context).state.value.isBusy) startForOperation(context)
+        }
+
+        fun screen(): ShownScreens.Screen = screens.screen()
+
         private fun send(appCtx: Context, intent: Intent) {
+            if (!ProcessingServiceGate.maySend(running, screens.any) { PdfProcessingNotifications.areOn(appCtx) }) return
             try {
                 appCtx.startService(intent)
             } catch (_: IllegalStateException) {
-                ContextCompat.startForegroundService(appCtx, intent)
+                try {
+                    ContextCompat.startForegroundService(appCtx, intent)
+                } catch (_: IllegalStateException) {
+                }
             }
         }
     }
@@ -69,6 +86,7 @@ class PdfProcessingForegroundService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        running = true
         PdfProcessingNotifications.createChannelIfNeeded(this)
     }
 
@@ -104,6 +122,7 @@ class PdfProcessingForegroundService : Service() {
     }
 
     override fun onDestroy() {
+        running = false
         scope.cancel()
         super.onDestroy()
     }

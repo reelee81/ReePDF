@@ -141,7 +141,8 @@
     <string name="battery_optimization">Battery optimization</string>
     <string name="battery_optimization_text">For long PDF operations (1000+ pages), we recommend disabling battery optimization for this app; otherwise, the system may stop processing when you put the app in the background or lock the screen.\n\nThe location of this setting differs between manufacturers, but usually:\nSettings\n→ Apps\n→ Manage apps\n→ ReePDF\n→ “Power usage” or “Battery”\n\nTo be absolutely sure:\n• Some manufacturers are very aggressive with battery saving (for example when the screen is locked), so the process may still be paused.\n• Stay on the app screen during long operations: the app then keeps the display awake until the processing finishes.</string>
     <string name="allow_notifications">Allow notifications</string>
-    <string name="allow_notifications_text">During long PDF operations, the app shows the processing progress in a notification, without sound. If notifications are turned off, processing still runs, but the progress is only visible in the app.\n\nOK opens the app\'s notification settings, where you can turn them on.</string>
+    <string name="allow_notifications_turned_off">Allow notifications – turned off</string>
+    <string name="allow_notifications_text">During long PDF operations, the app shows the processing progress in a notification, without sound, and runs as a foreground service, so processing can continue in the background.\n\nWhile notifications are not allowed, the foreground service cannot be used, and the system may stop processing while the app is in the background.\n\nOK opens the app\'s notification settings, where you can turn them on.</string>
     <string name="position_on_page">Position on page(s)</string>
     <string name="pdf_edits_save_failed">Saving PDF edits failed: %1$s</string>
     <string name="pdf_edits_erasing">Removing edits</string>

@@ -27,8 +27,8 @@ android {
         applicationId = "hu.reelee81.reepdf"
         minSdk = 26
         targetSdk = 37
-        versionCode = 311
-        versionName = "3.11"
+        versionCode = 312
+        versionName = "3.12"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

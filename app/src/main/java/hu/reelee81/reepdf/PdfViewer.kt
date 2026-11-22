@@ -64,7 +64,9 @@ class PdfViewer : AppCompatActivity(), ViewerActions {
 
     private lateinit var model: PdfViewerModel
     private var serviceCaption: String? = null
+    private var serviceProgress = PdfProcessingForegroundService.PROGRESS_NONE
     private var serviceJob: Job? = null
+    private val serviceScreen = PdfProcessingForegroundService.screen()
     private var accessibility: AccessibilityManager? = null
     private val touchExploration = AccessibilityManager.TouchExplorationStateChangeListener { enabled ->
         model.state?.readsPageTexts = enabled
@@ -72,6 +74,7 @@ class PdfViewer : AppCompatActivity(), ViewerActions {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        serviceScreen.show()
         applySystemBars()
 
         model = ViewModelProvider(this)[PdfViewerModel::class.java]
@@ -154,11 +157,18 @@ class PdfViewer : AppCompatActivity(), ViewerActions {
 
     override fun onStart() {
         super.onStart()
+        serviceScreen.show()
         model.state?.onShown()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        serviceCaption?.let { PdfProcessingForegroundService.startIfNotRunning(this, it, serviceProgress) }
     }
 
     override fun onStop() {
         model.state?.onHidden()
+        serviceScreen.hide()
         super.onStop()
     }
 
@@ -188,6 +198,7 @@ class PdfViewer : AppCompatActivity(), ViewerActions {
     }
 
     override fun onDestroy() {
+        serviceScreen.hide()
         accessibility?.removeTouchExplorationStateChangeListener(touchExploration)
         accessibility = null
         serviceJob?.cancel()
@@ -283,10 +294,12 @@ class PdfViewer : AppCompatActivity(), ViewerActions {
         )
         if (serviceCaption != caption) {
             serviceCaption = caption
+            serviceProgress = PdfProcessingForegroundService.PROGRESS_NONE
             PdfProcessingForegroundService.start(this, caption)
         }
         serviceJob = lifecycleScope.launch {
             delay((NOTIFICATION_PROGRESS_MS - ViewerWait.REVEAL_MS).milliseconds)
+            serviceProgress = PdfProcessingForegroundService.PROGRESS_INDETERMINATE
             PdfProcessingForegroundService.start(this@PdfViewer, caption, PdfProcessingForegroundService.PROGRESS_INDETERMINATE)
         }
     }

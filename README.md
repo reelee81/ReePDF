@@ -113,7 +113,7 @@ We publish the source code so that others can use it, modify it and learn from i
 ### Long operations
 
 - Progress window with percentage and a cancel button; canceling restores the previous state
-- Processing continues in the background with a notification, and the screen stays on while the app is open
+- With notifications allowed, processing continues in the background with a notification (tapping it returns to the app), and the screen stays on while the app is open
 - “Battery optimization” help in the menu, because some phones stop background work during long operations
 - Built for very large documents: pages are processed in batches whose size adapts to the page content,
   to keep memory usage low

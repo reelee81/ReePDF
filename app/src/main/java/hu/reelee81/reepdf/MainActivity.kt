@@ -460,8 +460,12 @@ class MainActivity : AppCompatActivity() {
 
     private val notificationPermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
+    private val serviceScreen = PdfProcessingForegroundService.screen()
+    private var notificationsMenuItem: MenuItem? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
 
+        serviceScreen.show()
         session = if (savedInstanceState == null) sessions.incrementAndGet() else sessions.get()
         if (savedInstanceState == null) {
             val operations = PdfOperations.runner(this)
@@ -502,6 +506,8 @@ class MainActivity : AppCompatActivity() {
         }
 
         super.onCreate(savedInstanceState)
+
+        PdfProcessingNotifications.createChannelIfNeeded(this)
 
         // START Alternative DEBUG mode check
         val isDebug = try {
@@ -2742,6 +2748,8 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
 
+        serviceScreen.hide()
+
         runCatching {
             if (::binding.isInitialized) {
                 binding.root.removeCallbacks(progressTicker)
@@ -3686,8 +3694,7 @@ class MainActivity : AppCompatActivity() {
             label?.visibility = if (linear) View.GONE else View.INVISIBLE
         }
 
-        if (!operationOverlay &&
-            (handoverId == null || PdfOperations.runner(this).isHolding) &&
+        if (notifiesScreenProgress() &&
             ProgressNotifyPacing.waitMs(progressTracker.startedAt, progressNotified, progressNotifiedAt, percent, now) == 0L
         ) {
             progressNotified = percent
@@ -5427,6 +5434,7 @@ class MainActivity : AppCompatActivity() {
     override fun onStart() {
         super.onStart()
 
+        serviceScreen.show()
         PdfOperations.runner(this).screenStarted()
 
         if (::adapter.isInitialized) {
@@ -5538,6 +5546,7 @@ class MainActivity : AppCompatActivity() {
         foldableInfoJob = null
 
         PdfOperations.runner(this).screenStopped()
+        serviceScreen.hide()
 
         if (handoverId == null && ::adapter.isInitialized) adapter.stopRendering()
 
@@ -6212,6 +6221,8 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        resumeProcessingService()
+        updateNotificationsMenuItem()
         setThemedBackArrow()
         suppressNup = false
         runCatching { snapshotInitialPrefsIfNeeded() }
@@ -6254,7 +6265,49 @@ class MainActivity : AppCompatActivity() {
 
         MenuCompat.setGroupDividerEnabled(menu, true)
 
+        notificationsMenuItem = menu.findItem(R.id.action_notifications)
+        updateNotificationsMenuItem()
+
         return true
+    }
+
+    private fun notifiesScreenProgress(): Boolean =
+        !operationOverlay && (handoverId == null || PdfOperations.runner(this).isHolding)
+
+    private fun resumeProcessingService() {
+        PdfProcessingForegroundService.resumeForOperation(this)
+        if (::binding.isInitialized &&
+            (binding.overlayProgressDialog.isVisible || binding.overlayProgressDialogUpdateUi.isVisible) &&
+            notifiesScreenProgress()
+        ) {
+            PdfProcessingForegroundService.startIfNotRunning(this, progressMessage, progressNotified)
+        }
+    }
+
+    private fun updateNotificationsMenuItem() {
+        val item = notificationsMenuItem ?: return
+        val title = getString(R.string.allow_notifications)
+        val icon = if (PdfProcessingNotifications.areOn(this)) {
+            null
+        } else {
+            AppCompatResources.getDrawable(this, R.drawable.ic_exclamation_24)?.mutate()
+        }
+        if (icon == null) {
+            item.title = title
+            item.contentDescription = null
+            return
+        }
+        icon.setTint(ContextCompat.getColor(this, R.color.menu_notifications_off_icon_color))
+        icon.setBounds(0, 0, icon.intrinsicWidth, icon.intrinsicHeight)
+        item.title = SpannableString(title + Char(0xFFFC)).apply {
+            setSpan(
+                TrailingIconSpan(icon, resources.getDimensionPixelSize(R.dimen.dp_8)),
+                title.length,
+                length,
+                Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+            )
+        }
+        item.contentDescription = getString(R.string.allow_notifications_turned_off)
     }
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
