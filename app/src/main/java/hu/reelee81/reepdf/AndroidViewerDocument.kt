@@ -81,7 +81,7 @@ class AndroidViewerDocument private constructor(
             marks.marks.map { found ->
                 val mark = found.mark
                 ViewerSavedMark(
-                    mark.id, found.stream, ViewerMarkKind.valueOf(mark.kind.name), mark.width,
+                    mark.id, found.stream, ViewerMarkKind.valueOf(mark.kind.name), mark.color, mark.width,
                     ViewerMarkPath(mark.path.verbs, mark.path.points), found.clip
                 )
             },

@@ -248,6 +248,32 @@ class PdfProjectionAreaTest {
     }
 
     @Test
+    fun aSignaturePlacedAgainAndAgainKeepsTheSheetDepthAndStaysOnItsOwnLabelWithItsKindAndColor() {
+        build(scaled)
+        var depthAfterFirst = -1
+        for (round in 0 until 8) {
+            val area = areas()[round % 4]
+            project(save(signature("r$round", area, round.toDouble())))
+            build(scaled)
+            val depth = maxDepth(nup())
+            if (round == 0) depthAfterFirst = depth else assertEquals("round $round", depthAfterFirst, depth)
+        }
+
+        for (index in 0..3) {
+            val marks = PdfMarkContent.read(layer(index)!!).map { it.mark }
+            assertEquals(listOf("r$index", "r${index + 4}"), marks.map { it.id })
+            for (mark in marks) {
+                assertEquals(PdfMarkKind.SIGNATURE, mark.kind)
+                assertEquals(0x3D5FEC, mark.color)
+                assertEquals(
+                    listOf(PdfMarkPath.MOVE, PdfMarkPath.LINE, PdfMarkPath.MOVE, PdfMarkPath.CUBIC),
+                    mark.path.verbs.toList()
+                )
+            }
+        }
+    }
+
+    @Test
     fun erasingEveryMarkOfAProjectedPieceRemovesTheLayer() {
         build(scaled)
         val area = areas()[2]
@@ -342,6 +368,17 @@ class PdfProjectionAreaTest {
         PdfMarkPath.Builder().moveTo(x1.toFloat(), y.toFloat()).lineTo(x2.toFloat(), y.toFloat())
             .lineTo(x2.toFloat(), (y + 1).toFloat()).lineTo(x1.toFloat(), (y + 1).toFloat()).close().build()
     )
+
+    private fun signature(id: String, area: NupArea, shift: Double): PdfMark {
+        val y = (mid(area) + shift).toFloat()
+        val left = area.left.toFloat()
+        val right = area.right.toFloat()
+        return PdfMark(
+            id, PdfMarkKind.SIGNATURE, 0x3D5FEC, 1.5f,
+            PdfMarkPath.Builder().moveTo(left + 10, y).lineTo(left + 30, y + 8)
+                .moveTo(left + 35, y).curveTo(left + 40, y + 10, left + 50, y - 10, right - 10, y).build()
+        )
+    }
 
     private fun save(vararg marks: PdfMark): File = write(PdfMarkSave.Plan(added = mapOf(0 to marks.toList())))
 

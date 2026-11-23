@@ -9,6 +9,8 @@ class ViewerEditSession {
         class Erase(val marks: Set<ViewerMark>, val saved: Set<SavedRef>) : Action
 
         class Blank(val pages: Set<Int>?) : Action
+
+        class Replace(val marks: Set<ViewerMark>, val saved: Set<SavedRef>, val mark: ViewerMark) : Action
     }
 
     class State internal constructor(
@@ -88,6 +90,14 @@ class ViewerEditSession {
                         erased.getOrPut(stream) { LinkedHashSet() } += id
                         erasedPages[stream] = page
                     }
+                }
+                is Action.Replace -> {
+                    for (mark in action.marks) added[mark.page]?.remove(mark)
+                    for ((page, stream, id) in action.saved) {
+                        erased.getOrPut(stream) { LinkedHashSet() } += id
+                        erasedPages[stream] = page
+                    }
+                    added.getOrPut(action.mark.page) { ArrayList() } += action.mark
                 }
                 is Action.Blank -> {
                     val pages = action.pages

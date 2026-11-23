@@ -40,6 +40,7 @@ class ViewerState(val title: String, val canEdit: Boolean, private val scope: Co
 
     init {
         editor.onFailure = { text -> editMessage = ViewerEditMessage.EraseFailed(text) }
+        editor.signatures.onFailure = { text -> editMessage = ViewerEditMessage.SignatureFailed(text) }
     }
 
     internal val surface: ViewerSurface = ViewerSurface(
@@ -233,6 +234,9 @@ class ViewerState(val title: String, val canEdit: Boolean, private val scope: Co
     fun handleBack(): Boolean = when {
         editor.isActive -> {
             when {
+                editor.signatures.pad?.isDrawing == true -> Unit
+                editor.signatures.pad != null -> editor.signatures.cancelPad()
+                editor.signatures.deleting != null -> editor.signatures.dismissDelete()
                 editor.question != null -> editor.question = null
                 editor.panel != null || editor.rowOpen -> editor.closePanel()
                 editor.state.hasChanges -> editor.question = ViewerEditQuestion.EXIT
@@ -376,4 +380,6 @@ sealed interface ViewerEditMessage {
     class SaveFailed(val text: String) : ViewerEditMessage
 
     class EraseFailed(val text: String) : ViewerEditMessage
+
+    class SignatureFailed(val text: String) : ViewerEditMessage
 }

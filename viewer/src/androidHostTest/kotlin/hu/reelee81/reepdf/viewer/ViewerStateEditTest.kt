@@ -67,6 +67,50 @@ class ViewerStateEditTest {
     }
 
     @Test
+    fun backClosesTheSignaturePadAndTheDeleteQuestionBeforeThePanel() {
+        val store = MemoryStore()
+        state.editor.signatures.attach(store)
+        opened()
+        state.startEditing()
+        state.editor.tapTool(ViewerEditTool.SIGNATURE)
+        state.editor.tapTool(ViewerEditTool.SIGNATURE)
+        state.editor.openSignaturePad(0)
+
+        assertTrue(state.handleBack())
+        assertNull(state.editor.signatures.pad)
+        assertEquals(ViewerEditPanel.SIGNATURES, state.editor.panel)
+
+        store.saved[1] = ViewerSignature(2f, listOf(floatArrayOf(0.1f, 0.1f)))
+        state.editor.signatures.load()
+        state.editor.signatures.askDelete(1)
+        assertTrue(state.handleBack())
+        assertNull(state.editor.signatures.deleting)
+        assertTrue(state.editor.signatures.saved[1] != null)
+        assertEquals(ViewerEditPanel.SIGNATURES, state.editor.panel)
+        assertTrue(state.handleBack())
+        assertNull(state.editor.panel)
+    }
+
+    @Test
+    fun backDoesNothingWhileASignatureLineIsBeingDrawn() {
+        state.editor.signatures.attach(MemoryStore())
+        opened()
+        state.startEditing()
+        state.editor.openSignaturePad(0)
+        val pad = state.editor.signatures.pad!!
+
+        pad.begin(0.1f, 0.1f, 0.01f)
+        assertTrue(state.handleBack())
+        assertSame(pad, state.editor.signatures.pad)
+        pad.extend(0.3f, 0.2f)
+        pad.end(0.3f, 0.2f)
+        assertTrue(state.handleBack())
+
+        assertNull(state.editor.signatures.pad)
+        assertTrue(state.editor.isActive)
+    }
+
+    @Test
     fun backWithoutChangesLeavesEditingAtOnce() {
         opened()
         state.startEditing()
@@ -255,5 +299,19 @@ class ViewerStateEditTest {
         const val VIEW_WIDTH = 1_080
         const val VIEW_HEIGHT = 2_000
         const val SPACING = 16.0
+    }
+
+    private class MemoryStore : ViewerSignatureStore {
+        val saved = arrayOfNulls<ViewerSignature>(ViewerSignature.SLOTS)
+
+        override suspend fun read(slot: Int): ViewerSignature? = saved[slot]
+
+        override suspend fun write(slot: Int, signature: ViewerSignature) {
+            saved[slot] = signature
+        }
+
+        override suspend fun delete(slot: Int) {
+            saved[slot] = null
+        }
     }
 }

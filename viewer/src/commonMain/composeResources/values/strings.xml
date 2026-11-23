@@ -90,5 +90,16 @@
     <string name="mark_color_slate_blue">Slate blue</string>
     <string name="mark_color_dark_olive_green">Dark olive green</string>
     <string name="mark_color_tan">Tan</string>
+    <string name="edit_signature_1">Signature 1</string>
+    <string name="edit_signature_2">Signature 2</string>
+    <string name="edit_signature_add">Add %1$s</string>
+    <string name="edit_signature_edit">Edit %1$s</string>
+    <string name="edit_signature_delete">Delete %1$s</string>
+    <string name="edit_signature_empty">Empty</string>
+    <string name="edit_signature_1_delete_question">Delete Signature 1?</string>
+    <string name="edit_signature_2_delete_question">Delete Signature 2?</string>
+    <string name="clear_text">CLEAR</string>
+    <string name="decimal_separator">.</string>
+    <string name="signature_store_failed">Storing the signature failed: %1$s</string>
     <string name="edit_scroll">Scroll without drawing</string>
 </resources>

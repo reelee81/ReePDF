@@ -13,16 +13,16 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -39,6 +39,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 @Composable
@@ -48,15 +49,14 @@ internal fun ViewerWaitDialog(
     colors: ReeColors,
     overlayColor: Color,
     fontFamily: FontFamily,
+    mainPanelWidth: Dp,
     onCancel: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val density = LocalDensity.current
-    BoxWithConstraints(modifier.fillMaxSize().background(overlayColor), contentAlignment = Alignment.Center) {
-        val wide = maxWidth > maxHeight || minOf(maxWidth, maxHeight) >= WIDE_SCREEN
+    Box(modifier.fillMaxSize().background(overlayColor), contentAlignment = Alignment.Center) {
         Column(
-            Modifier.padding(OUTER_PADDING)
-                .then(if (wide) Modifier.widthIn(max = WIDE_PANEL) else Modifier)
+            Modifier.dialogFrame(mainPanelWidth)
                 .fillMaxWidth()
                 .background(colors.alertdialogBackgroundColor.default, RoundedCornerShape(PANEL_RADIUS))
                 .padding(INNER_PADDING),
@@ -64,7 +64,7 @@ internal fun ViewerWaitDialog(
         ) {
             BasicText(
                 text = caption,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).fillMaxWidth(),
                 style = TextStyle(
                     color = colors.progressInfoTextColor.default,
                     fontSize = with(density) { CAPTION_SIZE.toSp() },
@@ -88,18 +88,23 @@ internal fun ViewerTextButton(
     colors: ReeColors,
     fontFamily: FontFamily,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true
 ) {
     val density = LocalDensity.current
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
-    val textColor = if (pressed) colors.materialTextbuttonTextColor.of(ReeColorState.PRESSED) else colors.materialTextbuttonTextColor.default
+    val textColor = when {
+        !enabled -> colors.materialTextbuttonTextColor.of(ReeColorState.DISABLED)
+        pressed -> colors.materialTextbuttonTextColor.of(ReeColorState.PRESSED)
+        else -> colors.materialTextbuttonTextColor.default
+    }
     val pressedBackground = colors.materialTextbuttonRippleColor.default.copy(alpha = PRESSED_ALPHA)
     Box(
         modifier.padding(vertical = BUTTON_INSET)
             .heightIn(min = BUTTON_MIN_HEIGHT)
             .background(if (pressed) pressedBackground else Color.Transparent, RoundedCornerShape(BUTTON_RADIUS))
-            .clickable(interactionSource = interaction, indication = null, role = Role.Button, onClick = onClick)
+            .clickable(enabled = enabled, interactionSource = interaction, indication = null, role = Role.Button, onClick = onClick)
             .padding(horizontal = BUTTON_PADDING),
         contentAlignment = Alignment.Center
     ) {
@@ -149,9 +154,6 @@ private fun DrawScope.drawBar(color: Color, start: Float, end: Float) {
     drawRoundRect(color, Offset(from, 0f), Size(to - from, size.height), CornerRadius(size.height / 2))
 }
 
-private val WIDE_SCREEN = 600.dp
-private val WIDE_PANEL = 488.dp
-private val OUTER_PADDING = 16.dp
 private val INNER_PADDING = 16.dp
 private val PANEL_RADIUS = 12.dp
 private val CAPTION_SIZE = 14.dp

@@ -56,6 +56,7 @@ class ReePaletteTest {
         "teal_025" to p.teal025,
         "lemon_100" to p.lemon100,
         "orange_100" to p.orange100,
+        "green_100" to p.green100,
         "thumb_dark_light_075" to p.thumbDarkLight075,
         "thumb_dark_light_050" to p.thumbDarkLight050,
         "dark_light_100" to p.darkLight100,

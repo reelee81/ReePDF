@@ -3,6 +3,7 @@ package hu.reelee81.reepdf.viewer
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -25,9 +26,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -37,7 +40,10 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathOperation
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.pointerInput
@@ -46,6 +52,7 @@ import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
@@ -60,7 +67,14 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import hu.reelee81.reepdf.viewer.resources.Res
+import hu.reelee81.reepdf.viewer.resources.decimal_separator
 import hu.reelee81.reepdf.viewer.resources.edit_line_width
+import hu.reelee81.reepdf.viewer.resources.edit_signature_1
+import hu.reelee81.reepdf.viewer.resources.edit_signature_2
+import hu.reelee81.reepdf.viewer.resources.edit_signature_add
+import hu.reelee81.reepdf.viewer.resources.edit_signature_delete
+import hu.reelee81.reepdf.viewer.resources.edit_signature_edit
+import hu.reelee81.reepdf.viewer.resources.edit_signature_empty
 import hu.reelee81.reepdf.viewer.resources.edit_underline_straight
 import hu.reelee81.reepdf.viewer.resources.edit_underline_wavy
 import kotlin.math.roundToInt
@@ -86,7 +100,7 @@ internal fun ViewerEditPanels(
         val palette = tool.palette ?: return@BoxWithConstraints
         val cell = minOf(CELL, (maxWidth - PANEL_EDGE * 2 - PANEL_PADDING * 2) / COLUMNS)
         val contentWidth = if (panel == ViewerEditPanel.STYLE) STYLE_WIDTH else cell * COLUMNS
-        val underRow = row && (panel == ViewerEditPanel.WIDTH || panel == ViewerEditPanel.STYLE)
+        val underRow = row && (panel == ViewerEditPanel.WIDTH || panel == ViewerEditPanel.STYLE || panel == ViewerEditPanel.SIGNATURES)
         val iconCenter = when {
             underRow -> ViewerEditBarLayout.rowCenter(tool, maxWidth.value)
             panel == ViewerEditPanel.COLORS -> ViewerEditBarLayout.center(ViewerEditBarLayout.SWATCH, maxWidth.value)
@@ -113,6 +127,7 @@ internal fun ViewerEditPanels(
                 ViewerEditPanel.COLORS -> Palette(editor, tool, palette, colors, viewerColors, cell)
                 ViewerEditPanel.WIDTH -> Widths(state, tool, palette, colors, fontFamily, cell * COLUMNS)
                 ViewerEditPanel.STYLE -> Styles(editor, colors)
+                ViewerEditPanel.SIGNATURES -> Signatures(editor, colors, viewerColors, cell * COLUMNS)
             }
         }
     }
@@ -216,18 +231,31 @@ private fun Widths(
     width: Dp
 ) {
     val editor = state.editor
-    val density = LocalDensity.current
-    val index = editor.settings.widthIndex(tool)
-    val value = palette.widths[index]
-    val text = value.roundToInt().toString()
-    val label = stringResource(Res.string.edit_line_width)
-    val sample = colors.normalTextColor.default
     val window = LocalWindowInfo.current.containerSize
     val fitZoom = fitZoom(state, minOf(window.width, window.height))
+    ViewerWidthSlider(palette.widths, editor.settings.widthIndex(tool), { it * fitZoom }, colors, fontFamily, editor::chooseWidth, Modifier.width(width))
+}
+
+@Composable
+internal fun ViewerWidthSlider(
+    values: FloatArray,
+    index: Int,
+    thickness: (Float) -> Float,
+    colors: ReeColors,
+    fontFamily: FontFamily,
+    onChoose: (Int) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val density = LocalDensity.current
+    val value = values[index]
+    val separator = stringResource(Res.string.decimal_separator)
+    val text = widthText(value, separator)
+    val label = stringResource(Res.string.edit_line_width)
+    val sample = colors.normalTextColor.default
     val thumb = colors.switchThumbColor.of(ReeColorState.CHECKED)
     val filled = colors.switchTrackColor.of(ReeColorState.CHECKED)
     val empty = colors.switchTrackColor.default
-    val stops = palette.widths.size
+    val stops = values.size
     val valueStyle = TextStyle(
         color = colors.normalTextColor.default,
         fontSize = with(density) { VALUE_TEXT_SIZE.toSp() },
@@ -235,25 +263,25 @@ private fun Widths(
         textAlign = TextAlign.End
     )
     val measurer = rememberTextMeasurer()
-    val valueWidth = remember(palette, valueStyle, density, measurer) {
-        with(density) { palette.widths.maxOf { measurer.measure(it.roundToInt().toString(), valueStyle).size.width }.toDp() }
+    val valueWidth = remember(values, valueStyle, density, measurer, separator) {
+        with(density) { values.maxOf { measurer.measure(widthText(it, separator), valueStyle).size.width }.toDp() }
     }
-    Row(Modifier.width(width).height(ROW_HEIGHT), verticalAlignment = Alignment.CenterVertically) {
+    Row(modifier.height(ROW_HEIGHT), verticalAlignment = Alignment.CenterVertically) {
         Canvas(Modifier.size(SAMPLE_WIDTH, ROW_HEIGHT)) {
-            val thickness = (value * fitZoom).coerceIn(1f, SAMPLE_MAX.toPx())
+            val line = thickness(value).coerceIn(1f, SAMPLE_MAX.toPx())
             val inset = SIDE_INSET.toPx()
-            drawLine(sample, Offset(inset, size.height / 2), Offset(size.width - inset, size.height / 2), thickness, StrokeCap.Butt)
+            drawLine(sample, Offset(inset, size.height / 2), Offset(size.width - inset, size.height / 2), line, StrokeCap.Butt)
         }
         Canvas(
             Modifier.weight(1f)
                 .height(ROW_HEIGHT)
                 .pointerInput(stops) {
-                    detectTapGestures { editor.chooseWidth(stopAt(it.x, size.width, stops, STOP_INSET.toPx())) }
+                    detectTapGestures { onChoose(stopAt(it.x, size.width, stops, STOP_INSET.toPx())) }
                 }
                 .pointerInput(stops) {
                     detectHorizontalDragGestures { change, _ ->
                         change.consume()
-                        editor.chooseWidth(stopAt(change.position.x, size.width, stops, STOP_INSET.toPx()))
+                        onChoose(stopAt(change.position.x, size.width, stops, STOP_INSET.toPx()))
                     }
                 }
                 .semantics {
@@ -261,7 +289,7 @@ private fun Widths(
                     stateDescription = text
                     progressBarRangeInfo = ProgressBarRangeInfo(index.toFloat(), 0f..(stops - 1).toFloat(), stops - 2)
                     setProgress { target ->
-                        editor.chooseWidth(target.roundToInt().coerceIn(0, stops - 1))
+                        onChoose(target.roundToInt().coerceIn(0, stops - 1))
                         true
                     }
                 }
@@ -322,6 +350,108 @@ private fun Styles(editor: ViewerEditor, colors: ReeColors) {
     }
 }
 
+@Composable
+private fun Signatures(editor: ViewerEditor, colors: ReeColors, viewerColors: ViewerColors, width: Dp) {
+    val saved = editor.signatures.saved
+    val chosen = editor.chosenSignature
+    val frameWidth = width - SIGNATURE_ICON_WIDTH * 3 - SIGNATURE_GAP * 2
+    Column(Modifier.width(width).padding(vertical = SIGNATURE_EDGE)) {
+        for (slot in 0 until ViewerSignature.SLOTS) {
+            if (slot > 0) Spacer(Modifier.height(SIGNATURE_ROW_GAP))
+            val signature = saved[slot]
+            val name = stringResource(SIGNATURE_NAMES[slot])
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                SignatureIcon(ViewerIcons.add, stringResource(Res.string.edit_signature_add, name), signature == null, colors) {
+                    editor.openSignaturePad(slot)
+                }
+                Spacer(Modifier.width(SIGNATURE_GAP))
+                SignatureFrame(
+                    signature = signature,
+                    selected = slot == chosen,
+                    name = name,
+                    colors = colors,
+                    viewerColors = viewerColors,
+                    onClick = { editor.chooseSignature(slot) },
+                    modifier = Modifier.size(frameWidth, CELL)
+                )
+                Spacer(Modifier.width(SIGNATURE_GAP))
+                SignatureIcon(ViewerIcons.edit, stringResource(Res.string.edit_signature_edit, name), signature != null, colors) {
+                    editor.editSignaturePad(slot)
+                }
+                SignatureIcon(ViewerIcons.remove, stringResource(Res.string.edit_signature_delete, name), signature != null, colors) {
+                    editor.signatures.askDelete(slot)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SignatureIcon(icon: ImageVector, description: String, enabled: Boolean, colors: ReeColors, onClick: () -> Unit) {
+    Box(
+        Modifier.size(SIGNATURE_ICON_WIDTH, CELL)
+            .clickable(enabled = enabled, interactionSource = null, indication = null, role = Role.Button, onClick = onClick)
+            .semantics {
+                contentDescription = description
+                if (!enabled) disabled()
+            }
+            .alpha(if (enabled) 1f else DISABLED_ALPHA),
+        contentAlignment = Alignment.Center
+    ) {
+        Image(rememberVectorPainter(icon), null, Modifier.size(CHECK_SIZE), colorFilter = ColorFilter.tint(colors.normalTextColor.default))
+    }
+}
+
+@Composable
+private fun SignatureFrame(
+    signature: ViewerSignature?,
+    selected: Boolean,
+    name: String,
+    colors: ReeColors,
+    viewerColors: ViewerColors,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val empty = stringResource(Res.string.edit_signature_empty)
+    val ink = colors.normalTextColor.default
+    Box(
+        modifier.border(OUTLINE_WIDTH, viewerColors.colorOutline)
+            .clickable(enabled = signature != null, interactionSource = null, indication = null, role = Role.RadioButton, onClick = onClick)
+            .semantics {
+                contentDescription = name
+                this.selected = selected
+                if (signature == null) stateDescription = empty
+            },
+        contentAlignment = Alignment.CenterEnd
+    ) {
+        if (signature != null) {
+            Canvas(Modifier.fillMaxSize()) {
+                val inset = SIGNATURE_INSET.toPx()
+                val right = size.width - (CHECK_SIZE + SIGNATURE_INSET * 2).toPx()
+                drawSignature(signature, Rect(inset, inset, right, size.height - inset), ink)
+            }
+        }
+        if (selected) {
+            Image(
+                rememberVectorPainter(ViewerIcons.check),
+                null,
+                Modifier.padding(end = SIGNATURE_INSET).size(CHECK_SIZE),
+                colorFilter = ColorFilter.tint(viewerColors.signatureCheck)
+            )
+        }
+    }
+}
+
+internal fun DrawScope.drawSignature(signature: ViewerSignature, area: Rect, ink: Color) {
+    if (area.width <= 0f || area.height <= 0f) return
+    val box = signature.bounds()
+    val scale = minOf(area.width / (box[2] - box[0]), area.height / (box[3] - box[1]))
+    val dx = area.left + (area.width - (box[2] - box[0]) * scale) / 2 - box[0] * scale
+    val dy = area.top + (area.height - (box[3] - box[1]) * scale) / 2 - box[1] * scale
+    val line = maxOf(signature.width * scale / ViewerSignature.PAD_WIDTH_ON_PAGE, 1f)
+    drawPath(signature.path(scale, dx, dy).toPath(0f, 0f, 1f), ink, style = Stroke(line, cap = StrokeCap.Round, join = StrokeJoin.Round))
+}
+
 private fun centeredPath(shape: ViewerMarkPath, height: Float): Path {
     val points = shape.points
     var top = Float.MAX_VALUE
@@ -342,6 +472,11 @@ private fun centeredPath(shape: ViewerMarkPath, height: Float): Path {
         index += ViewerMarkPath.pointsOf(verb)
     }
     return path
+}
+
+internal fun widthText(value: Float, separator: String): String {
+    val tenths = (value * 10).roundToInt()
+    return if (tenths % 10 == 0) (tenths / 10).toString() else "${tenths / 10}$separator${tenths % 10}"
 }
 
 private fun stopAt(x: Float, width: Int, stops: Int, inset: Float): Int {
@@ -369,6 +504,7 @@ private val PANEL_RADIUS = 12.dp
 private val PANEL_SHADOW = 8.dp
 private val TAIL_HEIGHT = 8.dp
 private val ROW_HEIGHT = 56.dp
+internal val WIDTH_SLIDER_HEIGHT = ROW_HEIGHT
 private val SAMPLE_WIDTH = 56.dp
 private val SIDE_INSET = 8.dp
 private val SAMPLE_MAX = ROW_HEIGHT - SIDE_INSET * 2
@@ -381,6 +517,12 @@ private val VALUE_TEXT_SIZE = 16.dp
 private val CHECK_GAP = 8.dp
 private val CHECK_SIZE = 24.dp
 private val STYLE_GAP = 32.dp
+private val SIGNATURE_GAP = 8.dp
+private val SIGNATURE_ICON_WIDTH = 40.dp
+private val SIGNATURE_ROW_GAP = 16.dp
+private val SIGNATURE_EDGE = 8.dp
+private val SIGNATURE_INSET = 6.dp
+private val SIGNATURE_NAMES = listOf(Res.string.edit_signature_1, Res.string.edit_signature_2)
 private val STYLE_SAMPLE_WIDTH = 40.dp
 private val STYLE_SAMPLE_LETTER = 32.dp
 private val STYLE_WIDTH = SIDE_INSET * 2 + (STYLE_SAMPLE_WIDTH + CHECK_GAP + CHECK_SIZE) * 2 + STYLE_GAP

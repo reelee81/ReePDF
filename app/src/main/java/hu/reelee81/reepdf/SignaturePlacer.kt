@@ -60,7 +60,7 @@ class SignaturePlacer : AppCompatActivity(), SignaturePlacerActions {
 
         val frame = FrameLayout(this).apply {
             fitsSystemWindows = true
-            addView(signaturePlacerView(this@SignaturePlacer, state, this@SignaturePlacer, R.font.roboto_regular, R.font.roboto_medium))
+            addView(signaturePlacerView(this@SignaturePlacer, state, this@SignaturePlacer, R.font.roboto_regular, R.font.roboto_medium, R.dimen.dp_9999_main))
         }
         setContentView(frame)
 

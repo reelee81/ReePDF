@@ -97,6 +97,8 @@ object ViewerEditPalettes {
 
     val strikethrough = ViewerEditPalette(penColors, FloatArray(0), defaultColor = 2, defaultWidth = 0)
 
+    val signature = ViewerEditPalette(penColors, FloatArray(0), defaultColor = 1, defaultWidth = 0)
+
     val highlighter = ViewerEditPalette(
         listOf(
             0x000000 to Res.string.mark_color_black,
@@ -133,7 +135,7 @@ enum class ViewerEditTool(val enabled: Boolean) {
     STRIKETHROUGH(true),
     PEN(true),
     HIGHLIGHTER(true),
-    SIGNATURE(false),
+    SIGNATURE(true),
     ERASER(true);
 
     val palette: ViewerEditPalette?
@@ -142,6 +144,7 @@ enum class ViewerEditTool(val enabled: Boolean) {
             STRIKETHROUGH -> ViewerEditPalettes.strikethrough
             PEN -> ViewerEditPalettes.pen
             HIGHLIGHTER -> ViewerEditPalettes.highlighter
+            SIGNATURE -> ViewerEditPalettes.signature
             else -> null
         }
 
@@ -164,7 +167,10 @@ data class ViewerEditSettings(
     val underlineColor: Int = ViewerEditPalettes.underline.defaultColor,
     val strikethroughColor: Int = ViewerEditPalettes.strikethrough.defaultColor,
     val underlineStyle: ViewerUnderlineStyle = ViewerUnderlineStyle.STRAIGHT,
-    val undoPanelTop: Boolean = false
+    val undoPanelTop: Boolean = false,
+    val signatureColor: Int = ViewerEditPalettes.signature.defaultColor,
+    val signatureWidth: Int = ViewerSignature.DEFAULT_WIDTH,
+    val signatureSlot: Int = 0
 ) {
     val swatchTool: ViewerEditTool
         get() = if (tool.palette != null) tool else drawingTool
@@ -173,6 +179,7 @@ data class ViewerEditSettings(
         ViewerEditTool.HIGHLIGHTER -> highlighterColor
         ViewerEditTool.UNDERLINE -> underlineColor
         ViewerEditTool.STRIKETHROUGH -> strikethroughColor
+        ViewerEditTool.SIGNATURE -> signatureColor
         else -> penColor
     }
 
@@ -197,6 +204,7 @@ data class ViewerEditSettings(
             ViewerEditTool.HIGHLIGHTER -> copy(highlighterColor = index)
             ViewerEditTool.UNDERLINE -> copy(underlineColor = index)
             ViewerEditTool.STRIKETHROUGH -> copy(strikethroughColor = index)
+            ViewerEditTool.SIGNATURE -> copy(signatureColor = index)
             else -> copy(penColor = index)
         }
     }
@@ -211,6 +219,7 @@ data class ViewerEditSettings(
         val highlighter = ViewerEditPalettes.highlighter
         val underline = ViewerEditPalettes.underline
         val strikethrough = ViewerEditPalettes.strikethrough
+        val signature = ViewerEditPalettes.signature
         return copy(
             tool = tool.takeIf { it.enabled } ?: ViewerEditTool.PEN,
             drawingTool = drawingTool.takeIf { it.palette != null } ?: ViewerEditTool.PEN,
@@ -219,7 +228,10 @@ data class ViewerEditSettings(
             highlighterColor = highlighterColor.takeIf { it in 0 until highlighter.size } ?: highlighter.defaultColor,
             highlighterWidth = highlighterWidth.takeIf { it in highlighter.widths.indices } ?: highlighter.defaultWidth,
             underlineColor = underlineColor.takeIf { it in 0 until underline.size } ?: underline.defaultColor,
-            strikethroughColor = strikethroughColor.takeIf { it in 0 until strikethrough.size } ?: strikethrough.defaultColor
+            strikethroughColor = strikethroughColor.takeIf { it in 0 until strikethrough.size } ?: strikethrough.defaultColor,
+            signatureColor = signatureColor.takeIf { it in 0 until signature.size } ?: signature.defaultColor,
+            signatureWidth = signatureWidth.takeIf { it in ViewerSignature.WIDTHS.indices } ?: ViewerSignature.DEFAULT_WIDTH,
+            signatureSlot = signatureSlot.takeIf { it in 0 until ViewerSignature.SLOTS } ?: 0
         )
     }
 

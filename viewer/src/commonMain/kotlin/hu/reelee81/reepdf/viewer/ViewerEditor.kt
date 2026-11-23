@@ -25,6 +25,9 @@ class ViewerEditor(private val scope: CoroutineScope, private val onPagesChanged
     private var eraser: Eraser? = null
     private var pendingSaved = emptySet<ViewerEditSession.SavedRef>()
 
+    val signatures = ViewerSignatures(scope)
+    private var signatureDrag: SignatureDrag? = null
+
     var onSettingsChanged: (ViewerEditSettings) -> Unit = {}
     var onFailure: (String) -> Unit = {}
 
@@ -43,6 +46,10 @@ class ViewerEditor(private val scope: CoroutineScope, private val onPagesChanged
         private set
     var rowOpen by mutableStateOf(false)
         private set
+    var framed by mutableStateOf<ViewerFramedSignature?>(null)
+        private set
+    var movedSignature by mutableStateOf<ViewerMark?>(null)
+        private set
     private var pendingMarks by mutableStateOf(emptySet<ViewerMark>())
 
     fun restore(saved: ViewerEditSettings) {
@@ -58,6 +65,7 @@ class ViewerEditor(private val scope: CoroutineScope, private val onPagesChanged
     fun start() {
         if (isActive || source == null) return
         isActive = true
+        signatures.load()
         load(visible)
     }
 
@@ -72,6 +80,7 @@ class ViewerEditor(private val scope: CoroutineScope, private val onPagesChanged
     }
 
     fun togglePause() {
+        releaseSignature()
         cancelGesture()
         closePanel()
         paused = !paused
@@ -84,6 +93,7 @@ class ViewerEditor(private val scope: CoroutineScope, private val onPagesChanged
             when {
                 tool.palette?.hasWidths == true -> togglePanel(ViewerEditPanel.WIDTH)
                 tool == ViewerEditTool.UNDERLINE -> togglePanel(ViewerEditPanel.STYLE)
+                tool == ViewerEditTool.SIGNATURE -> togglePanel(ViewerEditPanel.SIGNATURES)
             }
         } else {
             panel = null
@@ -92,6 +102,7 @@ class ViewerEditor(private val scope: CoroutineScope, private val onPagesChanged
     }
 
     fun tapGroup() {
+        releaseSignature()
         panel = null
         if (settings.tool == ViewerEditTool.ERASER) {
             selectTool(settings.drawingTool)
@@ -111,10 +122,14 @@ class ViewerEditor(private val scope: CoroutineScope, private val onPagesChanged
     }
 
     private fun togglePanel(chosen: ViewerEditPanel) {
+        releaseSignature()
         panel = if (panel == chosen) null else chosen
     }
 
-    fun selectTool(tool: ViewerEditTool) = update(settings.withTool(tool))
+    fun selectTool(tool: ViewerEditTool) {
+        if (tool != settings.tool) releaseSignature()
+        update(settings.withTool(tool))
+    }
 
     fun chooseColor(index: Int) = update(settings.withColor(settings.swatchTool, index))
 
@@ -123,6 +138,118 @@ class ViewerEditor(private val scope: CoroutineScope, private val onPagesChanged
     fun chooseUnderlineStyle(style: ViewerUnderlineStyle) = update(settings.copy(underlineStyle = style))
 
     fun placeUndoPanel(top: Boolean) = update(settings.copy(undoPanelTop = top))
+
+    val chosenSignature: Int?
+        get() = signatures.chosen(settings.signatureSlot)
+
+    fun chooseSignature(slot: Int) {
+        if (signatures.saved.getOrNull(slot) != null) update(settings.copy(signatureSlot = slot))
+    }
+
+    fun openSignaturePad(slot: Int) = signatures.openPad(slot, settings.signatureWidth)
+
+    fun editSignaturePad(slot: Int) = signatures.editPad(slot)
+
+    fun chooseSignatureWidth(index: Int) {
+        val pad = signatures.pad ?: return
+        pad.chooseWidth(index)
+        update(settings.copy(signatureWidth = pad.widthIndex))
+    }
+
+    fun confirmSignaturePad() {
+        val slot = signatures.confirmPad() ?: return
+        update(settings.copy(signatureSlot = slot))
+    }
+
+    fun tapSignature(page: Int, point: ViewerTextPoint, pageWidth: Float, pageHeight: Float, tolerance: Float) {
+        if (!isActive || paused || settings.tool != ViewerEditTool.SIGNATURE) return
+        if (framed != null) {
+            releaseSignature()
+            return
+        }
+        cancelGesture()
+        val found = signatureAt(page, point, tolerance)
+        if (found != null) {
+            framed = found
+            return
+        }
+        val signature = chosenSignature?.let { signatures.saved[it] }
+        if (signature == null) {
+            panel = ViewerEditPanel.SIGNATURES
+            return
+        }
+        val mark = ViewerSignaturePlacement.place(signature, settings.color(ViewerEditTool.SIGNATURE), page, point, pageWidth, pageHeight)
+        state = session.perform(ViewerEditSession.Action.Add(mark))
+        framed = ViewerFramedSignature(mark, emptySet())
+    }
+
+    fun grabSignature(page: Int, point: ViewerTextPoint, handleReach: Float, tolerance: Float, margin: Float): Boolean {
+        val current = framed ?: return false
+        if (!isActive || paused || current.mark.page != page) return false
+        val frame = ViewerSignaturePlacement.framed(current.box, margin)
+        val resize = ViewerSignaturePlacement.onHandle(frame, point, handleReach)
+        if (!resize && !ViewerSignaturePlacement.inside(frame, point, tolerance)) return false
+        cancelGesture()
+        signatureDrag = SignatureDrag(current, point, resize)
+        movedSignature = current.mark
+        if (current.saved.isEmpty()) {
+            pendingMarks = setOf(current.mark)
+        } else {
+            pendingSaved = current.saved
+            sync()
+        }
+        return true
+    }
+
+    fun dragSignature(point: ViewerTextPoint, pageWidth: Float, pageHeight: Float) {
+        val drag = signatureDrag ?: return
+        val base = drag.framed
+        movedSignature = if (drag.resize) {
+            val corner = ViewerTextPoint(base.box[2] + point.x - drag.start.x, base.box[3] + point.y - drag.start.y)
+            ViewerSignaturePlacement.resized(base.mark, base.box, corner, pageWidth, pageHeight)
+        } else {
+            ViewerSignaturePlacement.moved(base.mark, base.box, point.x - drag.start.x, point.y - drag.start.y, pageWidth, pageHeight)
+        }
+    }
+
+    fun endSignatureDrag() {
+        val drag = signatureDrag ?: return
+        val moved = movedSignature
+        val base = drag.framed
+        signatureDrag = null
+        movedSignature = null
+        pendingMarks = emptySet()
+        val hidSaved = pendingSaved.isNotEmpty()
+        pendingSaved = emptySet()
+        if (moved != null && moved !== base.mark) {
+            val unsaved = if (base.saved.isEmpty()) setOf(base.mark) else emptySet()
+            state = session.perform(ViewerEditSession.Action.Replace(unsaved, base.saved, moved))
+            framed = ViewerFramedSignature(moved, emptySet())
+        }
+        if (hidSaved) sync()
+    }
+
+    fun releaseSignature() {
+        if (signatureDrag != null) cancelGesture()
+        framed = null
+    }
+
+    private fun signatureAt(page: Int, point: ViewerTextPoint, tolerance: Float): ViewerFramedSignature? {
+        addedMarks(page).lastOrNull { it.kind == ViewerMarkKind.SIGNATURE && ViewerSignaturePlacement.inside(ViewerSignaturePlacement.box(it.path, it.width), point, tolerance) }
+            ?.let { return ViewerFramedSignature(it, emptySet()) }
+        val marks = loaded[page] ?: return null
+        val hit = marks.marks.lastOrNull { saved ->
+            saved.kind == ViewerMarkKind.SIGNATURE &&
+                state.isVisible(ViewerEditSession.SavedRef(page, saved.stream, saved.id)) &&
+                ViewerMarkHit.within(saved.clip, point.x, point.y, tolerance) &&
+                ViewerSignaturePlacement.inside(ViewerSignaturePlacement.box(saved.path, saved.width), point, tolerance)
+        } ?: return null
+        val refs = marks.marks.filter { it.id == hit.id }
+            .map { ViewerEditSession.SavedRef(page, it.stream, it.id) }
+            .filter(state::isVisible)
+            .toSet()
+        return ViewerFramedSignature(ViewerMark(page, ViewerMarkKind.SIGNATURE, hit.color, hit.width, hit.path), refs)
+    }
 
     fun beginStroke(page: Int, point: ViewerTextPoint, minDistance: Float, textTolerance: Float) {
         if (!isActive || paused) return
@@ -169,6 +296,8 @@ class ViewerEditor(private val scope: CoroutineScope, private val onPagesChanged
         stroke = null
         wet = null
         eraser = null
+        signatureDrag = null
+        movedSignature = null
         pendingMarks = emptySet()
         if (pendingSaved.isNotEmpty()) {
             pendingSaved = emptySet()
@@ -209,6 +338,7 @@ class ViewerEditor(private val scope: CoroutineScope, private val onPagesChanged
 
     fun eraseVisible(pages: Set<Int>) {
         if (!isActive || pages.isEmpty()) return
+        releaseSignature()
         cancelGesture()
         val anything = pages.any { page ->
             state.added[page].orEmpty().isNotEmpty() || (!state.isBlank(page) && loaded[page]?.streams?.isNotEmpty() == true)
@@ -220,6 +350,7 @@ class ViewerEditor(private val scope: CoroutineScope, private val onPagesChanged
 
     fun eraseAll() {
         if (!isActive || (state.blankAll && state.added.isEmpty())) return
+        releaseSignature()
         cancelGesture()
         state = session.perform(ViewerEditSession.Action.Blank(null))
         sync()
@@ -227,6 +358,7 @@ class ViewerEditor(private val scope: CoroutineScope, private val onPagesChanged
 
     fun undo() {
         if (!state.canUndo) return
+        releaseSignature()
         cancelGesture()
         state = session.undo()
         sync()
@@ -234,6 +366,7 @@ class ViewerEditor(private val scope: CoroutineScope, private val onPagesChanged
 
     fun redo() {
         if (!state.canRedo) return
+        releaseSignature()
         cancelGesture()
         state = session.redo()
         sync()
@@ -243,6 +376,8 @@ class ViewerEditor(private val scope: CoroutineScope, private val onPagesChanged
 
     fun discard() {
         cancelGesture()
+        framed = null
+        signatures.close()
         paused = false
         rowOpen = false
         panel = null
@@ -254,6 +389,8 @@ class ViewerEditor(private val scope: CoroutineScope, private val onPagesChanged
 
     fun saved() {
         cancelGesture()
+        framed = null
+        signatures.close()
         paused = false
         rowOpen = false
         panel = null
@@ -445,6 +582,10 @@ class ViewerEditor(private val scope: CoroutineScope, private val onPagesChanged
         wet = null
         pendingMarks = emptySet()
         pendingSaved = emptySet()
+        signatureDrag = null
+        movedSignature = null
+        framed = null
+        signatures.close()
         state = session.clear()
         isActive = false
         paused = false
@@ -491,8 +632,10 @@ class ViewerEditor(private val scope: CoroutineScope, private val onPagesChanged
     }
 
     private class Eraser(var page: Int, var last: ViewerTextPoint, val tolerance: Float)
+
+    private class SignatureDrag(val framed: ViewerFramedSignature, val start: ViewerTextPoint, val resize: Boolean)
 }
 
-enum class ViewerEditPanel { COLORS, WIDTH, STYLE }
+enum class ViewerEditPanel { COLORS, WIDTH, STYLE, SIGNATURES }
 
 enum class ViewerEditQuestion { EXIT, ERASE_ALL }

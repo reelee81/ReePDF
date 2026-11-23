@@ -127,6 +127,7 @@ import hu.reelee81.reepdf.core.ProgressNotifyPacing
 import hu.reelee81.reepdf.core.ScaleMode
 import hu.reelee81.reepdf.core.SignatureGeometry
 import hu.reelee81.reepdf.core.SignatureGeometry.refPxForSignatureDpi
+import hu.reelee81.reepdf.core.VectorSignatureFiles
 import hu.reelee81.reepdf.core.WorkFileBackup
 import hu.reelee81.reepdf.databinding.ActivityMainBinding
 import hu.reelee81.reepdf.pdf.MuPdfSignedPageRenderer
@@ -142,6 +143,8 @@ import hu.reelee81.reepdf.pdf.PdfSourceParts
 import hu.reelee81.reepdf.pdf.PdfViewerEditOperation
 import hu.reelee81.reepdf.pdf.ProgressTracker
 import hu.reelee81.reepdf.pdf.SignedPageRenderer
+import hu.reelee81.reepdf.viewer.ViewerSignature
+import hu.reelee81.reepdf.viewer.ViewerSignatureFormat
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileInputStream
@@ -233,6 +236,7 @@ class MainActivity : AppCompatActivity() {
         const val KEY_LAST_LOADED_PROFILE = "key_last_loaded_profile"
         const val KEY_RESTORE_LOCK_UNTIL_RELOAD = "key_restore_lock_until_reload"
         const val KEY_FIRST_RUN_INITIALIZED = "key_first_run_initialized"
+        const val XML_VECTOR_SIGNATURE_PREFIX = "vector_signature_"
         const val KEY_THEME_RESTORE_FIRST = "key_theme_restore_first"
         const val KEY_THEME_RESTORE_OFFSET = "key_theme_restore_offset"
         const val KEY_THEME_RESTORE_SELECTED_CSV = "key_theme_restore_selected_csv"
@@ -535,6 +539,7 @@ class MainActivity : AppCompatActivity() {
 
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        reapplyPanelsMaxWidthFromResources()
 
         lastNightMask = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
 
@@ -1245,7 +1250,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun reapplyPanelsMaxWidthFromResources() {
         val maxPxMain = resources.getDimensionPixelSize(R.dimen.dp_9999_main)
-        val maxPxOverlay = resources.getDimensionPixelSize(R.dimen.dp_9999_overlay)
+        val maxPxOverlay = maxPxMain - binding.topPanel.paddingLeft - binding.topPanel.paddingRight
 
         listOf(binding.topPanel, binding.bottomPanel)
             .forEach { updateMatchConstraintMaxWidth(it, maxPxMain) }
@@ -6598,6 +6603,15 @@ class MainActivity : AppCompatActivity() {
                 }
                 serializer.endTag(null, "entry")
             }
+            val signatures = VectorSignatureFiles(signaturesDir)
+            for (slot in 0 until VectorSignatureFiles.SLOTS) {
+                val signature = signatures.read(slot)?.let(ViewerSignatureFormat::decode) ?: continue
+                serializer.startTag(null, "entry")
+                serializer.attribute(null, "key", "$XML_VECTOR_SIGNATURE_PREFIX${slot + 1}")
+                serializer.attribute(null, "type", "string")
+                serializer.text(ViewerSignatureFormat.encode(signature))
+                serializer.endTag(null, "entry")
+            }
             serializer.endTag(null, "map")
         }
 
@@ -6649,6 +6663,8 @@ class MainActivity : AppCompatActivity() {
         )
         val positionKeys = setOf(KEY_REEPROFILE1_POSITION, KEY_REEPROFILE2_POSITION)
         val dpiIndexKeys = setOf(KEY_REEPROFILE1_SIG_DPI_INDEX, KEY_REEPROFILE2_SIG_DPI_INDEX, KEY_LAST_SIG_DPI_INDEX)
+        val vectorSignatureSlots = (0 until VectorSignatureFiles.SLOTS).associateBy { "$XML_VECTOR_SIGNATURE_PREFIX${it + 1}" }
+        val vectorSignatures = LinkedHashMap<Int, ViewerSignature>()
 
         fun invalid(key: String): Nothing =
             throw IllegalArgumentException(getString(R.string.error_invalid_prefs_value, key))
@@ -6717,6 +6733,11 @@ class MainActivity : AppCompatActivity() {
                                             if (type != "int" || value == null || value !in 0..1) invalid(key)
                                             editor.putInt(key, value)
                                         }
+                                        in vectorSignatureSlots -> {
+                                            val signature = ViewerSignatureFormat.decode(valueText)
+                                            if (type != "string" || signature == null) invalid(key)
+                                            vectorSignatures[vectorSignatureSlots.getValue(key)] = signature
+                                        }
                                     }
                                 }
                                 currentKey = null
@@ -6736,6 +6757,8 @@ class MainActivity : AppCompatActivity() {
         }
 
         if (foundTargetMap) {
+            val signatures = VectorSignatureFiles(signaturesDir)
+            for ((slot, signature) in vectorSignatures) signatures.write(slot, ViewerSignatureFormat.encode(signature))
             synchronized(prefsBackupLock) {
                 editor?.apply()
             }

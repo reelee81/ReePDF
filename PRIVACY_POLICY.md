@@ -16,7 +16,7 @@ does not share data with third parties.
 
 Data stored on the device
 
-The application keeps its working files (temporary PDF files and page thumbnails), the signature images you add, and your settings only in its own private storage on your device, which other applications cannot access.
+The application keeps its working files (temporary PDF files and page thumbnails), the signature images you add, the vector signatures you draw, and your settings only in its own private storage on your device, which other applications cannot access.
 This data is excluded from Android cloud backup and from device-to-device transfer.
 When you uninstall the application, Android permanently deletes all of this data from your device.
 Files that you have explicitly saved or shared to another location (for example, to the Downloads folder or to another application) are not affected by uninstalling the application.

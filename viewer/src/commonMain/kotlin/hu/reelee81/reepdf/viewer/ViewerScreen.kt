@@ -22,6 +22,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import hu.reelee81.reepdf.viewer.resources.Res
 import hu.reelee81.reepdf.viewer.resources.back_to_main_screen
@@ -29,6 +30,8 @@ import hu.reelee81.reepdf.viewer.resources.cancel_text
 import hu.reelee81.reepdf.viewer.resources.edit_erase_all_question
 import hu.reelee81.reepdf.viewer.resources.edit_pdf
 import hu.reelee81.reepdf.viewer.resources.edit_question
+import hu.reelee81.reepdf.viewer.resources.edit_signature_1_delete_question
+import hu.reelee81.reepdf.viewer.resources.edit_signature_2_delete_question
 import hu.reelee81.reepdf.viewer.resources.no_pdf_edits_to_save
 import hu.reelee81.reepdf.viewer.resources.ok_text
 import hu.reelee81.reepdf.viewer.resources.pdf_edits_erase_failed
@@ -37,12 +40,13 @@ import hu.reelee81.reepdf.viewer.resources.pdf_edits_saving
 import hu.reelee81.reepdf.viewer.resources.pdf_wait_reading_edited_pages
 import hu.reelee81.reepdf.viewer.resources.pdf_wait_reading_pages
 import hu.reelee81.reepdf.viewer.resources.selection_too_large
+import hu.reelee81.reepdf.viewer.resources.signature_store_failed
 import hu.reelee81.reepdf.viewer.resources.viewer_search
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 
 @Composable
-fun ViewerScreen(state: ViewerState, actions: ViewerActions, fontFamily: FontFamily) {
+fun ViewerScreen(state: ViewerState, actions: ViewerActions, fontFamily: FontFamily, mainPanelWidth: Dp) {
     val dark = isSystemInDarkTheme()
     val colors = if (dark) ReeColors.dark else ReeColors.light
     val palette = if (dark) ReePalette.dark else ReePalette.light
@@ -137,6 +141,7 @@ fun ViewerScreen(state: ViewerState, actions: ViewerActions, fontFamily: FontFam
                 colors = colors,
                 overlayColor = palette.dialogOverlayBackgroundColor,
                 fontFamily = fontFamily,
+                mainPanelWidth = mainPanelWidth,
                 onDismiss = { state.editor.question = null },
                 onDiscard = state.editor::discard,
                 onSave = state::saveEdits
@@ -146,6 +151,7 @@ fun ViewerScreen(state: ViewerState, actions: ViewerActions, fontFamily: FontFam
                 colors = colors,
                 overlayColor = palette.dialogOverlayBackgroundColor,
                 fontFamily = fontFamily,
+                mainPanelWidth = mainPanelWidth,
                 onDismiss = { state.editor.question = null },
                 onDiscard = { state.editor.question = null },
                 onSave = {
@@ -156,6 +162,23 @@ fun ViewerScreen(state: ViewerState, actions: ViewerActions, fontFamily: FontFam
                 secondButton = Res.string.ok_text
             )
             null -> Unit
+        }
+        state.editor.signatures.pad?.let { pad ->
+            ViewerSignaturePadDialog(state.editor, pad, colors, viewerColors, palette.dialogOverlayBackgroundColor, fontFamily, mainPanelWidth)
+        }
+        state.editor.signatures.deleting?.let { slot ->
+            ViewerSaveQuestion(
+                text = stringResource(if (slot == 0) Res.string.edit_signature_1_delete_question else Res.string.edit_signature_2_delete_question),
+                colors = colors,
+                overlayColor = palette.dialogOverlayBackgroundColor,
+                fontFamily = fontFamily,
+                mainPanelWidth = mainPanelWidth,
+                onDismiss = state.editor.signatures::dismissDelete,
+                onDiscard = state.editor.signatures::dismissDelete,
+                onSave = state.editor.signatures::confirmDelete,
+                firstButton = Res.string.cancel_text,
+                secondButton = Res.string.ok_text
+            )
         }
         if (waiting) {
             Box(Modifier.fillMaxSize().pointerInput(Unit) { blockTouches() })
@@ -175,6 +198,7 @@ fun ViewerScreen(state: ViewerState, actions: ViewerActions, fontFamily: FontFam
                     colors = colors,
                     overlayColor = palette.dialogOverlayBackgroundColor,
                     fontFamily = fontFamily,
+                    mainPanelWidth = mainPanelWidth,
                     onCancel = if (saving) state::cancelSave else actions::onCancelWait
                 )
             }
@@ -184,6 +208,7 @@ fun ViewerScreen(state: ViewerState, actions: ViewerActions, fontFamily: FontFam
             ViewerEditMessage.NothingToSave -> stringResource(Res.string.no_pdf_edits_to_save)
             is ViewerEditMessage.SaveFailed -> stringResource(Res.string.pdf_edits_save_failed, shown.text)
             is ViewerEditMessage.EraseFailed -> stringResource(Res.string.pdf_edits_erase_failed, shown.text)
+            is ViewerEditMessage.SignatureFailed -> stringResource(Res.string.signature_store_failed, shown.text)
         }
         LaunchedEffect(message) {
             if (message != null) {

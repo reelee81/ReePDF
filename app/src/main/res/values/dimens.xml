@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <dimen name="dp_9999_main">9999dp</dimen>
-    <dimen name="dp_9999_overlay">9999dp</dimen>
     <dimen name="dp_9999_main_gap">16dp</dimen>
     <dimen name="dp_0">0dp</dimen>
     <dimen name="dp_1">1dp</dimen>
@@ -36,4 +35,5 @@
     <dimen name="dp_200">200dp</dimen>
     <dimen name="dp_400">400dp</dimen>
     <dimen name="dp_420">420dp</dimen>
+    <dimen name="dp_9999">9999dp</dimen>
 </resources>

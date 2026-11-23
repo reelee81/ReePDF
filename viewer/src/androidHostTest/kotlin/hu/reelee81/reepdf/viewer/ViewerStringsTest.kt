@@ -54,6 +54,17 @@ class ViewerStringsTest {
         val FORMAT_ARGUMENT = Regex("""%\d+\$[ds]""")
         val VIEWER_ONLY = setOf(
             "edit_scroll",
+            "edit_signature_1",
+            "edit_signature_2",
+            "edit_signature_add",
+            "edit_signature_edit",
+            "edit_signature_delete",
+            "edit_signature_empty",
+            "edit_signature_1_delete_question",
+            "edit_signature_2_delete_question",
+            "clear_text",
+            "decimal_separator",
+            "signature_store_failed",
             "edit_pdf",
             "discard_text",
             "back_to_main_screen",

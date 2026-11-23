@@ -22,6 +22,7 @@ class ViewerColors private constructor(night: Boolean) {
     val activeToolIcon = if (night) p.darkLight000 else p.darkLight100
     val colorOutline = if (night) p.darkLight100 else p.darkLight000
     val dropTarget = p.teal100
+    val signatureCheck = p.green100
 
     companion object {
         val light = ViewerColors(night = false)

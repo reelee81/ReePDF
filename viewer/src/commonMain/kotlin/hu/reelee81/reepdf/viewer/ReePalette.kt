@@ -26,6 +26,7 @@ class ReePalette private constructor(night: Boolean) {
     val teal025 = Color(0xFF02564D)
     val lemon100 = Color(0xFFFFFF00)
     val orange100 = Color(0xFFFF5C00)
+    val green100 = Color(0xFF35C369)
     val thumbDarkLight075 = Color(0xFFBFBFBF)
     val thumbDarkLight050 = Color(0xFF808080)
     val darkLight100 = Color(0xFFFFFFFF)

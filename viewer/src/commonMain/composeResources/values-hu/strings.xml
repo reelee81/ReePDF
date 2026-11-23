@@ -90,5 +90,16 @@
     <string name="mark_color_slate_blue">Palakék</string>
     <string name="mark_color_dark_olive_green">Sötét olajzöld</string>
     <string name="mark_color_tan">Drapp</string>
+    <string name="edit_signature_1">Aláírás 1</string>
+    <string name="edit_signature_2">Aláírás 2</string>
+    <string name="edit_signature_add">%1$s hozzáadása</string>
+    <string name="edit_signature_edit">%1$s szerkesztése</string>
+    <string name="edit_signature_delete">%1$s törlése</string>
+    <string name="edit_signature_empty">Üres</string>
+    <string name="edit_signature_1_delete_question">Törlöd az Aláírás 1-et?</string>
+    <string name="edit_signature_2_delete_question">Törlöd az Aláírás 2-t?</string>
+    <string name="clear_text">TÖRLÉS</string>
+    <string name="decimal_separator">,</string>
+    <string name="signature_store_failed">Az aláírás tárolása sikertelen: %1$s</string>
     <string name="edit_scroll">Görgetés rajzolás nélkül</string>
 </resources>

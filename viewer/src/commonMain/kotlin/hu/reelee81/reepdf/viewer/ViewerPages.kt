@@ -93,7 +93,10 @@ internal fun ViewerPages(
                 edge = AUTO_SCROLL_EDGE.toPx(),
                 edgeStep = AUTO_SCROLL_STEP.toPx(),
                 strokeStep = STROKE_STEP.toPx(),
-                eraserTolerance = ERASER_TOLERANCE.toPx()
+                eraserTolerance = ERASER_TOLERANCE.toPx(),
+                signatureSlop = SIGNATURE_SLOP.toPx(),
+                signatureReach = SIGNATURE_HANDLE_SLOP.toPx(),
+                signatureMargin = SIGNATURE_FRAME_MARGIN.toPx()
             )
         }
     }
@@ -142,7 +145,7 @@ internal fun ViewerPages(
         grab = { position -> grabAt(state, fastScroll, scrollerAlpha, position, thumbWidth, thumbHeight, touch) },
         drawPage = { page, x, y, zoom ->
             drawTexts(state, colors, page, x, y, zoom)
-            if (state.editor.isActive) drawEditMarks(state, page, x, y, zoom)
+            if (state.editor.isActive) drawEditMarks(state, colors, page, x, y, zoom)
         },
         drawOver = { drawHandles(state, touch.handleRadius, colors.selectionHandle) }
     ) {
@@ -163,7 +166,10 @@ private class ViewerTouch(
     val edge: Float,
     val edgeStep: Float,
     val strokeStep: Float,
-    val eraserTolerance: Float
+    val eraserTolerance: Float,
+    val signatureSlop: Float,
+    val signatureReach: Float,
+    val signatureMargin: Float
 )
 
 private fun ViewerMotion.doubleTap(state: ViewerState, scope: CoroutineScope, tap: Offset) {
@@ -289,6 +295,7 @@ private fun editGrab(state: ViewerState, position: Offset, touch: ViewerTouch): 
     val editor = state.editor
     if (state.isWaiting || editor.paused) return null
     val tool = editor.settings.tool
+    if (tool == ViewerEditTool.SIGNATURE) return signatureGrab(state, position, touch)
     val erasing = tool == ViewerEditTool.ERASER
     if (!erasing && !tool.draws) return null
     val (page, point) = state.pageHit(position.x, position.y) ?: return null
@@ -330,25 +337,92 @@ private fun editGrab(state: ViewerState, position: Offset, touch: ViewerTouch): 
     }
 }
 
-private fun DrawScope.drawEditMarks(state: ViewerState, page: Int, x: Double, y: Double, zoom: Float) {
+private fun signatureGrab(state: ViewerState, position: Offset, touch: ViewerTouch): ViewerDrag? {
+    val editor = state.editor
+    val (page, point) = state.pageHit(position.x, position.y) ?: return null
+    if (page in state.failedPages) return null
+    val pages = state.layout ?: return null
+    val zoom = state.viewport?.zoom ?: return null
+    val pageWidth = pages.width(page).toFloat()
+    val pageHeight = pages.height(page).toFloat()
+    val slop = touch.signatureSlop / zoom
+    val dragging = editor.grabSignature(page, point, touch.signatureReach / zoom, slop, touch.signatureMargin / zoom)
+    return { down ->
+        var zoomNext = false
+        var moved = false
+        try {
+            while (true) {
+                val event = awaitPointerEvent()
+                if (event.changes.count { it.pressed } > 1) {
+                    zoomNext = true
+                    break
+                }
+                val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                change.consume()
+                if (!change.pressed) break
+                if ((change.position - down.position).getDistance() > viewConfiguration.touchSlop) moved = true
+                if (dragging) state.pointOn(page, change.position.x, change.position.y)?.let { editor.dragSignature(it, pageWidth, pageHeight) }
+            }
+        } catch (e: CancellationException) {
+            editor.cancelGesture()
+            throw e
+        }
+        when {
+            zoomNext -> editor.cancelGesture()
+            dragging -> editor.endSignatureDrag()
+            !moved -> editor.tapSignature(page, point, pageWidth, pageHeight, slop)
+        }
+        zoomNext
+    }
+}
+
+private fun DrawScope.drawEditMarks(state: ViewerState, colors: ViewerColors, page: Int, x: Double, y: Double, zoom: Float) {
     val editor = state.editor
     val pages = state.layout ?: return
     val marks = editor.addedMarks(page)
     val wet = editor.wet?.takeIf { it.page == page }
-    if (marks.isEmpty() && wet == null) return
+    val moved = editor.movedSignature?.takeIf { it.page == page }
+    val framed = editor.framed?.takeIf { it.mark.page == page }
+    if (marks.isEmpty() && wet == null && moved == null && framed == null) return
     val left = x.toFloat()
     val top = y.toFloat()
     clipRect(left, top, left + (pages.width(page) * zoom).toFloat(), top + (pages.height(page) * zoom).toFloat()) {
         for (mark in marks) drawMark(mark, left, top, zoom)
         if (wet != null) drawMark(wet, left, top, zoom)
+        if (moved != null) drawMark(moved, left, top, zoom)
     }
+    val box = moved?.let { ViewerSignaturePlacement.box(it.path, it.width) } ?: framed?.box ?: return
+    val margin = SIGNATURE_FRAME_MARGIN.toPx()
+    drawSignatureFrame(
+        colors.cropFrame,
+        Rect(left + box[0] * zoom - margin, top + box[1] * zoom - margin, left + box[2] * zoom + margin, top + box[3] * zoom + margin)
+    )
+}
+
+private fun DrawScope.drawSignatureFrame(color: Color, shown: Rect) {
+    drawRect(color, shown.topLeft, shown.size, style = Stroke(SIGNATURE_FRAME_WIDTH.toPx()))
+    val length = PageCropperState.markLength(shown, SIGNATURE_MARK_LENGTH.toPx())
+    val width = SIGNATURE_MARK_WIDTH.toPx()
+    val corner = shown.bottomRight
+    drawLine(color, corner, Offset(corner.x - length, corner.y), width, StrokeCap.Square)
+    drawLine(color, corner, Offset(corner.x, corner.y - length), width, StrokeCap.Square)
 }
 
 private fun DrawScope.drawMark(mark: ViewerMark, left: Float, top: Float, zoom: Float) {
+    val path = mark.path.toPath(left, top, zoom)
+    val color = Color(OPAQUE or mark.color).copy(alpha = if (mark.kind.translucent) MARK_ALPHA else 1f)
+    if (mark.kind.fills) {
+        drawPath(path, color)
+    } else {
+        drawPath(path, color, style = Stroke(width = maxOf(mark.width * zoom, 1f), cap = StrokeCap.Round, join = StrokeJoin.Round))
+    }
+}
+
+internal fun ViewerMarkPath.toPath(left: Float, top: Float, zoom: Float): Path {
     val path = Path()
-    val p = mark.path.points
+    val p = points
     var index = 0
-    for (verb in mark.path.verbs) {
+    for (verb in verbs) {
         when (verb) {
             ViewerMarkPath.MOVE -> path.moveTo(left + p[index] * zoom, top + p[index + 1] * zoom)
             ViewerMarkPath.LINE -> path.lineTo(left + p[index] * zoom, top + p[index + 1] * zoom)
@@ -361,12 +435,7 @@ private fun DrawScope.drawMark(mark: ViewerMark, left: Float, top: Float, zoom: 
         }
         index += ViewerMarkPath.pointsOf(verb)
     }
-    val color = Color(OPAQUE or mark.color).copy(alpha = if (mark.kind.translucent) MARK_ALPHA else 1f)
-    if (mark.kind.fills) {
-        drawPath(path, color)
-    } else {
-        drawPath(path, color, style = Stroke(width = maxOf(mark.width * zoom, 1f), cap = StrokeCap.Round, join = StrokeJoin.Round))
-    }
+    return path
 }
 
 private fun DrawScope.drawTexts(state: ViewerState, colors: ViewerColors, page: Int, x: Double, y: Double, zoom: Float) {
@@ -493,3 +562,9 @@ private val INDICATOR_TEXT_SIZE = 12.sp
 private val WORD_TOLERANCE = 8.dp
 private val STROKE_STEP = 1.dp
 private val ERASER_TOLERANCE = 10.dp
+private val SIGNATURE_SLOP = 8.dp
+private val SIGNATURE_HANDLE_SLOP = 24.dp
+private val SIGNATURE_FRAME_WIDTH = 1.5.dp
+private val SIGNATURE_FRAME_MARGIN = 4.dp
+private val SIGNATURE_MARK_WIDTH = 4.dp
+private val SIGNATURE_MARK_LENGTH = 22.dp

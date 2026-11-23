@@ -5,7 +5,8 @@ enum class ViewerMarkKind {
     HIGHLIGHTER,
     TEXT_HIGHLIGHT,
     UNDERLINE,
-    STRIKETHROUGH;
+    STRIKETHROUGH,
+    SIGNATURE;
 
     internal val fills: Boolean
         get() = this == TEXT_HIGHLIGHT || this == UNDERLINE || this == STRIKETHROUGH
@@ -53,6 +54,7 @@ class ViewerSavedMark(
     val id: String,
     val stream: Int,
     val kind: ViewerMarkKind,
+    val color: Int,
     val width: Float,
     val path: ViewerMarkPath,
     val clip: FloatArray? = null

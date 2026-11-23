@@ -58,14 +58,17 @@ class ViewerEditToolsTest {
     }
 
     @Test
-    fun theTextAndTheSignatureToolsCannotBeChosenYet() {
+    fun theTextToolCannotBeChosenYet() {
         assertEquals(
-            listOf(ViewerEditTool.UNDERLINE, ViewerEditTool.STRIKETHROUGH, ViewerEditTool.PEN, ViewerEditTool.HIGHLIGHTER, ViewerEditTool.ERASER),
+            listOf(
+                ViewerEditTool.UNDERLINE, ViewerEditTool.STRIKETHROUGH, ViewerEditTool.PEN, ViewerEditTool.HIGHLIGHTER,
+                ViewerEditTool.SIGNATURE, ViewerEditTool.ERASER
+            ),
             ViewerEditTool.entries.filter { it.enabled }
         )
         val settings = ViewerEditSettings()
         assertSame(settings, settings.withTool(ViewerEditTool.TEXT))
-        assertSame(settings, settings.withTool(ViewerEditTool.SIGNATURE))
+        assertSame(ViewerEditPalettes.signature, ViewerEditTool.SIGNATURE.palette)
         assertSame(underline, ViewerEditTool.UNDERLINE.palette)
         assertSame(strikethrough, ViewerEditTool.STRIKETHROUGH.palette)
         assertSame(pen, ViewerEditTool.PEN.palette)
@@ -150,5 +153,28 @@ class ViewerEditToolsTest {
 
         assertEquals(ViewerEditSettings(undoPanelTop = true), fixed)
         assertTrue(ViewerEditSettings().sanitized() == ViewerEditSettings())
+    }
+
+    @Test
+    fun theSignatureHasThePenColorsItsOwnRememberedColorAndNoWidthPanel() {
+        val signature = ViewerEditPalettes.signature
+
+        assertEquals((0 until pen.size).map(pen::color), (0 until signature.size).map(signature::color))
+        assertEquals(0x202FB0, signature.color(signature.defaultColor))
+        assertFalse(signature.hasWidths)
+        val chosen = ViewerEditSettings().withTool(ViewerEditTool.SIGNATURE).withColor(ViewerEditTool.SIGNATURE, 2)
+        assertEquals(ViewerEditTool.SIGNATURE, chosen.drawingTool)
+        assertEquals(2, chosen.signatureColor)
+        assertEquals(ViewerEditPalettes.pen.defaultColor, chosen.penColor)
+        assertEquals(0xDD0000, chosen.color(ViewerEditTool.SIGNATURE))
+    }
+
+    @Test
+    fun brokenSignatureSettingsFallBackToTheirDefaults() {
+        val sanitized = ViewerEditSettings(signatureColor = 99, signatureWidth = 7, signatureSlot = 2).sanitized()
+
+        assertEquals(ViewerEditPalettes.signature.defaultColor, sanitized.signatureColor)
+        assertEquals(ViewerSignature.DEFAULT_WIDTH, sanitized.signatureWidth)
+        assertEquals(0, sanitized.signatureSlot)
     }
 }

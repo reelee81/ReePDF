@@ -12,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import hu.reelee81.reepdf.viewer.resources.Res
@@ -30,7 +31,7 @@ interface SignaturePlacerActions {
 }
 
 @Composable
-fun SignaturePlacerScreen(state: SignaturePlacerState, actions: SignaturePlacerActions, fontFamily: FontFamily) {
+fun SignaturePlacerScreen(state: SignaturePlacerState, actions: SignaturePlacerActions, fontFamily: FontFamily, mainPanelWidth: Dp) {
     val dark = isSystemInDarkTheme()
     val colors = if (dark) ReeColors.dark else ReeColors.light
     val palette = if (dark) ReePalette.dark else ReePalette.light
@@ -74,6 +75,7 @@ fun SignaturePlacerScreen(state: SignaturePlacerState, actions: SignaturePlacerA
                 colors = colors,
                 overlayColor = palette.dialogOverlayBackgroundColor,
                 fontFamily = fontFamily,
+                mainPanelWidth = mainPanelWidth,
                 onDismiss = state::dismissQuestion,
                 onDiscard = actions::onDiscard,
                 onSave = actions::onSave

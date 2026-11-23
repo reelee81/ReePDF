@@ -26,6 +26,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import hu.reelee81.reepdf.viewer.resources.Res
 import hu.reelee81.reepdf.viewer.resources.crop_all_pages
@@ -48,6 +49,7 @@ fun PageCropperScreen(
     state: PageCropperState,
     actions: PageCropperActions,
     fontFamily: FontFamily,
+    mainPanelWidth: Dp,
     excludeGestures: (List<Rect>) -> Unit = {}
 ) {
     val dark = isSystemInDarkTheme()
@@ -112,6 +114,7 @@ fun PageCropperScreen(
                 colors = colors,
                 overlayColor = palette.dialogOverlayBackgroundColor,
                 fontFamily = fontFamily,
+                mainPanelWidth = mainPanelWidth,
                 onDismiss = state::dismissQuestion,
                 onDiscard = actions::onDiscard,
                 onSave = actions::onSave

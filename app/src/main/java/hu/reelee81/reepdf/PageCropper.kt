@@ -59,7 +59,7 @@ class PageCropper : AppCompatActivity(), PageCropperActions {
 
         val frame = FrameLayout(this).apply {
             fitsSystemWindows = true
-            addView(pageCropperView(this@PageCropper, state, this@PageCropper, R.font.roboto_regular, R.font.roboto_medium))
+            addView(pageCropperView(this@PageCropper, state, this@PageCropper, R.font.roboto_regular, R.font.roboto_medium, R.dimen.dp_9999_main))
         }
         setContentView(frame)
 

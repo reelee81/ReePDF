@@ -28,6 +28,15 @@ class ViewerIconsTest {
     fun checkOffMatchesTheAppIcon() = assertMatchesApp("ic_check_off_24", ViewerIcons.CHECK_OFF_PATH)
 
     @Test
+    fun addMatchesTheAppIcon() = assertMatchesApp("ic_add_24", ViewerIcons.ADD_PATH)
+
+    @Test
+    fun checkMatchesItsDesign() = assertMatchesDesign("ic_check_24", ViewerIcons.CHECK_PATH, ViewerIcons.STEP_VIEWPORT)
+
+    @Test
+    fun removeMatchesItsDesign() = assertMatchesDesign("ic_remove_24", ViewerIcons.REMOVE_PATH, ViewerIcons.SMALL_VIEWPORT)
+
+    @Test
     fun searchMatchesItsDesign() = assertMatchesDesign("ic_search_24", ViewerIcons.SEARCH_PATH, ViewerIcons.VIEWPORT)
 
     @Test
@@ -122,7 +131,10 @@ class ViewerIconsTest {
             ViewerIcons.UNDO_PATH,
             ViewerIcons.REDO_PATH,
             ViewerIcons.CHECK_ON_PATH,
-            ViewerIcons.CHECK_OFF_PATH
+            ViewerIcons.CHECK_OFF_PATH,
+            ViewerIcons.ADD_PATH,
+            ViewerIcons.CHECK_PATH,
+            ViewerIcons.REMOVE_PATH
         )
         for (path in paths) {
             assertTrue(addPathNodes(path).isNotEmpty())

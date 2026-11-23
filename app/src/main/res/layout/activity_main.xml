@@ -592,7 +592,7 @@
         android:visibility="gone"
         android:clickable="true"
         android:focusable="true"
-        android:elevation="@dimen/dp_9999_overlay"
+        android:elevation="@dimen/dp_9999"
         android:paddingTop="@dimen/dp_16"
         android:paddingBottom="@dimen/dp_16"
         android:paddingLeft="@dimen/dp_16"
@@ -607,8 +607,7 @@
             app:layout_constraintLeft_toLeftOf="parent"
             app:layout_constraintRight_toRightOf="parent"
             app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintWidth_max="@dimen/dp_9999_overlay">
+            app:layout_constraintBottom_toBottomOf="parent">
 
             <include layout="@layout/dialog_pdf_password" />
         </LinearLayout>
@@ -622,7 +621,7 @@
         android:visibility="gone"
         android:clickable="true"
         android:focusable="true"
-        android:elevation="@dimen/dp_9999_overlay"
+        android:elevation="@dimen/dp_9999"
         android:paddingTop="@dimen/dp_16"
         android:paddingBottom="@dimen/dp_16"
         android:paddingLeft="@dimen/dp_16"
@@ -637,8 +636,7 @@
             app:layout_constraintLeft_toLeftOf="parent"
             app:layout_constraintRight_toRightOf="parent"
             app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintWidth_max="@dimen/dp_9999_overlay">
+            app:layout_constraintBottom_toBottomOf="parent">
 
             <include layout="@layout/dialog_signature_chooser" />
         </LinearLayout>
@@ -652,7 +650,7 @@
         android:visibility="gone"
         android:clickable="true"
         android:focusable="true"
-        android:elevation="@dimen/dp_9999_overlay"
+        android:elevation="@dimen/dp_9999"
         android:paddingTop="@dimen/dp_16"
         android:paddingBottom="@dimen/dp_16"
         android:paddingLeft="@dimen/dp_16"
@@ -667,8 +665,7 @@
             app:layout_constraintLeft_toLeftOf="parent"
             app:layout_constraintRight_toRightOf="parent"
             app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintWidth_max="@dimen/dp_9999_overlay">
+            app:layout_constraintBottom_toBottomOf="parent">
 
             <include layout="@layout/dialog_timestamp" />
         </LinearLayout>
@@ -682,7 +679,7 @@
         android:visibility="gone"
         android:clickable="true"
         android:focusable="true"
-        android:elevation="@dimen/dp_9999_overlay"
+        android:elevation="@dimen/dp_9999"
         android:paddingTop="@dimen/dp_16"
         android:paddingBottom="@dimen/dp_16"
         android:paddingLeft="@dimen/dp_16"
@@ -697,8 +694,7 @@
             app:layout_constraintLeft_toLeftOf="parent"
             app:layout_constraintRight_toRightOf="parent"
             app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintWidth_max="@dimen/dp_9999_overlay">
+            app:layout_constraintBottom_toBottomOf="parent">
 
             <include layout="@layout/dialog_battery_optimization" />
         </LinearLayout>
@@ -712,7 +708,7 @@
         android:visibility="gone"
         android:clickable="true"
         android:focusable="true"
-        android:elevation="@dimen/dp_9999_overlay"
+        android:elevation="@dimen/dp_9999"
         android:paddingTop="@dimen/dp_16"
         android:paddingBottom="@dimen/dp_16"
         android:paddingLeft="@dimen/dp_16"
@@ -727,8 +723,7 @@
             app:layout_constraintLeft_toLeftOf="parent"
             app:layout_constraintRight_toRightOf="parent"
             app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintWidth_max="@dimen/dp_9999_overlay">
+            app:layout_constraintBottom_toBottomOf="parent">
 
             <include layout="@layout/dialog_notifications" />
         </LinearLayout>
@@ -742,7 +737,7 @@
         android:visibility="gone"
         android:clickable="true"
         android:focusable="true"
-        android:elevation="@dimen/dp_9999_overlay"
+        android:elevation="@dimen/dp_9999"
         android:paddingTop="@dimen/dp_16"
         android:paddingBottom="@dimen/dp_16"
         android:paddingLeft="@dimen/dp_16"
@@ -757,8 +752,7 @@
             app:layout_constraintLeft_toLeftOf="parent"
             app:layout_constraintRight_toRightOf="parent"
             app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintWidth_max="@dimen/dp_9999_overlay">
+            app:layout_constraintBottom_toBottomOf="parent">
 
             <include layout="@layout/dialog_about" />
         </LinearLayout>
@@ -772,7 +766,7 @@
         android:visibility="gone"
         android:clickable="true"
         android:focusable="true"
-        android:elevation="@dimen/dp_9999_overlay"
+        android:elevation="@dimen/dp_9999"
         android:paddingTop="@dimen/dp_16"
         android:paddingBottom="@dimen/dp_16"
         android:paddingLeft="@dimen/dp_16"
@@ -787,8 +781,7 @@
             app:layout_constraintLeft_toLeftOf="parent"
             app:layout_constraintRight_toRightOf="parent"
             app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintWidth_max="@dimen/dp_9999_overlay">
+            app:layout_constraintBottom_toBottomOf="parent">
 
             <include layout="@layout/dialog_position_on_page" />
         </LinearLayout>
@@ -802,7 +795,7 @@
         android:visibility="gone"
         android:clickable="true"
         android:focusable="true"
-        android:elevation="@dimen/dp_9999_overlay"
+        android:elevation="@dimen/dp_9999"
         android:paddingTop="@dimen/dp_16"
         android:paddingBottom="@dimen/dp_16"
         android:paddingLeft="@dimen/dp_16"
@@ -817,8 +810,7 @@
             app:layout_constraintLeft_toLeftOf="parent"
             app:layout_constraintRight_toRightOf="parent"
             app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintWidth_max="@dimen/dp_9999_overlay">
+            app:layout_constraintBottom_toBottomOf="parent">
 
             <include layout="@layout/dialog_max_coordinates" />
         </LinearLayout>
@@ -832,7 +824,7 @@
         android:visibility="gone"
         android:clickable="true"
         android:focusable="true"
-        android:elevation="@dimen/dp_9999_overlay"
+        android:elevation="@dimen/dp_9999"
         android:paddingTop="@dimen/dp_16"
         android:paddingBottom="@dimen/dp_16"
         android:paddingLeft="@dimen/dp_16"
@@ -848,8 +840,7 @@
             app:layout_constraintLeft_toLeftOf="parent"
             app:layout_constraintRight_toRightOf="parent"
             app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintWidth_max="@dimen/dp_9999_overlay">
+            app:layout_constraintBottom_toBottomOf="parent">
 
             <include layout="@layout/dialog_import_warnings" />
         </LinearLayout>
@@ -863,7 +854,7 @@
         android:visibility="gone"
         android:clickable="true"
         android:focusable="true"
-        android:elevation="@dimen/dp_9999_overlay"
+        android:elevation="@dimen/dp_9999"
         android:paddingTop="@dimen/dp_16"
         android:paddingBottom="@dimen/dp_16"
         android:paddingLeft="@dimen/dp_16"
@@ -878,8 +869,7 @@
             app:layout_constraintLeft_toLeftOf="parent"
             app:layout_constraintRight_toRightOf="parent"
             app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintWidth_max="@dimen/dp_9999_overlay">
+            app:layout_constraintBottom_toBottomOf="parent">
 
             <include layout="@layout/progress_dialog" />
         </LinearLayout>
@@ -893,7 +883,7 @@
         android:visibility="gone"
         android:clickable="true"
         android:focusable="true"
-        android:elevation="@dimen/dp_9999_overlay"
+        android:elevation="@dimen/dp_9999"
         android:paddingTop="@dimen/dp_16"
         android:paddingBottom="@dimen/dp_16"
         android:paddingLeft="@dimen/dp_16"
@@ -908,8 +898,7 @@
             app:layout_constraintLeft_toLeftOf="parent"
             app:layout_constraintRight_toRightOf="parent"
             app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintWidth_max="@dimen/dp_9999_overlay">
+            app:layout_constraintBottom_toBottomOf="parent">
 
             <include layout="@layout/progress_dialog_update_ui" />
         </LinearLayout>

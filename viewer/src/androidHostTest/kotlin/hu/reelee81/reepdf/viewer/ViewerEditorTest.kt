@@ -10,6 +10,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -44,7 +45,7 @@ class ViewerEditorTest {
     }
 
     private fun savedLine(id: String, stream: Int, x: Float, clip: FloatArray? = null) = ViewerSavedMark(
-        id, stream, ViewerMarkKind.PEN, 2f,
+        id, stream, ViewerMarkKind.PEN, 0x000000, 2f,
         ViewerMarkPath(byteArrayOf(ViewerMarkPath.MOVE, ViewerMarkPath.LINE), floatArrayOf(x, 50f, x + 20f, 50f)), clip
     )
 
@@ -508,11 +509,11 @@ class ViewerEditorTest {
     }
 
     @Test
-    fun theEraserAndTheDisabledToolsOpenNothing() {
+    fun theEraserAndTheDisabledToolOpenNothing() {
         editing()
 
         editor.tapTool(ViewerEditTool.TEXT)
-        editor.tapTool(ViewerEditTool.SIGNATURE)
+        editor.tapTool(ViewerEditTool.TEXT)
         val tool = editor.settings.tool
         editor.tapTool(ViewerEditTool.ERASER)
         editor.tapTool(ViewerEditTool.ERASER)
@@ -528,7 +529,7 @@ class ViewerEditorTest {
         val stored = mutableListOf<ViewerEditSettings>()
         editor.onSettingsChanged = { stored += it }
 
-        editor.restore(ViewerEditSettings(tool = ViewerEditTool.SIGNATURE, penColor = 50, undoPanelTop = true))
+        editor.restore(ViewerEditSettings(tool = ViewerEditTool.TEXT, penColor = 50, undoPanelTop = true))
         editor.placeUndoPanel(true)
         editor.selectTool(ViewerEditTool.HIGHLIGHTER)
 
@@ -536,6 +537,163 @@ class ViewerEditorTest {
         assertEquals(0, editor.settings.penColor)
         assertEquals(listOf(ViewerEditSettings(tool = ViewerEditTool.HIGHLIGHTER, drawingTool = ViewerEditTool.HIGHLIGHTER, undoPanelTop = true)), stored)
         assertNotNull(editor.settings)
+    }
+
+    private fun signatureReady(slot: Int = 0) {
+        val store = object : ViewerSignatureStore {
+            override suspend fun read(slot: Int): ViewerSignature? = if (slot == 0) SIGNATURE else null
+            override suspend fun write(slot: Int, signature: ViewerSignature) = Unit
+            override suspend fun delete(slot: Int) = Unit
+        }
+        editor.signatures.attach(store)
+        editing()
+        editor.selectTool(ViewerEditTool.SIGNATURE)
+        editor.chooseSignature(slot)
+    }
+
+    @Test
+    fun aTapPlacesTheChosenSignatureFramedInItsColorAndATapBesideItReleasesIt() {
+        signatureReady()
+        editor.chooseColor(2)
+
+        editor.tapSignature(0, ViewerTextPoint(50f, 50f), 100f, 100f, 2f)
+
+        val placed = editor.addedMarks(0).single()
+        assertEquals(ViewerMarkKind.SIGNATURE, placed.kind)
+        assertEquals(0xDD0000, placed.color)
+        assertSame(placed, editor.framed?.mark)
+        val box = editor.framed!!.box
+        assertTrue(box[0] >= 0f && box[2] <= 100f && box[1] >= 0f && box[3] <= 100f)
+        assertEquals(50f, (box[1] + box[3]) / 2, 0.01f)
+        editor.tapSignature(0, ViewerTextPoint(5f, 5f), 100f, 100f, 2f)
+        assertNull(editor.framed)
+        assertEquals(1, editor.addedMarks(0).size)
+    }
+
+    @Test
+    fun withoutAChosenSignatureATapOpensTheSignaturePanel() {
+        editor.signatures.attach(null)
+        editing()
+        editor.selectTool(ViewerEditTool.SIGNATURE)
+
+        editor.tapSignature(0, ViewerTextPoint(50f, 50f), 100f, 100f, 2f)
+
+        assertEquals(ViewerEditPanel.SIGNATURES, editor.panel)
+        assertTrue(editor.addedMarks(0).isEmpty())
+    }
+
+    @Test
+    fun movingAndResizingAreUndoneOneStepAtATime() {
+        signatureReady()
+        editor.tapSignature(0, ViewerTextPoint(150f, 150f), 300f, 300f, 2f)
+        val placed = editor.framed!!
+        val box = placed.box
+        assertEquals(ViewerSignature.PAD_WIDTH_ON_PAGE * (SIGNATURE.bounds()[2] - SIGNATURE.bounds()[0]), box[2] - box[0], 0.01f)
+
+        assertTrue(editor.grabSignature(0, ViewerTextPoint(box[0] + 1f, box[1] + 1f), 3f, 1f, 0f))
+        assertTrue(editor.addedMarks(0).isEmpty())
+        editor.dragSignature(ViewerTextPoint(box[0] - 200f, box[1] + 6f), 300f, 300f)
+        editor.endSignatureDrag()
+        val moved = editor.framed!!.box
+        assertEquals(0f, moved[0], 0.01f)
+        assertEquals(box[1] + 5f, moved[1], 0.01f)
+        assertTrue(editor.grabSignature(0, ViewerTextPoint(moved[2], moved[3]), 3f, 1f, 0f))
+        editor.dragSignature(ViewerTextPoint(moved[2] + 1000f, moved[3] + 1000f), 300f, 300f)
+        editor.endSignatureDrag()
+        val grown = editor.framed!!.box
+        assertEquals(0f, grown[0], 0.01f)
+        assertEquals(300f, grown[2], 0.01f)
+        assertTrue(grown[3] <= 300.01f)
+        assertEquals((moved[2] - moved[0]) / (moved[3] - moved[1]), (grown[2] - grown[0]) / (grown[3] - grown[1]), 0.001f)
+        assertEquals(1, editor.addedMarks(0).size)
+
+        editor.undo()
+        assertNull(editor.framed)
+        assertEquals(moved.toList(), ViewerSignaturePlacement.box(editor.addedMarks(0).single().path, editor.addedMarks(0).single().width).toList())
+        editor.undo()
+        assertSame(placed.mark, editor.addedMarks(0).single())
+        editor.undo()
+        assertTrue(editor.addedMarks(0).isEmpty())
+    }
+
+    @Test
+    fun theHandleSitsOnTheFrameOutsideTheSignatureAndGrabbingItDoesNotJump() {
+        signatureReady()
+        editor.tapSignature(0, ViewerTextPoint(70f, 150f), 300f, 300f, 2f)
+        val box = editor.framed!!.box
+
+        assertFalse(editor.grabSignature(0, ViewerTextPoint(box[2] + 4f, box[3] + 4f), 1f, 1f, 0f))
+        assertTrue(editor.grabSignature(0, ViewerTextPoint(box[2] + 4f, box[3] + 4f), 1f, 1f, 4f))
+        editor.dragSignature(ViewerTextPoint(box[2] + 4f, box[3] + 4f), 300f, 300f)
+        assertEquals(box.toList(), ViewerSignaturePlacement.box(editor.movedSignature!!.path, editor.movedSignature!!.width).toList())
+        editor.dragSignature(ViewerTextPoint(box[2] + 4f + (box[2] - box[0]), box[3] + 4f + (box[3] - box[1])), 300f, 300f)
+        editor.endSignatureDrag()
+
+        val doubled = editor.framed!!.box
+        assertEquals(box[0], doubled[0], 0.01f)
+        assertEquals(2 * (box[2] - box[0]), doubled[2] - doubled[0], 0.01f)
+    }
+
+    @Test
+    fun aGrabWithoutMovingChangesNothingAndAPinchCancelsTheDrag() {
+        signatureReady()
+        editor.tapSignature(0, ViewerTextPoint(50f, 50f), 100f, 100f, 2f)
+        val placed = editor.framed!!
+
+        assertTrue(editor.grabSignature(0, ViewerTextPoint(50f, 50f), 3f, 1f, 0f))
+        editor.endSignatureDrag()
+        assertTrue(editor.grabSignature(0, ViewerTextPoint(50f, 50f), 3f, 1f, 0f))
+        editor.dragSignature(ViewerTextPoint(60f, 60f), 100f, 100f)
+        editor.cancelGesture()
+
+        assertSame(placed, editor.framed)
+        assertSame(placed.mark, editor.addedMarks(0).single())
+        assertNull(editor.movedSignature)
+        assertFalse(editor.grabSignature(0, ViewerTextPoint(1f, 1f), 3f, 1f, 0f))
+        assertFalse(editor.grabSignature(1, ViewerTextPoint(50f, 50f), 3f, 1f, 0f))
+    }
+
+    @Test
+    fun aSavedSignatureIsFramedByATapAndMovingItErasesTheSavedOneAndAddsItsCopy() {
+        val saved = ViewerSavedMark(
+            "s", 7, ViewerMarkKind.SIGNATURE, 0x3D5FEC, 2f,
+            ViewerMarkPath(byteArrayOf(ViewerMarkPath.MOVE, ViewerMarkPath.LINE), floatArrayOf(20f, 20f, 40f, 30f))
+        )
+        document.marks[0] = ViewerPageMarks(listOf(saved, savedLine("p", 7, 60f)), intArrayOf(7))
+        signatureReady()
+
+        editor.tapSignature(0, ViewerTextPoint(30f, 25f), 100f, 100f, 2f)
+        val framed = editor.framed!!
+        assertEquals(0x3D5FEC, framed.mark.color)
+        assertTrue(editor.addedMarks(0).isEmpty())
+        assertTrue(editor.grabSignature(0, ViewerTextPoint(30f, 25f), 3f, 1f, 0f))
+        assertEquals(setOf("s"), document.edits.last().getValue(7).erased)
+        editor.dragSignature(ViewerTextPoint(40f, 35f), 100f, 100f)
+        editor.endSignatureDrag()
+
+        val copy = editor.addedMarks(0).single()
+        assertEquals(ViewerMarkKind.SIGNATURE, copy.kind)
+        assertEquals(0x3D5FEC, copy.color)
+        assertArrayEquals(floatArrayOf(30f, 30f, 50f, 40f), copy.path.points, 0.001f)
+        assertEquals(setOf("s"), editor.plan().erased[7])
+        editor.undo()
+        assertTrue(editor.addedMarks(0).isEmpty())
+        assertTrue(editor.plan().erased.isEmpty())
+    }
+
+    @Test
+    fun choosingAnotherToolOrUndoingReleasesTheFrame() {
+        signatureReady()
+        editor.tapSignature(0, ViewerTextPoint(50f, 50f), 100f, 100f, 2f)
+
+        editor.selectTool(ViewerEditTool.PEN)
+
+        assertNull(editor.framed)
+        editor.selectTool(ViewerEditTool.SIGNATURE)
+        editor.tapSignature(0, ViewerTextPoint(50f, 50f), 100f, 100f, 2f)
+        assertNotNull(editor.framed)
+        editor.tapSwatch()
+        assertNull(editor.framed)
     }
 
     private class FakeMarkDocument : ViewerDocument, ViewerMarkSource {
@@ -588,5 +746,9 @@ class ViewerEditorTest {
         override suspend fun copy(page: Int, from: ViewerTextPoint?, to: ViewerTextPoint?) = ""
 
         override suspend fun text(page: Int) = ""
+    }
+
+    private companion object {
+        val SIGNATURE = ViewerSignature(2f, listOf(floatArrayOf(0.1f, 0.1f, 0.5f, 0.3f, 0.9f, 0.2f)))
     }
 }

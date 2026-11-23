@@ -74,6 +74,34 @@ class PdfMarkContentTest {
     }
 
     @Test
+    fun aSignatureIsAnOpaqueStrokeOfSeveralLinesReadBackAsItsKind() {
+        val signature = PdfMark(
+            "sig6", PdfMarkKind.SIGNATURE, 0x3D5FEC, 1.5f,
+            PdfMarkPath.Builder().moveTo(1f, 2f).lineTo(3f, 4f).moveTo(5f, 6f).curveTo(6f, 7f, 8f, 9f, 10f, 11f).build()
+        )
+
+        val content = PdfMarkContent.write(listOf(signature), null)
+
+        assertEquals(
+            "/ReePDF <</Id(sig6)/K/Sign>> BDC\nq\n0.2392 0.3725 0.9255 RG\n1.5 w 1 J 1 j\n" +
+                "1 2 m\n3 4 l\n5 6 m\n6 7 8 9 10 11 c\nS\nQ\nEMC\n",
+            String(content, Charsets.ISO_8859_1)
+        )
+        assertSameMark(signature, PdfMarkContent.read(content).single().mark)
+    }
+
+    @Test
+    fun aMarkOfAnUnknownKindIsJudgedByHowItIsPainted() {
+        val content = "/ReePDF <</Id(f)/K/Future>> BDC q 0 0 1 RG 2 w 0 0 m 1 1 l S Q EMC".toByteArray()
+
+        val read = PdfMarkContent.read(content).single().mark
+
+        assertEquals(PdfMarkKind.PEN, read.kind)
+        assertEquals(0x0000FF, read.color)
+        assertEquals(2f, read.width, 0f)
+    }
+
+    @Test
     fun aMarkIsReadInTheSpaceOfTheTransformsAroundIt() {
         val mark = PdfMarkContent.write(listOf(pen), null)
         val content = "q 2 0 0 2 10 20 cm\n".toByteArray() + mark + "Q\n".toByteArray()

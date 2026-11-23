@@ -11,6 +11,8 @@ class ViewerStrokeBuilder(private val minDistance: Float) {
     val size: Int
         get() = xs.size
 
+    fun points(): FloatArray = FloatArray(xs.size * 2) { if (it % 2 == 0) xs[it / 2] else ys[it / 2] }
+
     fun add(x: Float, y: Float): Boolean {
         if (xs.isNotEmpty() && hypot(x - xs.last(), y - ys.last()) < minDistance) return false
         xs += x

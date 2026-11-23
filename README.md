@@ -26,8 +26,8 @@ We publish the source code so that others can use it, modify it and learn from i
 
 ### Page layout
 
-- Place several pages or cropped areas on one A4 sheet: **Row** × **Column** grid (1–100 each),
-  in portrait orientation, or in landscape orientation with the **Land.** (landscape) switch on
+- Place several pages or cropped areas on one A4 sheet: **Rows** × **Columns** grid (1–100 each),
+  in portrait orientation, or in landscape orientation with the **Landscape** switch on
 - **Margin** in millimeters around and between the cells (0–100 mm)
 - **Scale** switch with three positions (tap to step through them, or drag the switch directly to any position):
   - off: pages are only reduced, never enlarged
@@ -79,10 +79,17 @@ We publish the source code so that others can use it, modify it and learn from i
 
 - The app's own PDF viewer (MuPDF), on every supported Android version, fast even with tens of thousands of pages
 - Continuous vertical pages, two-finger and double-tap zoom, fast scrollbar and page number
-- Search (upper and lower case do not matter, accents do), text selection across pages and copying;
-  with touch exploration on, the screen reader reads the text of the page
+- Search (upper and lower case do not matter, accents do), text selection across pages and copying,
+  also in vertical (upright) writing; with touch exploration on, the screen reader reads the text of the page
 - Edit pages right in the viewer: pen and highlighter, each with its own color palette and five line widths;
   on text the highlighter follows the text lines
+- Underline (straight or wavy) and strikethrough on text, in the pen's colors, each tool remembering its own color;
+  the line follows the text line, and its thickness follows the letter size
+- Vector signature: draw up to two signatures, each with its own line width, and keep them in the app;
+  place the chosen one with a tap, in the pen's colors with its own remembered color, move it, resize it
+  proportionally by its bottom-right corner, and touch it again later to adjust it
+- Unlike the PNG signature, the vector signature stays a separate vector element in the PDF, so a PDF editor can
+  remove or copy it; it becomes part of the page picture only if a PNG signature is added to that page afterward
 - Eraser (it also removes saved edits), remove the edits of the current page or of every page,
   undo and redo
 - Saved edits stay on the pages even when the layout settings change later
@@ -104,9 +111,11 @@ We publish the source code so that others can use it, modify it and learn from i
 - Two setting profiles, **Profile 1** and **Profile 2** (grid, margin, orientation, border, scale, position,
   crop, signature position (separately for portrait and landscape), resolution and effects, password
   protection, file name template), saved and loaded with one tap
-- Export the settings to an XML file and import them again, for example on another device
+- Export the settings to an XML file and import them again, for example on another device; the file also
+  holds the saved vector signatures, so keep it safe
 - Light, dark or phone theme
 - English and Hungarian user interface
+- The main screen uses icons; long-press a button or icon to show its name
 - “About the app” window with the version number and links to this page, the privacy policy,
   the licenses, the source code and the contact address
 
@@ -117,6 +126,8 @@ We publish the source code so that others can use it, modify it and learn from i
 - “Battery optimization” help in the menu, because some phones stop background work during long operations
 - Built for very large documents: pages are processed in batches whose size adapts to the page content,
   to keep memory usage low
+- Identical content (for example the same image, font or logo in several imported files) is stored only once
+  in the working files and in the saved file, which keeps them small
 - Requires Android 8.0 or newer (API 26+)
 
 
