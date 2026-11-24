@@ -33,6 +33,7 @@ class ViewerState(val title: String, val canEdit: Boolean, private val scope: Co
     val selection = ViewerSelection(scope)
     val editor = ViewerEditor(scope) { pages -> surface.refresh(pages) }
     private var saveJob: Job? = null
+    private var pendingResume: ViewerResume? = null
 
     var editSaver: (suspend (ViewerEditPlan) -> ViewerEditSaveResult)? = null
     var editMessage by mutableStateOf<ViewerEditMessage?>(null)
@@ -98,11 +99,18 @@ class ViewerState(val title: String, val canEdit: Boolean, private val scope: Co
 
     fun tilesOf(page: Int): List<Pair<ViewerTile, ViewerImage>> = surface.tilesOf(page)
 
-    fun open(reason: ViewerWait.Reason, page: Int, opener: suspend () -> ViewerDocument) {
+    fun open(
+        reason: ViewerWait.Reason,
+        page: Int,
+        resume: ViewerResume? = null,
+        edits: (suspend () -> ViewerEditJournalRead)? = null,
+        opener: suspend () -> ViewerDocument
+    ) {
         openJob?.cancel()
         closeDocument()
         openError = null
-        surface.startAt(page)
+        pendingResume = resume
+        surface.startAt(page, resume?.spot)
         startWait(reason)
         openJob = scope.launch {
             var opened: ViewerDocument? = null
@@ -115,6 +123,8 @@ class ViewerState(val title: String, val canEdit: Boolean, private val scope: Co
                 search.attach(created)
                 selection.attach(created)
                 editor.attach(created)
+                pendingResume?.let { resumed -> resumeEditing(resumed, edits, created.pageCount) }
+                pendingResume = null
                 surface.applyLayout()
             } catch (e: CancellationException) {
                 if (document !== opened) opened?.close()
@@ -124,6 +134,35 @@ class ViewerState(val title: String, val canEdit: Boolean, private val scope: Co
                 stopWait()
                 openError = e.message ?: e::class.simpleName.orEmpty()
             }
+        }
+    }
+
+    fun resumeState(): ViewerResume = pendingResume ?: ViewerResume(
+        spot = surface.spot,
+        editing = editor.isActive,
+        paused = editor.paused,
+        panel = editor.panel,
+        rowOpen = editor.rowOpen,
+        question = editor.question,
+        deleting = editor.signatures.deleting,
+        saving = waitReason == ViewerWait.Reason.SAVING_EDITS
+    )
+
+    private suspend fun resumeEditing(resume: ViewerResume, edits: (suspend () -> ViewerEditJournalRead)?, pageCount: Int) {
+        val read = try {
+            edits?.invoke() ?: ViewerEditJournalRead.None
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            ViewerEditJournalRead.Unreadable
+        }
+        val found = (read as? ViewerEditJournalRead.Found)?.restore
+        val restored = found?.takeIf { it.fits(pageCount) }
+        if (canEdit && (resume.editing || restored != null)) editor.resume(resume, restored)
+        val damaged = read is ViewerEditJournalRead.Unreadable || (found != null && (restored == null || !restored.complete))
+        when {
+            damaged -> editMessage = ViewerEditMessage.RestoreIncomplete
+            resume.saving && editor.state.hasChanges -> editMessage = ViewerEditMessage.SaveInterrupted
         }
     }
 
@@ -203,7 +242,7 @@ class ViewerState(val title: String, val canEdit: Boolean, private val scope: Co
         saveJob = scope.launch {
             try {
                 when (val result = saver(plan)) {
-                    is ViewerEditSaveResult.Saved -> open(ViewerWait.Reason.OPENING_EDITED, page, result.opener)
+                    is ViewerEditSaveResult.Saved -> open(ViewerWait.Reason.OPENING_EDITED, page, opener = result.opener)
                     ViewerEditSaveResult.Unchanged -> {
                         stopWait()
                         editor.discard()
@@ -382,4 +421,8 @@ sealed interface ViewerEditMessage {
     class EraseFailed(val text: String) : ViewerEditMessage
 
     class SignatureFailed(val text: String) : ViewerEditMessage
+
+    data object RestoreIncomplete : ViewerEditMessage
+
+    data object SaveInterrupted : ViewerEditMessage
 }

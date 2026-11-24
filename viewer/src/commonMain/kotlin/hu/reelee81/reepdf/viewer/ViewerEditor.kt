@@ -28,6 +28,11 @@ class ViewerEditor(private val scope: CoroutineScope, private val onPagesChanged
     val signatures = ViewerSignatures(scope)
     private var signatureDrag: SignatureDrag? = null
 
+    var journal: ViewerEditJournal? = null
+    private var journalLive = 0L
+    private var journalDead = 0L
+    private var journalPad = 0L
+
     var onSettingsChanged: (ViewerEditSettings) -> Unit = {}
     var onFailure: (String) -> Unit = {}
 
@@ -52,6 +57,10 @@ class ViewerEditor(private val scope: CoroutineScope, private val onPagesChanged
         private set
     private var pendingMarks by mutableStateOf(emptySet<ViewerMark>())
 
+    init {
+        signatures.onRecord = ::recordPad
+    }
+
     fun restore(saved: ViewerEditSettings) {
         settings = saved.sanitized()
     }
@@ -67,6 +76,21 @@ class ViewerEditor(private val scope: CoroutineScope, private val onPagesChanged
         isActive = true
         signatures.load()
         load(visible)
+    }
+
+    internal fun resume(resume: ViewerResume, restored: ViewerEditRestore?) {
+        if (source == null) return
+        if (restored != null) {
+            state = session.restore(restored.actions, restored.position)
+            restored.pad?.let(signatures::restorePad)
+        }
+        start()
+        paused = resume.paused
+        panel = resume.panel
+        rowOpen = resume.rowOpen
+        question = resume.question
+        resume.deleting?.let(signatures::restoreDeleting)
+        if (restored != null) rewriteJournal()
     }
 
     fun onVisible(range: IntRange) {
@@ -179,7 +203,7 @@ class ViewerEditor(private val scope: CoroutineScope, private val onPagesChanged
             return
         }
         val mark = ViewerSignaturePlacement.place(signature, settings.color(ViewerEditTool.SIGNATURE), page, point, pageWidth, pageHeight)
-        state = session.perform(ViewerEditSession.Action.Add(mark))
+        perform(ViewerEditSession.Action.Add(mark))
         framed = ViewerFramedSignature(mark, emptySet())
     }
 
@@ -223,7 +247,7 @@ class ViewerEditor(private val scope: CoroutineScope, private val onPagesChanged
         pendingSaved = emptySet()
         if (moved != null && moved !== base.mark) {
             val unsaved = if (base.saved.isEmpty()) setOf(base.mark) else emptySet()
-            state = session.perform(ViewerEditSession.Action.Replace(unsaved, base.saved, moved))
+            perform(ViewerEditSession.Action.Replace(unsaved, base.saved, moved))
             framed = ViewerFramedSignature(moved, emptySet())
         }
         if (hidSaved) sync()
@@ -331,7 +355,7 @@ class ViewerEditor(private val scope: CoroutineScope, private val onPagesChanged
         val saved = pendingSaved
         eraser = null
         if (marks.isEmpty() && saved.isEmpty()) return
-        state = session.perform(ViewerEditSession.Action.Erase(marks, saved))
+        perform(ViewerEditSession.Action.Erase(marks, saved))
         pendingMarks = emptySet()
         pendingSaved = emptySet()
     }
@@ -344,7 +368,7 @@ class ViewerEditor(private val scope: CoroutineScope, private val onPagesChanged
             state.added[page].orEmpty().isNotEmpty() || (!state.isBlank(page) && loaded[page]?.streams?.isNotEmpty() == true)
         }
         if (!anything) return
-        state = session.perform(ViewerEditSession.Action.Blank(pages))
+        perform(ViewerEditSession.Action.Blank(pages))
         sync()
     }
 
@@ -352,7 +376,7 @@ class ViewerEditor(private val scope: CoroutineScope, private val onPagesChanged
         if (!isActive || (state.blankAll && state.added.isEmpty())) return
         releaseSignature()
         cancelGesture()
-        state = session.perform(ViewerEditSession.Action.Blank(null))
+        perform(ViewerEditSession.Action.Blank(null))
         sync()
     }
 
@@ -360,7 +384,7 @@ class ViewerEditor(private val scope: CoroutineScope, private val onPagesChanged
         if (!state.canUndo) return
         releaseSignature()
         cancelGesture()
-        state = session.undo()
+        moved(session.undo())
         sync()
     }
 
@@ -368,7 +392,7 @@ class ViewerEditor(private val scope: CoroutineScope, private val onPagesChanged
         if (!state.canRedo) return
         releaseSignature()
         cancelGesture()
-        state = session.redo()
+        moved(session.redo())
         sync()
     }
 
@@ -384,6 +408,8 @@ class ViewerEditor(private val scope: CoroutineScope, private val onPagesChanged
         question = null
         state = session.clear()
         isActive = false
+        forgetJournal()
+        journal?.discard()
         sync()
     }
 
@@ -397,6 +423,69 @@ class ViewerEditor(private val scope: CoroutineScope, private val onPagesChanged
         question = null
         state = session.clear()
         isActive = false
+    }
+
+    private fun perform(action: ViewerEditSession.Action) {
+        val target = journal
+        if (target == null) {
+            state = session.perform(action)
+            return
+        }
+        val dropped = session.redoActions().sumOf(ViewerEditJournalFormat::weight)
+        val refs = session.refsOf(action)
+        state = session.perform(action)
+        journalLive += ViewerEditJournalFormat.weight(action) - dropped
+        journalDead += dropped
+        target.append(ViewerEditRecord.Performed(action, refs))
+        compactJournal()
+    }
+
+    private fun moved(next: ViewerEditSession.State) {
+        state = next
+        val target = journal ?: return
+        journalDead += ViewerEditJournalFormat.MOVE_WEIGHT
+        target.append(ViewerEditRecord.Moved(session.position))
+        compactJournal()
+    }
+
+    private fun recordPad(record: ViewerEditRecord) {
+        val target = journal ?: return
+        val weight = ViewerEditJournalFormat.weight(record)
+        when (record) {
+            is ViewerEditRecord.PadOpened, is ViewerEditRecord.PadStroke -> {
+                journalPad += weight
+                journalLive += weight
+            }
+            ViewerEditRecord.PadCleared, ViewerEditRecord.PadClosed -> {
+                journalLive -= journalPad
+                journalDead += journalPad + weight
+                journalPad = 0L
+            }
+            else -> journalDead += weight
+        }
+        target.append(record)
+        compactJournal()
+    }
+
+    private fun compactJournal() {
+        if (journalDead > journalLive && journalDead > COMPACT_BYTES) rewriteJournal()
+    }
+
+    private fun rewriteJournal() {
+        val target = journal ?: return
+        val records = session.records().toMutableList()
+        val padRecord = signatures.pad?.let { ViewerEditRecord.PadOpened(it.slot, it.widthIndex, it.strokes) }
+        padRecord?.let(records::add)
+        target.rewrite(records)
+        journalLive = records.sumOf(ViewerEditJournalFormat::weight)
+        journalDead = 0L
+        journalPad = padRecord?.let(ViewerEditJournalFormat::weight) ?: 0L
+    }
+
+    private fun forgetJournal() {
+        journalLive = 0L
+        journalDead = 0L
+        journalPad = 0L
     }
 
     private fun update(next: ViewerEditSettings) {
@@ -473,7 +562,7 @@ class ViewerEditor(private val scope: CoroutineScope, private val onPagesChanged
             Mode.TEXT -> current.textMark()
         }
         wet = null
-        if (mark != null) state = session.perform(ViewerEditSession.Action.Add(mark))
+        if (mark != null) perform(ViewerEditSession.Action.Add(mark))
     }
 
     private fun eraseAt(page: Int, point: ViewerTextPoint, tolerance: Float) {
@@ -587,6 +676,7 @@ class ViewerEditor(private val scope: CoroutineScope, private val onPagesChanged
         framed = null
         signatures.close()
         state = session.clear()
+        forgetJournal()
         isActive = false
         paused = false
         rowOpen = false
@@ -634,6 +724,10 @@ class ViewerEditor(private val scope: CoroutineScope, private val onPagesChanged
     private class Eraser(var page: Int, var last: ViewerTextPoint, val tolerance: Float)
 
     private class SignatureDrag(val framed: ViewerFramedSignature, val start: ViewerTextPoint, val resize: Boolean)
+
+    private companion object {
+        const val COMPACT_BYTES = 64L * 1024
+    }
 }
 
 enum class ViewerEditPanel { COLORS, WIDTH, STYLE, SIGNATURES }

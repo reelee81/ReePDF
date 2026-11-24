@@ -48,6 +48,16 @@ class PageCropperState(spec: PageCropperSpec, private val scope: CoroutineScope)
     val isReady: Boolean
         get() = surface.layout != null
 
+    fun resume(left: Float, top: Float, right: Float, bottom: Float, all: Boolean, question: Boolean, spot: ViewerSpot?) {
+        val values = listOf(left, top, right, bottom)
+        if (values.all { it in 0f..1f } && right > left && bottom > top) {
+            frame = Rect(left, top, right, bottom)
+        }
+        allPages = all
+        asking = question
+        surface.startAt(0, spot)
+    }
+
     fun open(opener: suspend () -> ViewerPageSource) {
         openJob?.cancel()
         closeSource()

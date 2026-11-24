@@ -102,4 +102,6 @@
     <string name="decimal_separator">.</string>
     <string name="signature_store_failed">Storing the signature failed: %1$s</string>
     <string name="edit_scroll">Scroll without drawing</string>
+    <string name="pdf_edits_restore_incomplete">The unsaved edits could not be fully restored.</string>
+    <string name="pdf_edits_save_interrupted">Saving was interrupted, the edits are kept. Save again.</string>
 </resources>

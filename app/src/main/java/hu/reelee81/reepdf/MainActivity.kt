@@ -288,6 +288,7 @@ class MainActivity : AppCompatActivity() {
     private var placerChooserSignature: String? = null
     private lateinit var pageCropperLauncher: ActivityResultLauncher<Intent>
     private var cropResult: CropResult? = null
+    private var viewerResult: Uri? = null
     private var pageCropperOpen = false
     private var startupRestoreDone = false
     private lateinit var numberOfRows: TextInputEditText
@@ -670,7 +671,8 @@ class MainActivity : AppCompatActivity() {
                 ?.toUri()
 
             if (result.resultCode == RESULT_OK && editedUri != null) {
-                handleEditedPdfFromViewer(editedUri)
+                viewerResult = editedUri
+                applyViewerResult()
             } else {
                 lifecycleScope.launch(Dispatchers.IO) {
                     cleanupCacheExceptTemps()
@@ -930,6 +932,7 @@ class MainActivity : AppCompatActivity() {
         pendingSaveNamedDisplayName = savedInstanceState?.getString("state_pending_save_name")
         placerResult = PlacerResult.from(savedInstanceState)
         receiveCropResult(CropResult.from(savedInstanceState))
+        viewerResult = savedInstanceState?.getString("state_viewer_result")?.toUri()
 
         val bundleIndicesToSelect: Set<Int>? = savedInstanceState
             ?.getByteArray("state_selected_bits")
@@ -1448,6 +1451,7 @@ class MainActivity : AppCompatActivity() {
         val reopenChooser = placerChooserSignature?.takeIf { ::binding.isInitialized && binding.overlayDialogSignatureChooser.isVisible }
         (placerResult ?: reopenChooser?.let(PlacerResult::cancelled))?.saveTo(outState)
         cropResult?.saveTo(outState)
+        viewerResult?.let { outState.putString("state_viewer_result", it.toString()) }
 
         runCatching {
             val lm = binding.rvThumbnails.layoutManager as? LinearLayoutManager
@@ -2573,12 +2577,21 @@ class MainActivity : AppCompatActivity() {
         startupRestoreDone = true
         applyPlacerResult()
         applyCropResult()
+        applyViewerResult()
     }
 
     private fun dropPendingResults() {
         startupRestoreDone = true
         placerResult = null
         cropResult = null
+        viewerResult = null
+    }
+
+    private fun applyViewerResult() {
+        val uri = viewerResult ?: return
+        if (!startupRestoreDone || isUiBlockedByProgress) return
+        viewerResult = null
+        handleEditedPdfFromViewer(uri)
     }
 
     private class PlacerResult(

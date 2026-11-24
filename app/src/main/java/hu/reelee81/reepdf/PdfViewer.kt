@@ -21,10 +21,13 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import hu.reelee81.reepdf.viewer.ViewerActions
+import hu.reelee81.reepdf.viewer.ViewerEditPanel
 import hu.reelee81.reepdf.viewer.ViewerEditPlan
+import hu.reelee81.reepdf.viewer.ViewerEditQuestion
 import hu.reelee81.reepdf.viewer.ViewerEditSaveResult
 import hu.reelee81.reepdf.viewer.ViewerEditSettings
 import hu.reelee81.reepdf.viewer.ViewerEditTool
+import hu.reelee81.reepdf.viewer.ViewerResume
 import hu.reelee81.reepdf.viewer.ViewerState
 import hu.reelee81.reepdf.viewer.ViewerUnderlineStyle
 import hu.reelee81.reepdf.viewer.ViewerWait
@@ -48,6 +51,14 @@ class PdfViewer : AppCompatActivity(), ViewerActions {
         private const val STATE_TITLE = "pdf_current_title"
         private const val STATE_OUTPUT_URI = "pdf_current_output_uri"
         private const val STATE_PAGE = "pdf_current_page"
+        private const val STATE_SPOT = "pdf_spot"
+        private const val STATE_EDITING = "pdf_editing"
+        private const val STATE_PAUSED = "pdf_edit_paused"
+        private const val STATE_PANEL = "pdf_edit_panel"
+        private const val STATE_ROW_OPEN = "pdf_edit_row_open"
+        private const val STATE_QUESTION = "pdf_edit_question"
+        private const val STATE_DELETING = "pdf_edit_deleting"
+        private const val STATE_SAVING = "pdf_edit_saving"
         private const val NOTIFICATION_PROGRESS_MS = 5_000L
         private const val EDIT_PREFS = "viewer_edit"
         private const val KEY_TOOL = "tool"
@@ -92,7 +103,8 @@ class PdfViewer : AppCompatActivity(), ViewerActions {
             val file = File(path)
             val title = savedInstanceState?.getString(STATE_TITLE) ?: intent.getStringExtra(EXTRA_TITLE) ?: file.name
             val page = savedInstanceState?.getInt(STATE_PAGE) ?: intent.getIntExtra(EXTRA_INITIAL_PAGE_INDEX, 0)
-            model.start(title, file, page, savedInstanceState?.getString(STATE_OUTPUT_URI))
+            val resume = savedInstanceState?.let(::resumeFrom)
+            model.start(title, file, page, savedInstanceState?.getString(STATE_OUTPUT_URI), AndroidEditJournal.of(this), resume)
         }
         val state = model.state ?: return
         model.outputUri?.let(::setEditedDocumentResult)
@@ -191,6 +203,15 @@ class PdfViewer : AppCompatActivity(), ViewerActions {
         model.state?.let { state ->
             outState.putString(STATE_TITLE, state.title)
             outState.putInt(STATE_PAGE, state.currentPage)
+            val resume = state.resumeState()
+            outState.putSpot(STATE_SPOT, resume.spot)
+            outState.putBoolean(STATE_EDITING, resume.editing)
+            outState.putBoolean(STATE_PAUSED, resume.paused)
+            resume.panel?.let { outState.putString(STATE_PANEL, it.name) }
+            outState.putBoolean(STATE_ROW_OPEN, resume.rowOpen)
+            resume.question?.let { outState.putString(STATE_QUESTION, it.name) }
+            resume.deleting?.let { outState.putInt(STATE_DELETING, it) }
+            outState.putBoolean(STATE_SAVING, resume.saving)
         }
         model.outputUri?.let { outState.putString(STATE_OUTPUT_URI, it) }
         super.onSaveInstanceState(outState)
@@ -236,6 +257,20 @@ class PdfViewer : AppCompatActivity(), ViewerActions {
         }
         if (result is ViewerEditSaveResult.Saved) model.outputUri?.let(::setEditedDocumentResult)
         return result
+    }
+
+    private fun resumeFrom(saved: Bundle): ViewerResume? {
+        if (!saved.containsKey(STATE_EDITING)) return null
+        return ViewerResume(
+            spot = saved.getSpot(STATE_SPOT),
+            editing = saved.getBoolean(STATE_EDITING),
+            paused = saved.getBoolean(STATE_PAUSED),
+            panel = saved.getString(STATE_PANEL)?.let { name -> ViewerEditPanel.entries.firstOrNull { it.name == name } },
+            rowOpen = saved.getBoolean(STATE_ROW_OPEN),
+            question = saved.getString(STATE_QUESTION)?.let { name -> ViewerEditQuestion.entries.firstOrNull { it.name == name } },
+            deleting = if (saved.containsKey(STATE_DELETING)) saved.getInt(STATE_DELETING) else null,
+            saving = saved.getBoolean(STATE_SAVING)
+        )
     }
 
     private fun readEditSettings(prefs: SharedPreferences): ViewerEditSettings {

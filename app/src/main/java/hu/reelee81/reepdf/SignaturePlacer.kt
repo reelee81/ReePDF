@@ -35,6 +35,10 @@ class SignaturePlacer : AppCompatActivity(), SignaturePlacerActions {
         const val EXTRA_GRAYSCALE = "placer_grayscale"
         const val EXTRA_X_MM = "placer_x_mm"
         const val EXTRA_Y_MM = "placer_y_mm"
+        private const val STATE_X = "placer_state_x"
+        private const val STATE_Y = "placer_state_y"
+        private const val STATE_ASKING = "placer_state_asking"
+        private const val STATE_SPOT = "placer_state_spot"
     }
 
     private lateinit var model: SignaturePlacerModel
@@ -53,7 +57,16 @@ class SignaturePlacer : AppCompatActivity(), SignaturePlacerActions {
                 return
             }
             val metrics = resources.displayMetrics
-            model.start(spec(), path, intent.getIntExtra(EXTRA_PAGE_INDEX, 0), signature, max(metrics.widthPixels, metrics.heightPixels))
+            model.start(spec(), path, intent.getIntExtra(EXTRA_PAGE_INDEX, 0), signature, max(metrics.widthPixels, metrics.heightPixels)) { placer ->
+                if (savedInstanceState != null && savedInstanceState.containsKey(STATE_X)) {
+                    placer.resume(
+                        savedInstanceState.getFloat(STATE_X),
+                        savedInstanceState.getFloat(STATE_Y),
+                        savedInstanceState.getBoolean(STATE_ASKING),
+                        savedInstanceState.getSpot(STATE_SPOT)
+                    )
+                }
+            }
         }
         val state = model.state ?: return
         setResult(RESULT_CANCELED, passThrough())
@@ -106,6 +119,16 @@ class SignaturePlacer : AppCompatActivity(), SignaturePlacerActions {
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         SystemBarsCompat.applyViewerBars(this)
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        model.state?.let { state ->
+            outState.putFloat(STATE_X, state.xMm)
+            outState.putFloat(STATE_Y, state.yMm)
+            outState.putBoolean(STATE_ASKING, state.asking)
+            outState.putSpot(STATE_SPOT, state.surface.spot)
+        }
+        super.onSaveInstanceState(outState)
     }
 
     override fun finish() {

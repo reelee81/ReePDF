@@ -26,6 +26,8 @@ class ViewerSignatures(private val scope: CoroutineScope) {
 
     var onFailure: (String) -> Unit = {}
 
+    internal var onRecord: (ViewerEditRecord) -> Unit = {}
+
     var saved by mutableStateOf<List<ViewerSignature?>>(List(ViewerSignature.SLOTS) { null })
         private set
     var pad by mutableStateOf<ViewerSignaturePad?>(null)
@@ -65,17 +67,32 @@ class ViewerSignatures(private val scope: CoroutineScope) {
 
     fun openPad(slot: Int, widthIndex: Int) {
         if (pad != null || saved.getOrNull(slot) != null) return
-        pad = ViewerSignaturePad(slot, widthIndex)
+        opened(ViewerSignaturePad(slot, widthIndex, onRecord = { onRecord(it) }))
     }
 
     fun editPad(slot: Int) {
         val signature = saved.getOrNull(slot) ?: return
         if (pad != null) return
-        pad = ViewerSignaturePad(slot, ViewerSignature.WIDTHS.indexOfFirst { it == signature.width }, signature.strokes)
+        opened(ViewerSignaturePad(slot, ViewerSignature.WIDTHS.indexOfFirst { it == signature.width }, signature.strokes) { onRecord(it) })
+    }
+
+    internal fun restorePad(restored: ViewerPadRestore) {
+        pad = ViewerSignaturePad(restored.slot, restored.widthIndex, restored.strokes) { onRecord(it) }
+    }
+
+    internal fun restoreDeleting(slot: Int) {
+        if (slot in 0 until ViewerSignature.SLOTS) deleting = slot
+    }
+
+    private fun opened(chosen: ViewerSignaturePad) {
+        pad = chosen
+        onRecord(ViewerEditRecord.PadOpened(chosen.slot, chosen.widthIndex, chosen.strokes))
     }
 
     fun cancelPad() {
+        if (pad == null) return
         pad = null
+        onRecord(ViewerEditRecord.PadClosed)
     }
 
     fun close() {
@@ -87,6 +104,7 @@ class ViewerSignatures(private val scope: CoroutineScope) {
         val open = pad ?: return null
         val signature = open.signature() ?: return null
         pad = null
+        onRecord(ViewerEditRecord.PadClosed)
         saved = saved.toMutableList().also { it[open.slot] = signature }
         persist { it.write(open.slot, signature) }
         return open.slot
@@ -123,7 +141,12 @@ class ViewerSignatures(private val scope: CoroutineScope) {
     }
 }
 
-class ViewerSignaturePad internal constructor(val slot: Int, widthIndex: Int, drawn: List<FloatArray> = emptyList()) {
+class ViewerSignaturePad internal constructor(
+    val slot: Int,
+    widthIndex: Int,
+    drawn: List<FloatArray> = emptyList(),
+    private val onRecord: (ViewerEditRecord) -> Unit = {}
+) {
     private var builder: ViewerStrokeBuilder? = null
 
     var widthIndex by mutableIntStateOf(widthIndex.coerceIn(ViewerSignature.WIDTHS.indices))
@@ -143,7 +166,9 @@ class ViewerSignaturePad internal constructor(val slot: Int, widthIndex: Int, dr
         get() = builder != null
 
     fun chooseWidth(index: Int) {
-        if (index in ViewerSignature.WIDTHS.indices) widthIndex = index
+        if (index !in ViewerSignature.WIDTHS.indices || index == widthIndex) return
+        widthIndex = index
+        onRecord(ViewerEditRecord.PadWidth(index))
     }
 
     fun begin(x: Float, y: Float, step: Float) {
@@ -171,13 +196,17 @@ class ViewerSignaturePad internal constructor(val slot: Int, widthIndex: Int, dr
         val started = builder ?: return
         builder = null
         current = null
-        strokes = strokes + started.points()
+        val points = started.points()
+        strokes = strokes + points
+        onRecord(ViewerEditRecord.PadStroke(points))
     }
 
     fun clear() {
+        val drawn = builder != null || strokes.isNotEmpty()
         builder = null
         current = null
         strokes = emptyList()
+        if (drawn) onRecord(ViewerEditRecord.PadCleared)
     }
 
     fun signature(): ViewerSignature? {

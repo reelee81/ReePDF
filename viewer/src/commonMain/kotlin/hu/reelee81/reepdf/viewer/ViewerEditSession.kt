@@ -52,6 +52,27 @@ class ViewerEditSession {
     var state: State = State.EMPTY
         private set
 
+    val position: Int
+        get() = done
+
+    internal fun redoActions(): List<Action> = actions.subList(done, actions.size).toList()
+
+    internal fun refsOf(action: Action): IntArray = refsOf(actions, done, action)
+
+    internal fun records(): List<ViewerEditRecord> {
+        val records = ArrayList<ViewerEditRecord>(actions.size + 1)
+        for ((index, action) in actions.withIndex()) records += ViewerEditRecord.Performed(action, refsOf(actions, index, action))
+        if (done < actions.size) records += ViewerEditRecord.Moved(done)
+        return records
+    }
+
+    fun restore(restored: List<Action>, position: Int): State {
+        actions.clear()
+        actions.addAll(restored)
+        done = position.coerceIn(0, actions.size)
+        return replay()
+    }
+
     fun perform(action: Action): State {
         while (actions.size > done) actions.removeAt(actions.lastIndex)
         actions += action
@@ -121,5 +142,30 @@ class ViewerEditSession {
             canRedo = done < actions.size
         )
         return state
+    }
+
+    private companion object {
+        fun refsOf(actions: List<Action>, upTo: Int, action: Action): IntArray {
+            val marks = when (action) {
+                is Action.Erase -> action.marks
+                is Action.Replace -> action.marks
+                else -> return IntArray(0)
+            }
+            val refs = ArrayList<Int>(marks.size)
+            for (mark in marks) {
+                for (index in upTo - 1 downTo 0) {
+                    val added = when (val earlier = actions[index]) {
+                        is Action.Add -> earlier.mark
+                        is Action.Replace -> earlier.mark
+                        else -> null
+                    }
+                    if (added === mark) {
+                        refs += index
+                        break
+                    }
+                }
+            }
+            return refs.toIntArray()
+        }
     }
 }

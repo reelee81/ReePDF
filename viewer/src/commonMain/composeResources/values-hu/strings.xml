@@ -102,4 +102,6 @@
     <string name="decimal_separator">,</string>
     <string name="signature_store_failed">Az aláírás tárolása sikertelen: %1$s</string>
     <string name="edit_scroll">Görgetés rajzolás nélkül</string>
+    <string name="pdf_edits_restore_incomplete">A nem mentett szerkesztéseket nem sikerült teljesen visszaállítani.</string>
+    <string name="pdf_edits_save_interrupted">A mentés megszakadt, a szerkesztések megmaradtak. Mentsd újra.</string>
 </resources>

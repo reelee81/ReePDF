@@ -55,6 +55,13 @@ class SignaturePlacerState(private val spec: SignaturePlacerSpec, private val sc
     val isReady: Boolean
         get() = surface.layout != null
 
+    fun resume(x: Float, y: Float, question: Boolean, spot: ViewerSpot?) {
+        if (x.isFinite()) xMm = x.coerceIn(0f, maxX)
+        if (y.isFinite()) yMm = y.coerceIn(0f, maxY)
+        asking = question
+        surface.startAt(0, spot)
+    }
+
     fun open(opener: suspend () -> ViewerPageSource) {
         openJob?.cancel()
         closeSource()

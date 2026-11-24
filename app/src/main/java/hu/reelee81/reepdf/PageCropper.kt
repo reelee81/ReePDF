@@ -27,6 +27,10 @@ class PageCropper : AppCompatActivity(), PageCropperActions {
         const val EXTRA_GROUP = "cropper_group"
         const val EXTRA_FRAME = "cropper_frame"
         const val EXTRA_ALL_PAGES = "cropper_all_pages"
+        private const val STATE_FRAME = "cropper_state_frame"
+        private const val STATE_ALL_PAGES = "cropper_state_all_pages"
+        private const val STATE_ASKING = "cropper_state_asking"
+        private const val STATE_SPOT = "cropper_state_spot"
     }
 
     private lateinit var model: PageCropperModel
@@ -53,7 +57,20 @@ class PageCropper : AppCompatActivity(), PageCropperActions {
                 allPages = intent.getBooleanExtra(EXTRA_ALL_PAGES, false),
                 minSize = PdfCropRect.MIN_SIZE
             )
-            model.start(spec, File(dir), intent.getIntExtra(EXTRA_SOURCE_PAGE, 0), intent.getIntExtra(EXTRA_TURNS, 0))
+            model.start(spec, File(dir), intent.getIntExtra(EXTRA_SOURCE_PAGE, 0), intent.getIntExtra(EXTRA_TURNS, 0)) { cropper ->
+                val saved = savedInstanceState?.getFloatArray(STATE_FRAME)
+                if (savedInstanceState != null && saved != null && saved.size == 4) {
+                    cropper.resume(
+                        saved[0],
+                        saved[1],
+                        saved[2],
+                        saved[3],
+                        savedInstanceState.getBoolean(STATE_ALL_PAGES),
+                        savedInstanceState.getBoolean(STATE_ASKING),
+                        savedInstanceState.getSpot(STATE_SPOT)
+                    )
+                }
+            }
         }
         val state = model.state ?: return
 
@@ -97,6 +114,17 @@ class PageCropper : AppCompatActivity(), PageCropperActions {
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         SystemBarsCompat.applyViewerBars(this)
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        model.state?.let { state ->
+            val frame = state.frame
+            outState.putFloatArray(STATE_FRAME, floatArrayOf(frame.left, frame.top, frame.right, frame.bottom))
+            outState.putBoolean(STATE_ALL_PAGES, state.allPages)
+            outState.putBoolean(STATE_ASKING, state.asking)
+            outState.putSpot(STATE_SPOT, state.surface.spot)
+        }
+        super.onSaveInstanceState(outState)
     }
 
     override fun finish() {

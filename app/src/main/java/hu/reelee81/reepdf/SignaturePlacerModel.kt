@@ -27,9 +27,17 @@ class SignaturePlacerModel : ViewModel() {
     var signatureFailed by mutableStateOf(false)
         private set
 
-    fun start(spec: SignaturePlacerSpec, path: String, pageIndex: Int, signaturePath: String, screenSide: Int) {
+    fun start(
+        spec: SignaturePlacerSpec,
+        path: String,
+        pageIndex: Int,
+        signaturePath: String,
+        screenSide: Int,
+        prepare: (SignaturePlacerState) -> Unit
+    ) {
         val placer = SignaturePlacerState(spec, viewModelScope)
         state = placer
+        prepare(placer)
         placer.open { AndroidSinglePage.open(path, pageIndex) }
         viewModelScope.launch {
             val decoded = withContext(Dispatchers.IO) { decode(signaturePath, spec, screenSide) }

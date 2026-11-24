@@ -53,6 +53,8 @@ class ViewerStringsTest {
     private companion object {
         val FORMAT_ARGUMENT = Regex("""%\d+\$[ds]""")
         val VIEWER_ONLY = setOf(
+            "pdf_edits_restore_incomplete",
+            "pdf_edits_save_interrupted",
             "edit_scroll",
             "edit_signature_1",
             "edit_signature_2",

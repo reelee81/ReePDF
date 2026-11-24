@@ -35,7 +35,9 @@ import hu.reelee81.reepdf.viewer.resources.edit_signature_2_delete_question
 import hu.reelee81.reepdf.viewer.resources.no_pdf_edits_to_save
 import hu.reelee81.reepdf.viewer.resources.ok_text
 import hu.reelee81.reepdf.viewer.resources.pdf_edits_erase_failed
+import hu.reelee81.reepdf.viewer.resources.pdf_edits_restore_incomplete
 import hu.reelee81.reepdf.viewer.resources.pdf_edits_save_failed
+import hu.reelee81.reepdf.viewer.resources.pdf_edits_save_interrupted
 import hu.reelee81.reepdf.viewer.resources.pdf_edits_saving
 import hu.reelee81.reepdf.viewer.resources.pdf_wait_reading_edited_pages
 import hu.reelee81.reepdf.viewer.resources.pdf_wait_reading_pages
@@ -209,6 +211,8 @@ fun ViewerScreen(state: ViewerState, actions: ViewerActions, fontFamily: FontFam
             is ViewerEditMessage.SaveFailed -> stringResource(Res.string.pdf_edits_save_failed, shown.text)
             is ViewerEditMessage.EraseFailed -> stringResource(Res.string.pdf_edits_erase_failed, shown.text)
             is ViewerEditMessage.SignatureFailed -> stringResource(Res.string.signature_store_failed, shown.text)
+            ViewerEditMessage.RestoreIncomplete -> stringResource(Res.string.pdf_edits_restore_incomplete)
+            ViewerEditMessage.SaveInterrupted -> stringResource(Res.string.pdf_edits_save_interrupted)
         }
         LaunchedEffect(message) {
             if (message != null) {

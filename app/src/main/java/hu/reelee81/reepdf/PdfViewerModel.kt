@@ -7,12 +7,14 @@ import hu.reelee81.reepdf.pdf.PdfMarkSave
 import hu.reelee81.reepdf.pdf.ProgressTracker
 import hu.reelee81.reepdf.viewer.ViewerEditPlan
 import hu.reelee81.reepdf.viewer.ViewerEditSaveResult
+import hu.reelee81.reepdf.viewer.ViewerResume
 import hu.reelee81.reepdf.viewer.ViewerState
 import hu.reelee81.reepdf.viewer.ViewerWait
 import java.io.File
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.async
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 
@@ -26,12 +28,20 @@ class PdfViewerModel : ViewModel() {
 
     @Volatile
     private var document: AndroidViewerDocument? = null
+    private var journal: AndroidEditJournal? = null
 
-    fun start(title: String, file: File, page: Int, outputUri: String?) {
+    fun start(title: String, file: File, page: Int, outputUri: String?, journal: AndroidEditJournal, resume: ViewerResume?) {
         this.file = file
         this.outputUri = outputUri
+        this.journal = journal
         state = ViewerState(title, true, viewModelScope).also { viewer ->
-            viewer.open(ViewerWait.Reason.OPENING, page) { opened(file) }
+            viewer.editor.journal = journal
+            val reading = resume?.let {
+                viewModelScope.async { journal.read(withContext(Dispatchers.IO) { AndroidEditJournal.identity(file) }) }
+            }
+            viewer.open(ViewerWait.Reason.OPENING, page, resume, reading?.let { edits -> { edits.await() } }) {
+                opened(file, fresh = resume == null)
+            }
         }
     }
 
@@ -54,7 +64,7 @@ class PdfViewerModel : ViewModel() {
             } else {
                 file = output
                 outputUri = uri
-                ViewerEditSaveResult.Saved { opened(output) }
+                ViewerEditSaveResult.Saved { opened(output, fresh = false) }
             }
         } catch (e: CancellationException) {
             discard(output)
@@ -70,15 +80,24 @@ class PdfViewerModel : ViewModel() {
     }
 
     fun close() {
+        state?.editor?.journal = null
+        journal?.discard()
         state?.close()
     }
 
     override fun onCleared() {
+        state?.editor?.journal = null
         state?.close()
     }
 
-    private suspend fun opened(file: File): AndroidViewerDocument =
-        AndroidViewerDocument.open(file.absolutePath).also { document = it }
+    private suspend fun opened(file: File, fresh: Boolean): AndroidViewerDocument {
+        val identity = withContext(Dispatchers.IO) { AndroidEditJournal.identity(file) }
+        journal?.let { target ->
+            if (fresh) target.discard()
+            target.begin(identity)
+        }
+        return AndroidViewerDocument.open(file.absolutePath).also { document = it }
+    }
 
     private companion object {
         const val CLOSED_MESSAGE = "The viewer document is closed"

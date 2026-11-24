@@ -37,6 +37,7 @@ class ViewerSurface(
     private var sizes: ViewerPageSizes? = null
     private var tilePlan: ViewerTilePlan? = null
     private var pendingPage = 0
+    private var pendingSpot: ViewerSpot? = null
     private var viewWidth = 0
     private var viewHeight = 0
     private var spacing = -1.0
@@ -78,13 +79,23 @@ class ViewerSurface(
             return best
         }
 
+    val spot: ViewerSpot?
+        get() {
+            val pages = layout ?: return pendingSpot
+            val view = viewport ?: return pendingSpot
+            val top = view.contentTop
+            val page = pages.pageAt(top)
+            return ViewerSpot(page, top - pages.top(page), view.contentLeft, view.zoom / ViewerViewport.fitWidthZoom(view.width, pages, gutter))
+        }
+
     fun pageImage(page: Int): ViewerImage? = pageImages[page]?.let { shown[it] }
 
     fun tilesOf(page: Int): List<Pair<ViewerTile, ViewerImage>> =
         tiles[page].orEmpty().mapNotNull { tile -> shown[tile]?.let { tile to it } }
 
-    fun startAt(page: Int) {
-        pendingPage = page
+    fun startAt(page: Int, spot: ViewerSpot? = null) {
+        pendingPage = spot?.page ?: page
+        pendingSpot = spot
     }
 
     fun attach(source: ViewerPageSource, pageSizes: ViewerPageSizes) {
@@ -154,6 +165,7 @@ class ViewerSurface(
         val pages = layout
         if (pages == null || viewWidth <= 0) {
             pendingPage = page
+            pendingSpot = null
             return
         }
         val next = ViewerViewport.atPage(page, viewWidth, viewHeight, pages, zoomLimits, gutter)
@@ -270,7 +282,13 @@ class ViewerSurface(
         val pageSizes = sizes ?: return
         if (viewWidth <= 0 || viewHeight <= 0 || spacing < 0.0) return
         val built = ViewerPageLayout(pageSizes.widths, pageSizes.heights, spacing)
-        val start = ViewerViewport.atPage(pendingPage, viewWidth, viewHeight, built, zoomLimits, gutter)
+        val spot = pendingSpot
+        pendingSpot = null
+        val start = if (spot != null) {
+            ViewerViewport.atSpot(spot, viewWidth, viewHeight, built, zoomLimits, gutter)
+        } else {
+            ViewerViewport.atPage(pendingPage, viewWidth, viewHeight, built, zoomLimits, gutter)
+        }
         layout = built
         viewport = start
         renderZoom = start.zoom

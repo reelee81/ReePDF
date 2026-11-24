@@ -14,9 +14,10 @@ class PageCropperModel : ViewModel() {
     var state: PageCropperState? = null
         private set
 
-    fun start(spec: PageCropperSpec, sourceDir: File, sourcePage: Int, quarterTurns: Int) {
+    fun start(spec: PageCropperSpec, sourceDir: File, sourcePage: Int, quarterTurns: Int, prepare: (PageCropperState) -> Unit) {
         val cropper = PageCropperState(spec, viewModelScope)
         state = cropper
+        prepare(cropper)
         cropper.open {
             val (location, view) = withContext(Dispatchers.IO) {
                 val parts = PdfSourceParts.open(sourceDir)

@@ -83,6 +83,23 @@ class ViewerViewport private constructor(
             return create(width, height, zoom, 0.0, y, layout, limits, gutter)
         }
 
+        fun atSpot(
+            spot: ViewerSpot,
+            width: Int,
+            height: Int,
+            layout: ViewerPageLayout,
+            limits: ViewerZoomLimits = ViewerZoomLimits.FREE,
+            gutter: Double = 0.0
+        ): ViewerViewport {
+            val page = spot.page.coerceIn(0, layout.pageCount - 1)
+            val relative = spot.zoom.takeIf { it.isFinite() && it > 0f } ?: 1f
+            val zoom = (fitWidthZoom(width, layout, gutter) * relative)
+                .coerceIn(limits.min(width, layout, gutter), limits.max(width, layout, gutter))
+            val top = spot.top.takeIf { it.isFinite() } ?: 0.0
+            val left = spot.left.takeIf { it.isFinite() } ?: 0.0
+            return create(width, height, zoom, left * zoom, (layout.top(page) + top) * zoom, layout, limits, gutter)
+        }
+
         private fun create(
             width: Int,
             height: Int,
@@ -110,6 +127,8 @@ class ViewerViewport private constructor(
             }
     }
 }
+
+class ViewerSpot(val page: Int, val top: Double, val left: Double, val zoom: Float)
 
 class ViewerZoomLimits private constructor(private val fitFactor: Float?) {
     fun min(width: Int, layout: ViewerPageLayout, gutter: Double): Float {
