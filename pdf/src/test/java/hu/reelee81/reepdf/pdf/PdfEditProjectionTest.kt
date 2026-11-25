@@ -49,6 +49,7 @@ class PdfEditProjectionTest {
     private val rotatedHalf = doubleArrayOf(0.0, 0.5, -0.5, 0.0, 450.0, 100.0)
 
     private companion object {
+        const val EDIT_X = 150f
         val BROKEN = "\nq0.313 cm.176 ".repeat(120) + "q\n"
     }
 
@@ -70,7 +71,7 @@ class PdfEditProjectionTest {
         var depthAfterFirst = -1
         for (round in 1..10) {
             val nup = buildNup(source)
-            val edited = edit(nup, "EDIT $round", 150f, 120f + round * 20f)
+            val edited = edit(nup, "EDIT $round", 120f + round * 20f)
             val projected = temporary.newFile("source_$round.pdf")
             val changed = projectFile(source, edited, projected)
             assertEquals(1, changed)
@@ -84,7 +85,7 @@ class PdfEditProjectionTest {
         for (round in 1..10) {
             val position = positions["EDIT $round"]
             assertNotNull("EDIT $round is missing", position)
-            assertEquals(150f, position!![0], 0.05f)
+            assertEquals(EDIT_X, position!![0], 0.05f)
             assertEquals(120f + round * 20f, position[1], 0.05f)
         }
         assertTrue(textPositions(finalNup, 2).keys.none { it.startsWith("EDIT") })
@@ -113,7 +114,7 @@ class PdfEditProjectionTest {
         val projected = projectEdit(source, "EDIT", 1)
         val position = textPositions(buildNup(projected), 1)["EDIT"]
         assertNotNull(position)
-        assertEquals(150f, position!![0], 0.05f)
+        assertEquals(EDIT_X, position!![0], 0.05f)
         assertEquals(200f, position[1], 0.05f)
 
         val cleared = erase(buildNup(projected), null)!!
@@ -132,7 +133,7 @@ class PdfEditProjectionTest {
         val projected = projectEdit(source, "EDIT", 1)
         val position = textPositions(buildNup(projected), 1)["EDIT"]
         assertNotNull(position)
-        assertEquals(150f, position!![0], 0.05f)
+        assertEquals(EDIT_X, position!![0], 0.05f)
         assertEquals(200f, position[1], 0.05f)
         PdfDocument(PdfReader(projected)).use { pdf ->
             val page = pdf.getPage(1)
@@ -175,7 +176,7 @@ class PdfEditProjectionTest {
         }
         val positions = textPositions(buildNup(projected), 1)
         assertTrue(positions.containsKey("SOURCE 1"))
-        assertEquals(150f, positions.getValue("EDIT")[0], 0.05f)
+        assertEquals(EDIT_X, positions.getValue("EDIT")[0], 0.05f)
         assertEquals(200f, positions.getValue("EDIT")[1], 0.05f)
     }
 
@@ -315,7 +316,7 @@ class PdfEditProjectionTest {
 
         val cleared = erase(buildNup(source), null)!!
         assertFalse(hasLayers(cleared, null))
-        val edited = edit(cleared, "NEW ONE", 150f, 200f)
+        val edited = edit(cleared, "NEW ONE", 200f)
         val projected = temporary.newFile()
         assertEquals(2, projectFile(source, edited, projected))
 
@@ -343,7 +344,7 @@ class PdfEditProjectionTest {
     @Test
     fun clearingRemovesEditsNotYetProjectedToTheSource() {
         val source = makeSource(2)
-        val edited = edit(edit(buildNup(source), "FIRST PAGE EDIT", 150f, 200f, 1), "SECOND PAGE EDIT", 150f, 200f, 2)
+        val edited = edit(edit(buildNup(source), "FIRST PAGE EDIT", 200f, 1), "SECOND PAGE EDIT", 200f, 2)
         assertTrue(hasLayers(edited, setOf(1)))
 
         val cleared = erase(edited, setOf(1))!!
@@ -369,7 +370,7 @@ class PdfEditProjectionTest {
     @Test
     fun clearingKeepsAppendedContentWhenTheOriginalWasModified() {
         val modified = temporary.newFile()
-        PdfDocument(PdfReader(edit(buildNup(makeSource(1)), "EDIT", 150f, 200f)), PdfWriter(modified)).use { pdf ->
+        PdfDocument(PdfReader(edit(buildNup(makeSource(1)), "EDIT", 200f)), PdfWriter(modified)).use { pdf ->
             val stream = pdf.getPage(1).getContentStream(0)
             stream.setData(stream.bytes + "\n0 0 m 10 10 l S\n".toByteArray())
         }
@@ -405,7 +406,7 @@ class PdfEditProjectionTest {
             }
         }
         val untouched = File(parts, "0001.pdf").readBytes()
-        val edited = edit(buildNup(whole), "THIRD PAGE EDIT", 150f, 200f, 3)
+        val edited = edit(buildNup(whole), "THIRD PAGE EDIT", 200f, 3)
 
         val result = PdfEditProjection.project(PdfSourceParts.open(parts), edited, batchSize = 1, writeStage = { NoProgress }) {}
 
@@ -423,8 +424,8 @@ class PdfEditProjectionTest {
         val source = makeSharedPieceInfoSource()
         assertTrue(sharesPieceInfoWithFirstPage(source, 2))
 
-        val withFirst = projectTogether(source, edit(buildNup(source), "FIRST PAGE EDIT", 150f, 200f, 1))
-        val withBoth = projectTogether(withFirst, edit(buildNup(withFirst), "SECOND PAGE EDIT", 150f, 200f, 2))
+        val withFirst = projectTogether(source, edit(buildNup(source), "FIRST PAGE EDIT", 200f, 1))
+        val withBoth = projectTogether(withFirst, edit(buildNup(withFirst), "SECOND PAGE EDIT", 200f, 2))
 
         assertOwnLayerRecords(withBoth)
         val nup = buildNup(withBoth)
@@ -435,7 +436,7 @@ class PdfEditProjectionTest {
     @Test
     fun editsOnPagesSharingTheirPieceInfoInOneSaveStayOnTheirOwnPage() {
         val source = makeSharedPieceInfoSource()
-        val edited = edit(edit(buildNup(source), "FIRST PAGE EDIT", 150f, 200f, 1), "SECOND PAGE EDIT", 150f, 200f, 2)
+        val edited = edit(edit(buildNup(source), "FIRST PAGE EDIT", 200f, 1), "SECOND PAGE EDIT", 200f, 2)
 
         val projected = projectTogether(source, edited)
 
@@ -450,7 +451,7 @@ class PdfEditProjectionTest {
         val source = makeSharedPieceInfoSource()
         val projected = projectTogether(
             source,
-            edit(edit(buildNup(source), "FIRST PAGE EDIT", 150f, 200f, 1), "SECOND PAGE EDIT", 150f, 200f, 2)
+            edit(edit(buildNup(source), "FIRST PAGE EDIT", 200f, 1), "SECOND PAGE EDIT", 200f, 2)
         )
 
         val withoutFirst = buildNup(projectTogether(projected, cleared(buildNup(projected), 1)))
@@ -467,7 +468,7 @@ class PdfEditProjectionTest {
     @Test
     fun pagesThatShareTheRecordOfAnEditedPageGetTheirOwnLayer() {
         val plain = makeSourceEndingWithAnExtraRestore()
-        val withFirst = projectTogether(plain, edit(buildNup(plain), "FIRST PAGE EDIT", 150f, 200f, 1))
+        val withFirst = projectTogether(plain, edit(buildNup(plain), "FIRST PAGE EDIT", 200f, 1))
         val shared = temporary.newFile()
         PdfDocument(PdfReader(withFirst), PdfWriter(shared)).use { pdf ->
             val pieceInfo = pdf.getPage(1).pdfObject.getAsDictionary(PdfName.PieceInfo).makeIndirect(pdf)
@@ -477,7 +478,7 @@ class PdfEditProjectionTest {
         assertTrue(sharesPieceInfoWithFirstPage(shared, 3))
         val firstLayer = firstLayerBytes(shared)
 
-        val edited = edit(edit(buildNup(shared), "SECOND PAGE EDIT", 150f, 200f, 2), "THIRD PAGE EDIT", 150f, 200f, 3)
+        val edited = edit(edit(buildNup(shared), "SECOND PAGE EDIT", 200f, 2), "THIRD PAGE EDIT", 200f, 3)
         val projected = projectTogether(shared, edited)
 
         assertOwnLayerRecords(projected)
@@ -599,7 +600,7 @@ class PdfEditProjectionTest {
     }
 
     private fun projectEdit(source: File, text: String, pageNumber: Int): File {
-        val edited = edit(buildNup(source), text, 150f, 200f, pageNumber)
+        val edited = edit(buildNup(source), text, 200f, pageNumber)
         val projected = temporary.newFile()
         projectFile(source, edited, projected)
         return projected
@@ -627,7 +628,7 @@ class PdfEditProjectionTest {
         assertNotProjectable(source, modified)
 
         val unmarked = temporary.newFile("unmarked.pdf")
-        PdfDocument(PdfReader(edit(nup, "EDIT", 150f, 200f)), PdfWriter(unmarked)).use { pdf ->
+        PdfDocument(PdfReader(edit(nup, "EDIT", 200f)), PdfWriter(unmarked)).use { pdf ->
             privateData(pdf.getPage(1).pdfObject)!!.remove(PdfName("Base"))
         }
         assertNotProjectable(source, unmarked)
@@ -888,7 +889,7 @@ class PdfEditProjectionTest {
             for (texts in listOf(plain, flat)) {
                 val edit = texts["EDIT$round"]
                 assertNotNull("round $round", edit)
-                assertEquals(150f, edit!![0], 0.05f)
+                assertEquals(EDIT_X, edit!![0], 0.05f)
                 assertEquals(200f, edit[1], 0.05f)
             }
             assertEquals(plain.keys, flat.keys)
@@ -1137,13 +1138,13 @@ class PdfEditProjectionTest {
         return file
     }
 
-    private fun edit(nup: File, text: String, x: Float, y: Float, pageNumber: Int = 1): File {
+    private fun edit(nup: File, text: String, y: Float, pageNumber: Int = 1): File {
         val file = temporary.newFile()
         PdfDocument(PdfReader(nup), PdfWriter(file)).use { pdf ->
             val page = pdf.getPage(pageNumber)
             val form = PdfFormXObject(Rectangle(page.mediaBox))
             PdfCanvas(form, pdf).beginText().setFontAndSize(PdfFontFactory.createFont(), 10f)
-                .moveText(x.toDouble(), y.toDouble()).showText(text).endText()
+                .moveText(EDIT_X.toDouble(), y.toDouble()).showText(text).endText()
             PdfCanvas(page.newContentStreamAfter(), page.resources, pdf)
                 .saveState()
                 .addXObjectWithTransformationMatrix(form, 1f, 0f, 0f, 1f, 0f, 0f)

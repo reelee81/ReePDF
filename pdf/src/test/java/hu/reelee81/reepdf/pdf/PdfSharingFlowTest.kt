@@ -55,7 +55,7 @@ class PdfSharingFlowTest {
 
     @Test
     fun fourImportsOfOneLabelLeaveOneCopyInTheWorkspaceAndInTheLayout() {
-        val label = label("label.pdf")
+        val label = label()
         val source = import(List(4) { label })
         assertCount(1, distinct(source.file(0), PdfName.Image))
         build(source, 4, grid)
@@ -66,7 +66,7 @@ class PdfSharingFlowTest {
 
     @Test
     fun identicalPagesImportedInSinglePageBatchesStayValidAndShared() {
-        val source = import(List(3) { label("label.pdf", annotated = true, embedded = true) }, batchSize = 1)
+        val source = import(List(3) { label(annotated = true, embedded = true) }, batchSize = 1)
         assertCount(1, distinct(source.file(0), PdfName.Image))
         assertCount(1, fontPrograms(source.file(0)))
         build(source, 3, single)
@@ -79,7 +79,7 @@ class PdfSharingFlowTest {
 
     @Test
     fun editingOneOfTwoIdenticallyEditedPagesLeavesTheOtherAlone() {
-        val label = label("label.pdf")
+        val label = label()
         build(import(List(2) { label }), 2, single)
         project(save(PdfMarkSave.Plan(added = mapOf(0 to listOf(pen("same")), 1 to listOf(pen("same"))))))
         assertEquals(listOf("same"), layerIds(0))
@@ -115,7 +115,7 @@ class PdfSharingFlowTest {
 
     @Test
     fun aPasswordProtectedExportKeepsTheSharedContentAndOpens() {
-        val label = label("label.pdf")
+        val label = label()
         build(import(List(4) { label }), 4, single)
         val result = runBlocking { export().execute {} }
         PdfDocument(reader(result.file, password)).use { pdf ->
@@ -127,7 +127,7 @@ class PdfSharingFlowTest {
 
     @Test
     fun strokesOfAReopenedSavedFileStayVisibleButCannotBeErased() {
-        val label = label("label.pdf")
+        val label = label()
         build(import(List(2) { label }), 2, single)
         project(save(PdfMarkSave.Plan(added = mapOf(0 to listOf(pen("saved")), 1 to listOf(pen("saved"))))))
         for (number in 1..2) assertEquals(listOf("saved"), erasable(number))
@@ -147,8 +147,8 @@ class PdfSharingFlowTest {
         assertEquals(listOf("saved"), drawn(2))
     }
 
-    private fun label(name: String, annotated: Boolean = false, embedded: Boolean = false): File {
-        val file = File(dir, name)
+    private fun label(annotated: Boolean = false, embedded: Boolean = false): File {
+        val file = File(dir, "label.pdf")
         PdfDocument(PdfWriter(file.absolutePath)).use { pdf ->
             val page = pdf.addNewPage(PageSize.A6)
             val font = if (embedded) {

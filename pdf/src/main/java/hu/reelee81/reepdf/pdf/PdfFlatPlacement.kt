@@ -134,7 +134,7 @@ internal object PdfFlatPlacement {
         }
 
         val output = ByteArrayOutputStream()
-        output.writeOperator(doubleArrayOf(base[0], base[1], base[2] - base[0], base[3] - base[1]), "re W n")
+        output.writeClipRect(doubleArrayOf(base[0], base[1], base[2] - base[0], base[3] - base[1]))
         val frames = Frames(output)
         var index = 0
         while (index < items.size) {
@@ -583,10 +583,10 @@ internal object PdfFlatPlacement {
         write(text.toByteArray(Charsets.ISO_8859_1))
     }
 
-    private fun ByteArrayOutputStream.writeOperator(values: DoubleArray, operator: String) {
+    private fun ByteArrayOutputStream.writeClipRect(rect: DoubleArray) {
         val output = PdfOutputStream(this)
-        for (value in values) output.writeDouble(value, true).writeSpace()
-        output.writeString("$operator\n")
+        for (value in rect) output.writeDouble(value, true).writeSpace()
+        output.writeString("re W n\n")
         output.flush()
     }
 

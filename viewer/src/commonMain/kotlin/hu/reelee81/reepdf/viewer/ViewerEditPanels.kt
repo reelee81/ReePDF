@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
@@ -117,7 +118,7 @@ internal fun ViewerEditPanels(
             corner = PANEL_RADIUS.value + TAIL_HEIGHT.value,
             underIcon = panel == ViewerEditPanel.STYLE
         )
-        val shape = BubbleShape(with(LocalDensity.current) { place.tail.dp.toPx() }, TAIL_HEIGHT, PANEL_RADIUS)
+        val shape = BubbleShape(with(LocalDensity.current) { place.tail.dp.toPx() })
         Box(
             Modifier.offset(x = place.left.dp, y = top)
                 .shadow(PANEL_SHADOW, shape)
@@ -155,10 +156,10 @@ internal class ViewerEditPanelPlace(val left: Float, val tail: Float) {
     }
 }
 
-private class BubbleShape(private val tail: Float, private val tailHeight: Dp, private val radius: Dp) : Shape {
+private class BubbleShape(private val tail: Float) : Shape {
     override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density): Outline {
-        val height = with(density) { tailHeight.toPx() }
-        val corner = with(density) { radius.toPx() }
+        val height = with(density) { TAIL_HEIGHT.toPx() }
+        val corner = with(density) { PANEL_RADIUS.toPx() }
         val body = Path().apply { addRoundRect(RoundRect(0f, height, size.width, size.height, CornerRadius(corner))) }
         val point = Path().apply {
             moveTo(tail - height, height + 1f)
@@ -246,24 +247,25 @@ private fun Widths(
 private fun Weights(editor: ViewerEditor, tool: ViewerEditTool, palette: ViewerEditPalette, colors: ReeColors, fontFamily: FontFamily, width: Dp) {
     val density = LocalDensity.current
     val index = editor.shownWidthIndex(tool)
+    val weight = palette.widths[index].roundToInt()
+    val name = ViewerMarkText.weightName(weight)
     val style = TextStyle(
         color = colors.normalTextColor.default,
-        fontSize = with(density) { WEIGHT_SAMPLE_SIZE.toSp() },
+        fontSize = with(density) { WEIGHT_NAME_SIZE.toSp() },
         fontFamily = fontFamily,
-        fontWeight = FontWeight(palette.widths[index].roundToInt())
+        fontWeight = FontWeight(weight),
+        textAlign = TextAlign.Center
     )
-    Row(Modifier.width(width).height(ROW_HEIGHT), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(SAMPLE_WIDTH, ROW_HEIGHT).padding(start = SIDE_INSET), contentAlignment = Alignment.CenterStart) {
-            BasicText(WEIGHT_SAMPLE, style = style, maxLines = 1)
-        }
+    Column(Modifier.width(width).padding(horizontal = WEIGHT_EDGE)) {
+        BasicText(name, Modifier.fillMaxWidth().padding(top = WEIGHT_NAME_TOP), style = style, maxLines = 1)
         StopSlider(
             palette.widths.size,
             index,
             stringResource(Res.string.edit_text_weight),
-            null,
+            name,
             colors,
             editor::chooseWidth,
-            Modifier.weight(1f).padding(end = WEIGHT_END),
+            Modifier.fillMaxWidth(),
             onStart = editor::beginWidthChoice,
             onEnd = editor::endWidthChoice
         )
@@ -560,11 +562,11 @@ private val SLIDER_GAP = 16.dp
 private val STOP_RADIUS = 4.dp
 private val STOP_INSET = SLIDER_GAP - SIDE_INSET + STOP_RADIUS
 private val THUMB_RADIUS = 10.dp
-private val WEIGHT_END = SIDE_INSET - (STOP_INSET - THUMB_RADIUS)
+private val WEIGHT_EDGE = SIDE_INSET - (STOP_INSET - THUMB_RADIUS)
 private val TRACK_WIDTH = 4.dp
 private val VALUE_TEXT_SIZE = 16.dp
-private val WEIGHT_SAMPLE_SIZE = 24.dp
-private const val WEIGHT_SAMPLE = "Aa"
+private val WEIGHT_NAME_SIZE = 20.dp
+private val WEIGHT_NAME_TOP = 8.dp
 private val CHECK_GAP = 8.dp
 private val CHECK_SIZE = 24.dp
 private val STYLE_GAP = 32.dp

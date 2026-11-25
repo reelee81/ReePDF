@@ -2,6 +2,7 @@ package hu.reelee81.reepdf.viewer
 
 import java.io.ByteArrayInputStream
 import java.io.File
+import java.nio.ByteBuffer
 import java.util.zip.CRC32
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -364,10 +365,60 @@ class ViewerTypedTextTest {
 
     private fun read(bytes: ByteArray): ViewerEditJournalRead = ViewerEditJournalFormat.read(ByteArrayInputStream(bytes)::read, IDENTITY)
 
+    @Test
+    fun everyWeightIsItsOwnRobotoFileFromThinToBlack() {
+        val advances = ViewerMarkText.WEIGHTS.map { fonts.font(it).advance('n'.code) }
+
+        assertEquals(listOf(100, 200, 300, 400, 500, 600, 700, 800, 900), ViewerMarkText.WEIGHTS.toList())
+        assertEquals(advances.sorted(), advances)
+        assertEquals(ViewerMarkText.WEIGHTS.size, advances.toSet().size)
+    }
+
+    @Test
+    fun theWeightPanelShowsEachFontsOwnFullName() {
+        for (weight in ViewerMarkText.WEIGHTS) {
+            val file = File("../app/src/main/res/font/roboto_${FILES.getValue(weight)}.ttf").readBytes()
+
+            assertEquals(fullName(file), ViewerMarkText.weightName(weight))
+        }
+    }
+
+    private fun fullName(font: ByteArray): String {
+        val data = ByteBuffer.wrap(font)
+        val tables = data.getShort(4).toInt() and 0xFFFF
+        for (table in 0 until tables) {
+            val entry = 12 + table * 16
+            if (String(font, entry, 4, Charsets.US_ASCII) != "name") continue
+            val start = data.getInt(entry + 8)
+            val count = data.getShort(start + 2).toInt() and 0xFFFF
+            val strings = start + (data.getShort(start + 4).toInt() and 0xFFFF)
+            for (record in 0 until count) {
+                val at = start + 6 + record * 12
+                val platform = data.getShort(at).toInt() and 0xFFFF
+                val id = data.getShort(at + 6).toInt() and 0xFFFF
+                if (platform != 3 || id != 4) continue
+                val length = data.getShort(at + 8).toInt() and 0xFFFF
+                val offset = data.getShort(at + 10).toInt() and 0xFFFF
+                return String(font, strings + offset, length, Charsets.UTF_16BE)
+            }
+        }
+        throw AssertionError("No full name in the font")
+    }
+
     private companion object {
         const val IDENTITY = "/data/cache/viewer.pdf\n1234\n5678"
         const val SAMPLE = "Árvíztűrő tükörfúrógép ÁRVÍZTŰRŐ 0123456789 .,;:!?-–()€ßЖΩ@"
-        val FILES = mapOf(400 to "regular", 500 to "medium", 600 to "semibold", 700 to "bold", 900 to "black")
+        val FILES = mapOf(
+            100 to "thin",
+            200 to "extralight",
+            300 to "light",
+            400 to "regular",
+            500 to "medium",
+            600 to "semibold",
+            700 to "bold",
+            800 to "extrabold",
+            900 to "black"
+        )
         val ITEXT_SUMS = mapOf(400 to 28574, 500 to 29112, 600 to 29338, 700 to 29565, 900 to 30045)
         val ITEXT_EACH = mapOf(
             400 to intArrayOf(243, 887, 570, 562, 248, 907),

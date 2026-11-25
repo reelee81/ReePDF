@@ -1,5 +1,6 @@
 package hu.reelee81.reepdf.viewer
 
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -102,7 +103,7 @@ class ViewerEditorTest {
 
         val mark = editor.addedMarks(0).single()
         assertEquals(ViewerMarkKind.TEXT_HIGHLIGHT, mark.kind)
-        assertEquals(0xFFED45, mark.color)
+        assertEquals(0xFFFF00, mark.color)
         assertEquals(0f, mark.width, 0f)
         assertArrayEquals(floatArrayOf(10f, 10f, 40f, 10f, 40f, 20f, 10f, 20f), mark.path.points, 0f)
     }
@@ -167,6 +168,63 @@ class ViewerEditorTest {
     }
 
     @Test
+    fun aTextLineStartedAwayFromTextStopsAtOnceWhileTheOtherToolsKeepDrawing() {
+        editing()
+        val stopped = mutableListOf<ViewerEditTool>()
+        for (tool in listOf(ViewerEditTool.UNDERLINE, ViewerEditTool.STRIKETHROUGH, ViewerEditTool.PEN, ViewerEditTool.HIGHLIGHTER)) {
+            editor.selectTool(tool)
+            editor.beginStroke(0, ViewerTextPoint(10f, 15f), 1f, 5f)
+            editor.extendStroke(ViewerTextPoint(40f, 16f))
+            if (!editor.isStroking) stopped += tool
+            editor.cancelGesture()
+        }
+
+        assertEquals(listOf(ViewerEditTool.UNDERLINE, ViewerEditTool.STRIKETHROUGH), stopped)
+        assertTrue(editor.addedMarks(0).isEmpty())
+    }
+
+    @Test
+    fun aTextLineStillWaitingForItsWordCanBeLetGoWhileTheLookupFinishes() {
+        val gate = CompletableDeferred<Unit>()
+        document.wordGate = gate
+        document.words = { _, point -> ViewerTextSpan(point, point, FloatArray(0)) }
+        editing()
+        editor.selectTool(ViewerEditTool.UNDERLINE)
+
+        editor.beginStroke(0, ViewerTextPoint(10f, 15f), 1f, 5f)
+        val deciding = editor.isDeciding
+        editor.abandonStroke()
+        gate.complete(Unit)
+        editor.extendStroke(ViewerTextPoint(40f, 16f))
+        editor.endStroke()
+
+        assertTrue(deciding)
+        assertFalse(editor.isStroking)
+        assertFalse(editor.isDeciding)
+        assertNull(editor.wet)
+        assertEquals(1, document.wordLookups)
+        assertTrue(editor.addedMarks(0).isEmpty())
+    }
+
+    @Test
+    fun aTextLineStartedOnTextKeepsDrawingUntilItEnds() {
+        document.words = { _, point -> ViewerTextSpan(point, point, FloatArray(0)) }
+        editing()
+        editor.selectTool(ViewerEditTool.UNDERLINE)
+
+        editor.beginStroke(0, ViewerTextPoint(10f, 15f), 1f, 5f)
+        val started = editor.isStroking
+        editor.extendStroke(ViewerTextPoint(40f, 16f))
+        val drawing = editor.isStroking
+        editor.endStroke()
+
+        assertTrue(started)
+        assertTrue(drawing)
+        assertFalse(editor.isStroking)
+        assertEquals(ViewerMarkKind.UNDERLINE, editor.addedMarks(0).single().kind)
+    }
+
+    @Test
     fun theUnderlineOpensItsStylesTheStrikethroughNothingAndBothKeepTheirColors() {
         editing()
 
@@ -189,7 +247,7 @@ class ViewerEditorTest {
         assertEquals(ViewerEditPanel.COLORS, swatch)
         assertEquals(5, editor.settings.underlineColor)
         assertEquals(7, editor.settings.strikethroughColor)
-        assertEquals(0, editor.settings.penColor)
+        assertEquals(ViewerEditPalettes.pen.defaultColor, editor.settings.penColor)
         assertEquals(ViewerEditTool.STRIKETHROUGH, editor.settings.drawingTool)
     }
 
@@ -536,7 +594,7 @@ class ViewerEditorTest {
         editor.selectTool(ViewerEditTool.HIGHLIGHTER)
 
         assertEquals(ViewerEditTool.HIGHLIGHTER, editor.settings.tool)
-        assertEquals(0, editor.settings.penColor)
+        assertEquals(ViewerEditPalettes.pen.defaultColor, editor.settings.penColor)
         assertEquals(listOf(ViewerEditSettings(tool = ViewerEditTool.HIGHLIGHTER, drawingTool = ViewerEditTool.HIGHLIGHTER, undoPanelTop = true)), stored)
         assertNotNull(editor.settings)
     }
@@ -721,6 +779,8 @@ class ViewerEditorTest {
         val edits = mutableListOf<Map<Int, ViewerStreamEdit>>()
         var failEdits = false
         var words: (Int, ViewerTextPoint) -> ViewerTextSpan? = { _, _ -> null }
+        var wordGate: CompletableDeferred<Unit>? = null
+        var wordLookups = 0
 
         override val pageCount = 10
 
@@ -752,7 +812,11 @@ class ViewerEditorTest {
 
         override fun releaseCount() = Unit
 
-        override suspend fun word(page: Int, point: ViewerTextPoint, tolerance: Float) = words(page, point)
+        override suspend fun word(page: Int, point: ViewerTextPoint, tolerance: Float): ViewerTextSpan? {
+            wordGate?.await()
+            wordLookups++
+            return words(page, point)
+        }
 
         override suspend fun caret(page: Int, point: ViewerTextPoint): ViewerTextPoint = point
 

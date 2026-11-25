@@ -272,6 +272,105 @@ class ViewerStateTest {
     }
 
     @Test
+    fun aTextAtTheBottomOfTheLastPageIsRaisedAboveTheKeyboardAndFallsBackWhenItCloses() {
+        val start = opened()
+        val pages = checkNotNull(state.layout)
+        val last = PAGE_COUNT - 1
+        val box = Rect(100f, 800f, 200f, 830f)
+        state.scrollToY(1e12)
+        val end = checkNotNull(state.viewport)
+        val scrolls = state.scrollCount
+
+        state.setUncoveredHeight(1_200)
+        val opened = checkNotNull(state.viewport)
+        val scrollsAfterOpening = state.scrollCount
+        state.reveal(last, box)
+        val shown = checkNotNull(state.screenRect(last, box))
+        val raised = checkNotNull(state.viewport)
+        state.setUncoveredHeight(0)
+
+        assertEquals(pages.totalHeight * start.zoom - VIEW_HEIGHT, end.scrollY, 1e-3)
+        assertEquals(end.scrollY, opened.scrollY, 0.0)
+        assertEquals(scrolls, scrollsAfterOpening)
+        assertTrue(shown.top >= 0f && shown.bottom <= 1_200f)
+        assertEquals(end.scrollY + 800.0, raised.scrollY, 1e-3)
+        assertEquals(end.scrollY, checkNotNull(state.viewport).scrollY, 1e-3)
+    }
+
+    @Test
+    fun theOpeningKeyboardPushesUpOnlyAHitItWouldCover() {
+        opened()
+        val last = PAGE_COUNT - 1
+        val low = Rect(100f, 800f, 200f, 830f)
+        state.scrollToY(1e12)
+        val end = checkNotNull(state.viewport).scrollY
+
+        state.setUncoveredHeight(1_200)
+        state.keepUncovered(last, Rect(100f, 100f, 200f, 120f))
+        val above = checkNotNull(state.viewport).scrollY
+        state.keepUncovered(0, low)
+        val away = checkNotNull(state.viewport).scrollY
+        state.keepUncovered(last, low)
+        val shown = checkNotNull(state.screenRect(last, low))
+
+        assertEquals(end, above, 0.0)
+        assertEquals(end, away, 0.0)
+        assertTrue(shown.top >= 0f && shown.bottom <= 1_200f)
+    }
+
+    @Test
+    fun everyRealResizeIsCountedSoTheKeyboardIsCheckedAgain() {
+        opened()
+        val before = state.resizeCount
+
+        state.onSize(VIEW_WIDTH, VIEW_HEIGHT, SPACING)
+        val same = state.resizeCount
+        state.onSize(VIEW_HEIGHT, VIEW_WIDTH, SPACING)
+
+        assertEquals(before, same)
+        assertEquals(before + 1, state.resizeCount)
+    }
+
+    @Test
+    fun reopeningTheKeyboardBringsTheCurrentHitBackFromAnywhere() {
+        val searching = ViewerState("test.pdf", false, scope, searchDebounceMs = 0L)
+        document.hitPage = FAR_PAGE
+        searching.open(ViewerWait.Reason.OPENING, 0) { document }
+        searching.onSize(VIEW_WIDTH, VIEW_HEIGHT, SPACING)
+        document.finishAll()
+        searching.startSearch()
+        searching.search.setQuery("word", searching.currentPage)
+        val (page, box) = checkNotNull(searching.search.currentBox())
+
+        searching.scrollToY(0.0)
+        val away = checkNotNull(searching.screenRect(page, box))
+        searching.setUncoveredHeight(1_200)
+        searching.revealSearchHit()
+        val back = checkNotNull(searching.screenRect(page, box))
+        searching.close()
+
+        assertEquals(FAR_PAGE, page)
+        assertTrue(away.top > VIEW_HEIGHT)
+        assertTrue(back.top >= 0f && back.bottom <= 1_200f)
+    }
+
+    @Test
+    fun aZoomStartedBeforeTheKeyboardOpenedStillLetsThePageRiseAboveIt() {
+        opened()
+        state.scrollToY(1e12)
+        val start = checkNotNull(state.viewport)
+
+        state.setUncoveredHeight(1_200)
+        state.zoomFrom(start, start.zoom * 2, VIEW_WIDTH / 2.0, VIEW_HEIGHT.toDouble())
+        state.endZoom()
+        state.scrollBy(0.0, 1e12)
+
+        val view = checkNotNull(state.viewport)
+        assertEquals(800, view.cover)
+        assertEquals(checkNotNull(state.layout).totalHeight * view.zoom - 1_200.0, view.scrollY, 1e-3)
+    }
+
+    @Test
     fun aScreenPointIsFoundOnItsPageInPageCoordinatesAndBack() {
         val zoom = opened().zoom
 
@@ -366,6 +465,7 @@ class ViewerStateTest {
         private val pending = ArrayList<Request>()
         private val pendingBatches = ArrayList<Batch>()
         var highlights: (Int) -> FloatArray = { FloatArray(0) }
+        var hitPage = -1
         var pageImageMillis = 10L
         var failTiles = false
 
@@ -401,9 +501,10 @@ class ViewerStateTest {
             }
         }
 
-        override suspend fun search(page: Int, query: String) = ViewerTextHits.NONE
+        override suspend fun search(page: Int, query: String) =
+            if (page == hitPage) ViewerTextHits(floatArrayOf(100f, 400f, 200f, 420f), intArrayOf(0, 1)) else ViewerTextHits.NONE
 
-        override suspend fun count(page: Int, query: String) = 0
+        override suspend fun count(page: Int, query: String) = if (page == hitPage) 1 else 0
 
         override fun releaseCount() = Unit
 

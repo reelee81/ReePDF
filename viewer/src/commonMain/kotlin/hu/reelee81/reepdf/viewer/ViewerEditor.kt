@@ -188,7 +188,7 @@ class ViewerEditor(private val scope: CoroutineScope, private val onPagesChanged
         val open = typing ?: return
         if (settings.swatchTool != ViewerEditTool.TEXT) return
         val color = settings.color(ViewerEditTool.TEXT)
-        if (color != open.mark.color) showStepped(open.copy(mark = ViewerTypedPlacement.recolored(open.mark, color), changed = true))
+        if (color != open.mark.color) showStepped(open, open.copy(mark = ViewerTypedPlacement.recolored(open.mark, color)))
     }
 
     fun beginWidthChoice() {
@@ -207,14 +207,14 @@ class ViewerEditor(private val scope: CoroutineScope, private val onPagesChanged
             return
         }
         if (weight == open.mark.text?.weight) return
-        showStepped(reweighted(open, weight, fonts))
+        showStepped(open, reweighted(open, weight, fonts))
     }
 
     fun endWidthChoice() {
         val drag = weightDrag ?: return
         weightDrag = null
         val open = typing ?: return
-        if (open !== drag && open.mark.text?.weight != drag.mark.text?.weight) showStepped(open)
+        if (open !== drag && open.mark.text?.weight != drag.mark.text?.weight) showStepped(drag, open)
     }
 
     private fun reweighted(draft: ViewerTypingDraft, weight: Int, fonts: ViewerTextFonts): ViewerTypingDraft {
@@ -461,7 +461,7 @@ class ViewerEditor(private val scope: CoroutineScope, private val onPagesChanged
         val before = drag.draft.mark.text
         val after = moved.text
         if (before != null && after != null && before.size == after.size && before.matrix.contentEquals(after.matrix)) return
-        showStepped(drag.draft.copy(mark = moved, changed = true))
+        showStepped(drag.draft, drag.draft.copy(mark = moved))
     }
 
     fun commitTyping() {
@@ -492,17 +492,23 @@ class ViewerEditor(private val scope: CoroutineScope, private val onPagesChanged
         if (hidden != draft?.saved.orEmpty()) sync()
     }
 
-    private fun showStepped(draft: ViewerTypingDraft) {
-        if (draft.mark.text?.text.isNullOrBlank()) {
-            showTyping(draft)
+    private fun showStepped(before: ViewerTypingDraft, after: ViewerTypingDraft) {
+        if (after.mark.text?.text.isNullOrBlank()) {
+            showTyping(after.copy(changed = true))
             return
         }
-        val step = if (draft.isNew) {
-            ViewerEditSession.Action.Add(draft.mark)
-        } else {
-            ViewerEditSession.Action.Replace(draft.editing, draft.saved, draft.mark)
+        var base = before
+        if (before.isNew || before.changed) {
+            val typed = if (before.isNew) {
+                ViewerEditSession.Action.Add(before.mark)
+            } else {
+                ViewerEditSession.Action.Replace(before.editing, before.saved, before.mark)
+            }
+            base = before.copy(editing = setOf(before.mark), saved = emptySet(), changed = false)
+            showTyping(base, typed)
         }
-        showTyping(draft.copy(editing = setOf(draft.mark), saved = emptySet(), changed = false), step)
+        val step = ViewerEditSession.Action.Replace(base.editing, base.saved, after.mark)
+        showTyping(after.copy(editing = setOf(after.mark), saved = emptySet(), changed = false), step)
     }
 
     private fun textAt(
@@ -554,6 +560,17 @@ class ViewerEditor(private val scope: CoroutineScope, private val onPagesChanged
             if (!tool.onlyOnText) wet = started.freehand()
             decide(started, point, textTolerance)
         }
+    }
+
+    val isStroking: Boolean
+        get() = stroke != null
+
+    val isDeciding: Boolean
+        get() = stroke?.mode == Mode.UNDECIDED
+
+    fun abandonStroke() {
+        stroke = null
+        wet = null
     }
 
     fun extendStroke(point: ViewerTextPoint) {

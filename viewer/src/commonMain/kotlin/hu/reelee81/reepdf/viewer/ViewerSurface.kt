@@ -20,7 +20,8 @@ class ViewerSurface(
     private val zoomLimits: ViewerZoomLimits = ViewerZoomLimits.FREE,
     private val onVisible: (IntRange) -> Unit = {},
     private val onLayout: () -> Unit = {},
-    private val onResized: () -> Unit = {}
+    private val onResized: () -> Unit = {},
+    private val keep: () -> Pair<Int, Rect>? = { null }
 ) {
     private val cache = ViewerImageCache<Any, ViewerImage>(0L) { it.bytes }
     private val shown = mutableStateMapOf<Any, ViewerImage>()
@@ -44,6 +45,7 @@ class ViewerSurface(
     private var gutter = 0.0
     private var renderZoom = 0f
     private var zooming = false
+    private var uncovered = Int.MAX_VALUE
 
     var layout by mutableStateOf<ViewerPageLayout?>(null)
         private set
@@ -121,11 +123,13 @@ class ViewerSurface(
             applyLayout()
             return
         }
-        val next = current.resized(width, height, built)
+        val kept = keep()?.takeIf { (page, box) -> uncoveredIn(built, current, page, box) }
+        val next = current.resized(width, height, built).covered(cover(), built)
         viewport = next
         renderZoom = next.zoom
         scrolled()
         plan()
+        kept?.let { (page, box) -> reveal(page, box, uncovered) }
         onResized()
     }
 
@@ -151,7 +155,7 @@ class ViewerSurface(
     fun zoomFrom(start: ViewerViewport, zoom: Float, pivotX: Double, pivotY: Double) {
         val pages = layout ?: return
         zooming = true
-        update(start.zoomedTo(zoom, pivotX, pivotY, pages))
+        update(start.covered(cover(), pages).zoomedTo(zoom, pivotX, pivotY, pages))
     }
 
     fun endZoom() {
@@ -168,7 +172,7 @@ class ViewerSurface(
             pendingSpot = null
             return
         }
-        val next = ViewerViewport.atPage(page, viewWidth, viewHeight, pages, zoomLimits, gutter)
+        val next = ViewerViewport.atPage(page, viewWidth, viewHeight, pages, zoomLimits, gutter, cover())
         zooming = false
         viewport = next
         renderZoom = next.zoom
@@ -256,7 +260,26 @@ class ViewerSurface(
         return page to ViewerTextPoint(pageX.toFloat(), pageY.toFloat())
     }
 
+    fun setUncovered(height: Int) {
+        val next = if (height > 0) height else Int.MAX_VALUE
+        if (next == uncovered) return
+        uncovered = next
+        val pages = layout ?: return
+        val view = viewport ?: return
+        val covered = view.covered(cover(), pages)
+        if (covered.scrollY == view.scrollY) viewport = covered else update(covered)
+    }
+
+    private fun cover(): Int = (viewHeight - uncovered).coerceAtLeast(0)
+
+    private fun uncoveredIn(pages: ViewerPageLayout, view: ViewerViewport, page: Int, box: Rect): Boolean {
+        if (page !in 0 until pages.pageCount) return false
+        val shown = screenBox(pages, view, page, box)
+        return shown.bottom > 0f && shown.top < min(view.height, uncovered)
+    }
+
     fun reveal(page: Int, box: Rect, uncoveredHeight: Int) {
+        setUncovered(uncoveredHeight)
         val pages = layout ?: return
         val start = viewport ?: return
         if (page !in 0 until pages.pageCount) return
@@ -278,6 +301,15 @@ class ViewerSurface(
         update(next)
     }
 
+    fun uncover(page: Int, box: Rect, uncoveredHeight: Int) {
+        val pages = layout ?: return
+        val view = viewport ?: return
+        if (page !in 0 until pages.pageCount) return
+        val shown = screenBox(pages, view, page, box)
+        if (shown.bottom <= min(view.height, uncoveredHeight) || shown.top >= view.height) return
+        reveal(page, box, uncoveredHeight)
+    }
+
     fun applyLayout() {
         val pageSizes = sizes ?: return
         if (viewWidth <= 0 || viewHeight <= 0 || spacing < 0.0) return
@@ -285,9 +317,9 @@ class ViewerSurface(
         val spot = pendingSpot
         pendingSpot = null
         val start = if (spot != null) {
-            ViewerViewport.atSpot(spot, viewWidth, viewHeight, built, zoomLimits, gutter)
+            ViewerViewport.atSpot(spot, viewWidth, viewHeight, built, zoomLimits, gutter, cover())
         } else {
-            ViewerViewport.atPage(pendingPage, viewWidth, viewHeight, built, zoomLimits, gutter)
+            ViewerViewport.atPage(pendingPage, viewWidth, viewHeight, built, zoomLimits, gutter, cover())
         }
         layout = built
         viewport = start

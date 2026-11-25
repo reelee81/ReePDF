@@ -33,7 +33,7 @@ class ViewerMarkText(val text: String, val weight: Int, val size: Float, val mat
         ViewerMarkText(text, weight, size, matrix)
 
     companion object {
-        val WEIGHTS = intArrayOf(400, 500, 600, 700, 900)
+        val WEIGHTS = intArrayOf(100, 200, 300, 400, 500, 600, 700, 800, 900)
         const val DEFAULT_WEIGHT = 400
         const val UNITS_PER_EM = 2048f
         const val ASCENT = 1900f / UNITS_PER_EM
@@ -42,6 +42,19 @@ class ViewerMarkText(val text: String, val weight: Int, val size: Float, val mat
         const val MIN_SIZE = 4f
         const val MAX_SIZE = 2000f
         const val DEFAULT_SIZE = 12f
+
+        fun weightName(weight: Int): String = "Roboto " + when (weight) {
+            100 -> "Thin"
+            200 -> "ExtraLight"
+            300 -> "Light"
+            400 -> "Regular"
+            500 -> "Medium"
+            600 -> "SemiBold"
+            700 -> "Bold"
+            800 -> "ExtraBold"
+            900 -> "Black"
+            else -> throw IllegalArgumentException("Invalid text weight $weight")
+        }
 
         fun upright(text: String, weight: Int, size: Float, left: Float, top: Float) =
             ViewerMarkText(text, weight, size, floatArrayOf(1f, 0f, 0f, -1f, left, top))

@@ -29,6 +29,7 @@ class ViewerSearch(
     private val fetching = HashMap<Int, Job>()
     private var runJob: Job? = null
     private var runPage = 0
+    private var startPage: Int? = null
     private var runLeft = 0
     private var moveJob: Job? = null
 
@@ -50,6 +51,12 @@ class ViewerSearch(
 
     fun hitsOf(page: Int): ViewerTextHits? = pageHits[page]
 
+    fun currentBox(): Pair<Int, Rect>? {
+        val hit = current ?: return null
+        val hits = pageHits[hit.page]?.takeIf { hit.index < it.count } ?: return null
+        return hit.page to hits.bounds(hit.index)
+    }
+
     fun attach(document: ViewerDocument?) {
         stop()
         this.document = document
@@ -64,20 +71,24 @@ class ViewerSearch(
         cancelAll()
         clearResults()
         query = ""
+        startPage = null
         isActive = false
     }
 
     fun setQuery(text: String, fromPage: Int) {
         if (text == query) return
+        val from = current?.page ?: startPage ?: fromPage
         query = text
         cancelJobs()
         clearResults()
         val doc = document ?: return
         if (text.isBlank() || counts.isEmpty()) {
+            startPage = null
             doc.releaseCount()
             return
         }
-        runPage = fromPage.coerceIn(0, counts.size - 1)
+        if (startPage == null) startPage = fromPage
+        runPage = from.coerceIn(0, counts.size - 1)
         runLeft = counts.size
         launchRun(doc, text, wait = true)
     }
@@ -189,7 +200,7 @@ class ViewerSearch(
         countedBefore = before
         position = before + hit.index + 1
         retain()
-        pageHits[hit.page]?.takeIf { hit.index < it.count }?.let { onJump(hit.page, it.bounds(hit.index)) }
+        currentBox()?.let { (page, bounds) -> onJump(page, bounds) }
     }
 
     private fun pageWithHits(from: Int, step: Int): Int? {

@@ -83,7 +83,7 @@ class PdfMarkText(val text: String, val weight: Int, val size: Float, val matrix
     }
 
     companion object {
-        val WEIGHTS = intArrayOf(400, 500, 600, 700, 900)
+        val WEIGHTS = intArrayOf(100, 200, 300, 400, 500, 600, 700, 800, 900)
         const val UNITS_PER_EM = 2048.0
         const val ASCENT = 1900.0 / UNITS_PER_EM
         const val LINE_HEIGHT = 2400.0 / UNITS_PER_EM

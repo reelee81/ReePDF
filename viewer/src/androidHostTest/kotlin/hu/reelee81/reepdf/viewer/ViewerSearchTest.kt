@@ -70,6 +70,77 @@ class ViewerSearchTest {
     }
 
     @Test
+    fun theCurrentHitsBoxIsWhereTheViewJumpedUntilTheSearchStops() {
+        document(6, mapOf(1 to 2, 4 to 1))
+        search.start()
+        search.setQuery("word", 3)
+
+        val first = search.currentBox()
+        search.next()
+        val second = search.currentBox()
+        search.stop()
+
+        assertEquals(4 to Rect(0f, 20f, 5f, 30f), first)
+        assertEquals(jumps.last(), second)
+        assertEquals(1, second?.first)
+        assertNull(search.currentBox())
+    }
+
+    @Test
+    fun aLongerQueryGoesOnFromTheShownHitNotFromThePageTheViewMovedTo() {
+        document(2, mapOf(0 to 1, 1 to 1))
+        search.start()
+
+        search.setQuery("w", 0)
+        search.setQuery("wo", 1)
+
+        assertEquals(ViewerSearch.Hit(0, 0), search.current)
+        assertEquals(1, search.position)
+        assertEquals(2, search.total)
+    }
+
+    @Test
+    fun aQueryWithoutHitsKeepsThePageTheSearchStartedOn() {
+        val doc = document(3, emptyMap())
+        search.start()
+
+        search.setQuery("x", 0)
+        doc.hitCounts = { 1 }
+        search.setQuery("xy", 2)
+
+        assertEquals(ViewerSearch.Hit(0, 0), search.current)
+    }
+
+    @Test
+    fun aSteppedToHitIsWhereALongerQueryGoesOn() {
+        document(3, mapOf(0 to 1, 1 to 1, 2 to 1))
+        search.start()
+
+        search.setQuery("w", 0)
+        search.next()
+        search.setQuery("wo", 0)
+
+        assertEquals(ViewerSearch.Hit(1, 0), search.current)
+    }
+
+    @Test
+    fun anEmptiedFieldOrANewSearchStartsWhereTheViewIs() {
+        document(3, mapOf(0 to 1, 1 to 1, 2 to 1))
+        search.start()
+
+        search.setQuery("w", 0)
+        search.setQuery("", 0)
+        search.setQuery("w", 2)
+        val afterEmptying = search.current
+        search.stop()
+        search.start()
+        search.setQuery("w", 1)
+
+        assertEquals(ViewerSearch.Hit(2, 0), afterEmptying)
+        assertEquals(ViewerSearch.Hit(1, 0), search.current)
+    }
+
+    @Test
     fun nextAndPreviousStepThroughTheHitsAndWrapAround() {
         val doc = document(6, mapOf(1 to 2, 4 to 1))
         search.setQuery("word", 3)

@@ -21,6 +21,8 @@ class ViewerTypedEditorTest {
     private val fonts = ViewerTextFonts { weight -> File("../app/src/main/res/font/roboto_${FILES.getValue(weight)}.ttf").readBytes() }
     private val editor = editor(journal)
 
+    private fun weight(value: Int): Int = ViewerMarkText.WEIGHTS.indexOf(value)
+
     @After
     fun tearDown() {
         scope.cancel()
@@ -186,7 +188,7 @@ class ViewerTypedEditorTest {
 
         editor.chooseColor(2)
         assertEquals(0xDD0000, open().mark.color)
-        editor.chooseWidth(3)
+        editor.chooseWidth(weight(700))
         assertEquals(700, open().mark.typed.weight)
         editor.typeText("Label 2", 7)
         tap(250f, 380f)
@@ -281,33 +283,33 @@ class ViewerTypedEditorTest {
         editor.typeText("pear", 4)
         tap(250f, 380f)
         tap(52f, 100f)
-        editor.chooseWidth(4)
+        editor.chooseWidth(weight(900))
         editor.chooseColor(2)
         tap(250f, 380f)
         editor.undo()
         editor.undo()
 
         assertEquals(400, typed().first().typed.weight)
-        assertEquals(4, editor.shownWidthIndex(ViewerEditTool.TEXT))
+        assertEquals(weight(900), editor.shownWidthIndex(ViewerEditTool.TEXT))
         assertEquals(2, editor.shownColorIndex(ViewerEditTool.TEXT))
         assertEquals(0xDD0000, editor.shownColor(ViewerEditTool.TEXT))
 
         tap(52f, 200f)
-        assertEquals(0, editor.settings.textWeight)
+        assertEquals(weight(400), editor.settings.textWeight)
         assertEquals(0, editor.settings.textColor)
-        assertEquals(0, editor.shownWidthIndex(ViewerEditTool.TEXT))
+        assertEquals(weight(400), editor.shownWidthIndex(ViewerEditTool.TEXT))
         assertEquals(0, editor.shownColorIndex(ViewerEditTool.TEXT))
         assertEquals(0x000000, editor.shownColor(ViewerEditTool.TEXT))
         assertEquals(editor.settings.widthIndex(ViewerEditTool.PEN), editor.shownWidthIndex(ViewerEditTool.PEN))
-        editor.chooseWidth(3)
+        editor.chooseWidth(weight(700))
         editor.chooseColor(1)
         tap(250f, 380f)
-        assertEquals(3, editor.shownWidthIndex(ViewerEditTool.TEXT))
+        assertEquals(weight(700), editor.shownWidthIndex(ViewerEditTool.TEXT))
         assertEquals(1, editor.shownColorIndex(ViewerEditTool.TEXT))
 
         tap(52f, 100f)
         tap(250f, 380f)
-        assertEquals(0, editor.settings.textWeight)
+        assertEquals(weight(400), editor.settings.textWeight)
         assertEquals(0, editor.settings.textColor)
 
         tap(50f, 300f)
@@ -324,7 +326,7 @@ class ViewerTypedEditorTest {
         tap(52f, 100f)
 
         editor.beginWidthChoice()
-        for (index in 1..4) editor.chooseWidth(index)
+        for (index in weight(500)..weight(900)) editor.chooseWidth(index)
         assertEquals(900, open().mark.typed.weight)
         editor.endWidthChoice()
         tap(250f, 380f)
@@ -337,6 +339,118 @@ class ViewerTypedEditorTest {
     }
 
     @Test
+    fun theFirstMoveOfANewTextIsItsOwnStepAfterTheTextIsPlaced() {
+        editing()
+        tap(50f, 100f)
+        editor.typeText("Moved", 5)
+
+        assertTrue(editor.grabText(0, ViewerTextPoint(55f, 100f), 10f, 2f, 4f))
+        editor.dragText(ViewerTextPoint(75f, 130f))
+        editor.endTextDrag()
+        assertFalse(open().isNew)
+        assertFalse(open().changed)
+        assertEquals(70f, open().mark.typed.matrix[4], 0.001f)
+
+        editor.undo()
+        assertNull(editor.typing)
+        assertEquals(listOf("Moved"), typed().map { it.typed.text })
+        assertEquals(50f, typed().single().typed.matrix[4], 0.001f)
+        editor.undo()
+        assertTrue(typed().isEmpty())
+        editor.redo()
+        assertEquals(50f, typed().single().typed.matrix[4], 0.001f)
+        editor.redo()
+        assertEquals(70f, typed().single().typed.matrix[4], 0.001f)
+        assertEveryStopKeepsOneText()
+    }
+
+    @Test
+    fun theFirstColorWeightOrSizeOfANewTextIsItsOwnStep() {
+        editing()
+        tap(50f, 100f)
+        editor.typeText("Red", 3)
+        editor.chooseColor(2)
+        tap(250f, 380f)
+        editor.undo()
+        assertEquals(0x000000, typed().single().color)
+        editor.undo()
+        assertTrue(typed().isEmpty())
+
+        tap(50f, 200f)
+        editor.typeText("Bold", 4)
+        editor.chooseWidth(weight(700))
+        tap(250f, 380f)
+        editor.undo()
+        assertEquals(400, typed().single().typed.weight)
+        editor.undo()
+        assertTrue(typed().isEmpty())
+
+        tap(50f, 300f)
+        editor.typeText("Big", 3)
+        val frame = ViewerTypedPlacement.shown(open().mark.typed, fonts.font(open().mark.typed.weight), 300f, 400f)
+        assertTrue(editor.grabText(0, ViewerTextPoint(frame[2] + 4f, frame[3] + 4f), 10f, 2f, 4f))
+        editor.dragText(ViewerTextPoint(frame[2] + 4f + (frame[2] - frame[0]), frame[3] + 4f + (frame[3] - frame[1])))
+        editor.endTextDrag()
+        tap(250f, 380f)
+        assertEquals(24f, typed().single().typed.size, 0.01f)
+        editor.undo()
+        assertEquals(ViewerMarkText.DEFAULT_SIZE, typed().single().typed.size, 0f)
+        editor.undo()
+        assertTrue(typed().isEmpty())
+        assertEveryStopKeepsOneText()
+    }
+
+    @Test
+    fun aWeightDragFromTheFirstToTheLastStopOnANewTextIsOneStepAfterThePlacing() {
+        editing()
+        editor.chooseWidth(weight(800))
+        tap(50f, 100f)
+        editor.typeText("Slide", 5)
+
+        editor.beginWidthChoice()
+        for (index in weight(800) downTo 0) editor.chooseWidth(index)
+        for (index in ViewerMarkText.WEIGHTS.indices) editor.chooseWidth(index)
+        editor.endWidthChoice()
+        assertEquals(900, open().mark.typed.weight)
+        tap(250f, 380f)
+
+        editor.undo()
+        assertEquals(800, typed().single().typed.weight)
+        editor.undo()
+        assertTrue(typed().isEmpty())
+        assertFalse(editor.canUndo)
+        editor.redo()
+        editor.redo()
+        assertEquals(900, typed().single().typed.weight)
+        assertFalse(editor.canRedo)
+    }
+
+    @Test
+    fun textTypedIntoATouchedTextBeforeItIsMovedIsItsOwnStep() {
+        editing()
+        tap(50f, 100f)
+        editor.typeText("Label", 5)
+        tap(250f, 380f)
+        tap(52f, 100f)
+        editor.typeText("Label 2", 7)
+
+        assertTrue(editor.grabText(0, ViewerTextPoint(55f, 100f), 10f, 2f, 4f))
+        editor.dragText(ViewerTextPoint(75f, 130f))
+        editor.endTextDrag()
+        tap(250f, 380f)
+
+        assertEquals(70f, typed().single().typed.matrix[4], 0.001f)
+        editor.undo()
+        assertEquals("Label 2", typed().single().typed.text)
+        assertEquals(50f, typed().single().typed.matrix[4], 0.001f)
+        editor.undo()
+        assertEquals("Label", typed().single().typed.text)
+        editor.undo()
+        assertTrue(typed().isEmpty())
+        assertEveryStopKeepsOneText()
+    }
+
+    @Test
     fun aWeightDragBackToWhereItStartedMakesNoStep() {
         editing()
         tap(50f, 100f)
@@ -345,8 +459,8 @@ class ViewerTypedEditorTest {
         tap(52f, 100f)
 
         editor.beginWidthChoice()
-        editor.chooseWidth(3)
-        editor.chooseWidth(0)
+        editor.chooseWidth(weight(700))
+        editor.chooseWidth(weight(400))
         editor.endWidthChoice()
 
         assertFalse(open().changed)
@@ -380,7 +494,7 @@ class ViewerTypedEditorTest {
         tap(250f, 380f)
 
         editor.chooseColor(1)
-        editor.chooseWidth(4)
+        editor.chooseWidth(weight(900))
         tap(50f, 200f)
         editor.typeText("second", 6)
         tap(250f, 380f)
@@ -391,7 +505,7 @@ class ViewerTypedEditorTest {
         assertEquals(0x202FB0, second.color)
         assertEquals(900, second.typed.weight)
         assertEquals(1, editor.settings.textColor)
-        assertEquals(4, editor.settings.textWeight)
+        assertEquals(weight(900), editor.settings.textWeight)
     }
 
     @Test
@@ -643,7 +757,17 @@ class ViewerTypedEditorTest {
 
     private companion object {
         const val IDENTITY = "/data/cache/viewer.pdf\n1234\n5678"
-        val FILES = mapOf(400 to "regular", 500 to "medium", 600 to "semibold", 700 to "bold", 900 to "black")
+        val FILES = mapOf(
+            100 to "thin",
+            200 to "extralight",
+            300 to "light",
+            400 to "regular",
+            500 to "medium",
+            600 to "semibold",
+            700 to "bold",
+            800 to "extrabold",
+            900 to "black"
+        )
         val RESUME = ViewerResume(null, editing = true, paused = false, panel = null, rowOpen = false, question = null, deleting = null, saving = false)
     }
 }

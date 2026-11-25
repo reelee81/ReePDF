@@ -19,7 +19,7 @@ The build is MuPDF 1.28.6 with the twenty-two patches in
    non-Android builds). It does not empty the store.
 3. `0003` — decodes JPEG 2000 (JPX) images at a reduced resolution when they
    are drawn scaled down. Upstream always decodes them at full resolution and
-   scales afterwards. The reduction is skipped for indexed images, JP2 files
+   scales afterward. The reduction is skipped for indexed images, JP2 files
    with a palette box and images with a color key, and the image is decoded
    again at full resolution if the reduced decode fails.
 4. `0004` — adds `PDFDocument.clearXref()`, the Java binding of the C
@@ -29,10 +29,10 @@ The build is MuPDF 1.28.6 with the twenty-two patches in
    not be called on a repaired document (`wasRepaired()`), because repaired
    objects may not be parsed the same way from the file again.
 5. `0005` — stops the long steps of an aborted page run early. Upstream
-   notices a cookie abort only between two content stream operators, so one
+   notices a cookie abort only between two content stream operators. One
    long operator (decoding or scaling a large image, rasterizing a huge path,
    converting an image through a tint transform, building an ICC transform)
-   runs to its end after the abort. While a page is run with a cookie, the
+   therefore runs to its end after the abort. While a page is run with a cookie, the
    abort flag is now reachable from the context (and the calling thread):
    image decoding, the decode filters and readers, shading function sampling
    and ICC transform building throw an abort error, so nothing incomplete is
@@ -73,10 +73,10 @@ The build is MuPDF 1.28.6 with the twenty-two patches in
     if mirrored around the half pixel. Images on whole pixels are unchanged.
 12. `0012` — a sampled function no longer reads the second neighboring
     sample of an input whose weight is exactly zero (the input lies on a
-    sample, or the dimension has a single sample). Upstream reads 2^m
-    samples for every evaluation of a function with m inputs, so a page with
-    an 18-input shading function took seconds to draw. The result is the
-    same value bit for bit.
+    sample, or the dimension has a single sample). Upstream reads `2^m`
+    samples for every evaluation of a function with `m` inputs, so a page with
+    an 18-input shading function took seconds to draw. The result is
+    bit-for-bit identical.
 13. `0013` — a NaN function input is taken as the start of the function's
     domain in all four function types. Upstream lets NaN through the domain
     clamp; a sampled function then turns it into an array index, which reads
@@ -104,7 +104,7 @@ and with a random function test; on Android (ARM) the output is unchanged.
     content again copies the image data without decoding it. Upstream decodes
     every inline image on every run only to find its end. It is used only for
     images without a filter or with a single image filter, not for older
-    document versions or while a local xref is active, and it is dropped
+    document versions and not while a local xref is active. It is dropped
     whenever an object, a stream or the xref changes. The output is the same.
 18. `0018` — a tiling pattern whose cell is larger than 8 million pixels in
     device space is drawn by drawing its repeats directly, not by drawing one
@@ -123,11 +123,11 @@ and with a random function test; on Android (ARM) the output is unchanged.
 20. `0020` — a change inside the dictionary of a stream (its `Length`,
     `Filter`, `DecodeParms` or the resources of a form) keeps the page maps.
     Upstream drops them on every change of an object in the document unless
-    the change is marked as non-structural, so every in-memory stream update
-    (`pdf_update_stream()`) made the next page lookup walk the whole page tree
-    and load every page dictionary again (57 ms instead of 3 ms per page load
-    on a 30 000 page document, and the dictionaries stay in memory). A stream
-    is never a node of the page tree.
+    the change is marked as non-structural. As a result, every in-memory
+    stream update (`pdf_update_stream()`) makes the next page lookup walk the
+    whole page tree and load every page dictionary again. On a 30 000-page
+    document, a page load then takes 57 ms instead of 3 ms, and the
+    dictionaries stay in memory. A stream is never a node of the page tree.
 21. `0021` — the PDF interpreter passes the advance of a vertical glyph with
     the sign fitz uses (positive for text that goes down, like
     `fz_advance_glyph()` and `fz_show_string()`). A PDF gives it as `w1`,
@@ -207,9 +207,9 @@ be rebuilt freely, because Gradle reads `mupdf/dist/` directly.
 The build is reproducible: building the same version again with the same
 tools gives a byte-identical file.
 
-| Version | SHA-256 |
-|---|---|
-| `1.28.6-reepdf` | `37d10493d432db9cce5347768ffe94078b5373c684ab5433b15e83c9ef299cc2` |
+| Version          | SHA-256                                                            |
+|------------------|--------------------------------------------------------------------|
+| `1.28.6-reepdf`  | `37d10493d432db9cce5347768ffe94078b5373c684ab5433b15e83c9ef299cc2` |
 | `1.28.6-reepdf2` | `f563508205887a1bc8c1eb3d6185c8964865d8a203a1fdf0745e1589ed221af0` |
 | `1.28.6-reepdf3` | `694aec8a79800dab126c95dc74ee468cf343b56988825b23c39bcd7eccaa79d0` |
 

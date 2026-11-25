@@ -84,5 +84,19 @@ class ViewerEditBarLayoutTest {
         assertEquals(332f, right.tail, 0.001f)
     }
 
+    @Test
+    fun theUndoPanelsTwoIconsAreAsFarApartAsTheTopRowsIcons() {
+        for (width in listOf(393f, 1080f / 2.625f, 873f)) {
+            assertDp(20f, ViewerUndoPanelLayout.gap(width))
+            assertDp(92f, ViewerUndoPanelLayout.height(width))
+        }
+        val narrow = 360f
+        val topRowGap = ViewerEditBarLayout.center(ViewerEditBarLayout.SAVE, narrow) - ViewerEditBarLayout.center(ViewerEditBarLayout.ERASE_ALL, narrow) - 24f
+        assertTrue(topRowGap < 20f)
+        assertDp(topRowGap, ViewerUndoPanelLayout.gap(narrow))
+        assertDp(12f + 24f + topRowGap + 24f + 12f, ViewerUndoPanelLayout.height(narrow))
+        assertDp(12f, ViewerUndoPanelLayout.EDGE)
+    }
+
     private fun assertDp(expected: Float, actual: Float) = assertEquals(expected, actual, 0.05f)
 }

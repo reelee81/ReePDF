@@ -90,6 +90,40 @@ class ViewerViewportTest {
     }
 
     @Test
+    fun theKeyboardLetsTheLastPageRiseAboveItAndGivesTheRoomBackWhenItCloses() {
+        val bottom = ViewerViewport.atPage(9, 1080, 2000, layout)
+        val end = 8618.0 * bottom.zoom - 2000.0
+
+        val covered = bottom.covered(800, layout)
+        val raised = covered.scrolledBy(0.0, 1e9, layout)
+
+        assertEquals(end, bottom.scrollY, 1e-3)
+        assertEquals(bottom.scrollY, covered.scrollY, 0.0)
+        assertEquals(end + 800.0, raised.scrollY, 1e-3)
+        assertEquals(800, raised.zoomedTo(raised.zoom * 2, 0.0, 0.0, layout).cover)
+        assertEquals(0.0, raised.scrolledBy(0.0, -1e9, layout).scrollY, 0.0)
+        assertEquals(end, raised.covered(0, layout).scrollY, 1e-3)
+        assertEquals(2000, bottom.covered(5000, layout).cover)
+    }
+
+    @Test
+    fun aShortDocumentStaysCenteredUntilItIsPushedUpToTheKeyboard() {
+        val short = ViewerPageLayout(floatArrayOf(595f), floatArrayOf(842f), 22.0)
+        val single = ViewerViewport.atPage(0, 1080, 2000, short)
+        val content = 842.0 * single.zoom
+        val center = -(2000.0 - content) / 2
+
+        val covered = single.covered(800, short)
+        val small = single.zoomedTo(0.5f, 0.0, 0.0, short).covered(400, short)
+
+        assertEquals(center, covered.scrollY, 1e-3)
+        assertEquals(content - 1200.0, covered.scrolledBy(0.0, 1e9, short).scrollY, 1e-3)
+        assertEquals(center, covered.scrolledBy(0.0, -1e9, short).scrollY, 1e-3)
+        assertEquals(small.scrollY, small.scrolledBy(0.0, 1e9, short).scrollY, 0.0)
+        assertEquals(-(2000.0 - 421.0) / 2, small.scrollY, 1e-3)
+    }
+
+    @Test
     fun scrollingStopsAtTheEdges() {
         val start = ViewerViewport.atPage(5, 1080, 2000, layout)
         assertEquals(0.0, start.scrolledBy(0.0, -1e9, layout).scrollY, 0.0)

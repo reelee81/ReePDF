@@ -44,7 +44,17 @@ class PdfTypedMarkTest {
     private lateinit var dir: File
     private var saves = 0
     private val scaled = NupConfig(2, 2, 5, isLandscape = false, drawFrame = false, scaleIndividually = true, fitIndividually = false)
-    private val fontFiles = mapOf(400 to "regular", 500 to "medium", 600 to "semibold", 700 to "bold", 900 to "black")
+    private val fontFiles = mapOf(
+        100 to "thin",
+        200 to "extralight",
+        300 to "light",
+        400 to "regular",
+        500 to "medium",
+        600 to "semibold",
+        700 to "bold",
+        800 to "extrabold",
+        900 to "black"
+    )
     private val fonts = PdfTextFonts(::fontBytes)
 
     @Before

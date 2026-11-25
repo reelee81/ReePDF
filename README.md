@@ -85,7 +85,7 @@ We publish the source code so that others can use it, modify it and learn from i
   on text the highlighter follows the text lines
 - Underline (straight or wavy) and strikethrough on text, in the pen's colors, each tool remembering its own color;
   the line follows the text line, and its thickness follows the letter size
-- Typed text: tap the page to type new text in Roboto, in five weights and the pen's colors (the last used
+- Typed text: tap the page to type new text in Roboto, in nine weights and the pen's colors (the last used
   color and weight are remembered); the view zooms in until the text is readable, and new text always starts
   at 12 pt, with the size shown above the box; move the box, resize it proportionally by its bottom-right
   corner, and touch it again later to edit it

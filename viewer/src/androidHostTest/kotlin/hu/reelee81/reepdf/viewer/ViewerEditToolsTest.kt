@@ -49,9 +49,9 @@ class ViewerEditToolsTest {
         assertArrayEquals(floatArrayOf(14f, 20f, 24f, 38f, 48f), highlighter.widths, 0f)
         val settings = ViewerEditSettings()
         assertEquals(ViewerEditTool.PEN, settings.tool)
-        assertEquals(0x000000, settings.color(ViewerEditTool.PEN))
-        assertEquals(2f, settings.width(ViewerEditTool.PEN), 0f)
-        assertEquals(0xFFED45, settings.color(ViewerEditTool.HIGHLIGHTER))
+        assertEquals(0x3D5FEC, settings.color(ViewerEditTool.PEN))
+        assertEquals(1f, settings.width(ViewerEditTool.PEN), 0f)
+        assertEquals(0xFFFF00, settings.color(ViewerEditTool.HIGHLIGHTER))
         assertEquals(24f, settings.width(ViewerEditTool.HIGHLIGHTER), 0f)
         assertFalse(settings.undoPanelTop)
         assertEquals(ViewerUnderlineStyle.STRAIGHT, settings.underlineStyle)
@@ -67,12 +67,12 @@ class ViewerEditToolsTest {
         assertEquals(0x000000, text.color(ViewerEditTool.TEXT))
         assertEquals(400f, text.width(ViewerEditTool.TEXT), 0f)
         assertEquals(ViewerEditPalettes.pen.size, ViewerEditPalettes.text.size)
-        val chosen = text.withColor(ViewerEditTool.TEXT, 2).withWidth(ViewerEditTool.TEXT, 3)
+        val chosen = text.withColor(ViewerEditTool.TEXT, 2).withWidth(ViewerEditTool.TEXT, 6)
         assertEquals(0xDD0000, chosen.color(ViewerEditTool.TEXT))
         assertEquals(700, chosen.weight)
         assertEquals(settings.penColor, chosen.penColor)
         assertEquals(settings.penWidth, chosen.penWidth)
-        assertSame(chosen, chosen.withWidth(ViewerEditTool.TEXT, 5))
+        assertSame(chosen, chosen.withWidth(ViewerEditTool.TEXT, 9))
         assertSame(ViewerEditPalettes.signature, ViewerEditTool.SIGNATURE.palette)
         assertSame(underline, ViewerEditTool.UNDERLINE.palette)
         assertSame(strikethrough, ViewerEditTool.STRIKETHROUGH.palette)
@@ -84,6 +84,14 @@ class ViewerEditToolsTest {
             ViewerEditTool.entries.filter { it.draws }
         )
         assertEquals(listOf(ViewerEditTool.UNDERLINE, ViewerEditTool.STRIKETHROUGH), ViewerEditTool.entries.filter { it.onlyOnText })
+    }
+
+    @Test
+    fun theTextToolOffersAllNineRobotoWeightsAndStartsAtRegular() {
+        assertArrayEquals(floatArrayOf(100f, 200f, 300f, 400f, 500f, 600f, 700f, 800f, 900f), ViewerEditPalettes.text.widths, 0f)
+        assertEquals(3, ViewerEditPalettes.text.defaultWidth)
+        assertEquals(400, ViewerEditSettings().weight)
+        assertEquals(400, ViewerEditSettings(textWeight = 9).sanitized().weight)
     }
 
     @Test
@@ -153,7 +161,7 @@ class ViewerEditToolsTest {
             strikethroughColor = -1,
             undoPanelTop = true,
             textColor = 28,
-            textWeight = 5
+            textWeight = 9
         )
 
         val fixed = broken.sanitized()

@@ -20,9 +20,11 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
@@ -30,6 +32,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.input.pointer.AwaitPointerEventScope
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.pointerInput
@@ -48,6 +51,7 @@ import androidx.compose.ui.unit.dp
 import hu.reelee81.reepdf.viewer.resources.Res
 import hu.reelee81.reepdf.viewer.resources.page_render_failed
 import kotlin.math.abs
+import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlinx.coroutines.CoroutineScope
@@ -56,7 +60,11 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 
-internal typealias ViewerDrag = suspend AwaitPointerEventScope.(PointerInputChange) -> Boolean
+internal enum class ViewerDragEnd { DONE, GESTURE, PAN }
+
+internal enum class ViewerPress { TAP, PAN, PINCH }
+
+internal typealias ViewerDrag = suspend AwaitPointerEventScope.(PointerInputChange) -> ViewerDragEnd
 
 internal typealias ViewerPageDrawing = DrawScope.(page: Int, x: Double, y: Double, zoom: Float) -> Unit
 
@@ -80,17 +88,20 @@ internal fun ViewerSurfaceView(
     val scope = rememberCoroutineScope()
     val decay = rememberSplineBasedDecay<Offset>()
     val currentGrab by rememberUpdatedState(grab)
+    val fling = remember { ViewerFlingTrack() }
 
     Box(
         modifier
             .clipToBounds()
             .onSizeChanged { surface.onSize(it.width, it.height, spacing, gutterPx) }
             .then(inputs)
+            .pointerInput(fling) { trackFling(fling) }
             .pointerInput(surface) {
                 surfaceGestures(
                     surface = surface,
                     grab = { position -> currentGrab(position) },
                     motion = motion,
+                    fling = fling,
                     onFling = { velocity -> motion.fling(surface, scope, decay, velocity) }
                 )
             }
@@ -144,27 +155,54 @@ internal class ViewerMotion {
     }
 }
 
+internal class ViewerFlingTrack {
+    private val tracker = VelocityTracker()
+
+    fun start(timeMillis: Long, position: Offset) {
+        tracker.resetTracking()
+        tracker.addPosition(timeMillis, position)
+    }
+
+    fun add(timeMillis: Long, position: Offset) = tracker.addPosition(timeMillis, position)
+
+    fun velocity(limit: Float): Velocity = tracker.calculateVelocity(Velocity(limit, limit))
+}
+
+private suspend fun PointerInputScope.trackFling(fling: ViewerFlingTrack) {
+    awaitEachGesture {
+        val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+        fling.start(down.uptimeMillis, down.position)
+        do {
+            val event = awaitPointerEvent(PointerEventPass.Initial)
+            event.changes.firstOrNull { it.id == down.id }?.let { fling.add(it.uptimeMillis, it.position) }
+        } while (event.changes.any { it.pressed })
+    }
+}
+
 private suspend fun PointerInputScope.surfaceGestures(
     surface: ViewerSurface,
     grab: (Offset) -> ViewerDrag?,
     motion: ViewerMotion,
+    fling: ViewerFlingTrack,
     onFling: (Velocity) -> Unit
 ) {
     awaitEachGesture {
         val down = awaitFirstDown(requireUnconsumed = false)
         motion.stop()
         try {
+            var moving = false
             val drag = grab(down.position)
             if (drag != null) {
                 down.consume()
                 motion.touching = true
-                if (!drag(down)) return@awaitEachGesture
+                when (drag(down)) {
+                    ViewerDragEnd.DONE -> return@awaitEachGesture
+                    ViewerDragEnd.GESTURE -> Unit
+                    ViewerDragEnd.PAN -> moving = true
+                }
             }
-            val tracker = VelocityTracker()
-            tracker.addPosition(down.uptimeMillis, down.position)
             var zoomTotal = 1f
             var panTotal = Offset.Zero
-            var moving = false
             var zoomed = false
             var cancelled: Boolean
             do {
@@ -191,14 +229,13 @@ private suspend fun PointerInputScope.surfaceGestures(
                         if (panChange != Offset.Zero) surface.scrollBy(-panChange.x.toDouble(), -panChange.y.toDouble())
                         event.changes.forEach { if (it.positionChanged()) it.consume() }
                     }
-                    event.changes.firstOrNull { it.id == down.id }?.let { tracker.addPosition(it.uptimeMillis, it.position) }
                 }
             } while (!cancelled && event.changes.any { it.pressed })
             if (zoomed) {
                 surface.endZoom()
             } else if (moving && !cancelled) {
                 val limit = viewConfiguration.maximumFlingVelocity
-                onFling(tracker.calculateVelocity(Velocity(limit, limit)))
+                onFling(fling.velocity(limit))
             }
         } finally {
             motion.touching = false
@@ -284,41 +321,90 @@ private fun FailedPages(surface: ViewerSurface, colors: ViewerColors, fontFamily
 
 internal fun autoScrollDrag(
     surface: ViewerSurface,
+    clock: CoroutineScope,
     edge: Float,
     maxStep: Float,
     moveTo: (x: Float, y: Float) -> Unit,
     end: () -> Unit
 ): ViewerDrag = { down ->
-    var finger = down.position
-    var zoomNext = false
-    try {
-        while (true) {
-            val event = withTimeoutOrNull(AUTO_SCROLL_FRAME_MS) { awaitPointerEvent() }
-            if (event != null) {
-                if (event.changes.count { it.pressed } > 1) {
-                    zoomNext = true
-                    break
-                }
-                val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                change.consume()
-                if (!change.pressed) break
-                finger = change.position
-            }
-            val step = Offset(
-                edgeStep(finger.x, size.width, edge, maxStep),
-                edgeStep(finger.y, size.height, edge, maxStep)
-            )
-            if (step != Offset.Zero) {
-                surface.scrollBy(step.x.toDouble(), step.y.toDouble())
-            } else if (event == null) {
-                continue
-            }
-            moveTo(finger.x, finger.y)
-        }
+    val zoomNext = try {
+        edgeScrollDrag(
+            down = down,
+            clock = clock,
+            secondFingerEnds = true,
+            step = { finger, scale ->
+                Offset(edgeStep(finger.x, size.width, edge, maxStep * scale), edgeStep(finger.y, size.height, edge, maxStep * scale))
+            },
+            scroll = { step -> surface.scrollBy(step.x.toDouble(), step.y.toDouble()) },
+            moveTo = { finger -> moveTo(finger.x, finger.y) }
+        )
     } finally {
         end()
     }
-    zoomNext
+    if (zoomNext) ViewerDragEnd.GESTURE else ViewerDragEnd.DONE
+}
+
+internal suspend fun AwaitPointerEventScope.edgeScrollDrag(
+    down: PointerInputChange,
+    clock: CoroutineScope,
+    secondFingerEnds: Boolean,
+    step: (finger: Offset, scale: Float) -> Offset,
+    scroll: (Offset) -> Unit,
+    moveTo: (Offset) -> Unit
+): Boolean {
+    val finger = EdgeFinger(down.position)
+    val ticker = clock.launch {
+        var last = -1L
+        while (true) {
+            withFrameNanos { now ->
+                if (last >= 0L) {
+                    val delta = step(finger.position, autoScrollScale(now - last))
+                    if (delta != Offset.Zero) {
+                        scroll(delta)
+                        moveTo(finger.position)
+                    }
+                }
+                last = now
+            }
+        }
+    }
+    try {
+        while (true) {
+            val event = awaitPointerEvent()
+            if (secondFingerEnds && event.changes.count { it.pressed } > 1) return true
+            val change = event.changes.firstOrNull { it.id == down.id } ?: break
+            change.consume()
+            if (!change.pressed) break
+            finger.position = change.position
+            moveTo(finger.position)
+        }
+    } finally {
+        ticker.cancel()
+    }
+    return false
+}
+
+private class EdgeFinger(var position: Offset)
+
+internal fun autoScrollScale(elapsedNanos: Long): Float =
+    elapsedNanos.coerceIn(0L, AUTO_SCROLL_LONGEST_FRAMES * AUTO_SCROLL_FRAME_NANOS) / AUTO_SCROLL_FRAME_NANOS.toFloat()
+
+internal suspend fun AwaitPointerEventScope.awaitPress(surface: ViewerSurface, down: PointerInputChange): ViewerPress {
+    while (true) {
+        val event = awaitPointerEvent()
+        if (event.changes.count { it.pressed } > 1) return ViewerPress.PINCH
+        val change = event.changes.firstOrNull { it.id == down.id } ?: return ViewerPress.TAP
+        change.consume()
+        if (!change.pressed) return ViewerPress.TAP
+        if (startsPan(surface, down, change)) return ViewerPress.PAN
+    }
+}
+
+internal fun AwaitPointerEventScope.startsPan(surface: ViewerSurface, down: PointerInputChange, change: PointerInputChange): Boolean {
+    if ((change.position - down.position).getDistance() <= viewConfiguration.touchSlop) return false
+    val step = change.position - change.previousPosition
+    surface.scrollBy(-step.x.toDouble(), -step.y.toDouble())
+    return true
 }
 
 internal fun edgeStep(position: Float, length: Int, edge: Float, maxStep: Float): Float = when {
@@ -327,9 +413,19 @@ internal fun edgeStep(position: Float, length: Int, edge: Float, maxStep: Float)
     else -> 0f
 }
 
+internal fun pageEdgeStep(position: Float, length: Int, pageStart: Float, pageEnd: Float, edge: Float, maxStep: Float): Float {
+    val step = edgeStep(position, length, edge, maxStep)
+    return when {
+        step < 0f -> max(step, min(0f, pageStart))
+        step > 0f -> min(step, max(0f, pageEnd - length))
+        else -> 0f
+    }
+}
+
 internal val AUTO_SCROLL_EDGE = 40.dp
 internal val AUTO_SCROLL_STEP = 10.dp
-internal const val AUTO_SCROLL_FRAME_MS = 16L
+private const val AUTO_SCROLL_FRAME_NANOS = 16_000_000L
+private const val AUTO_SCROLL_LONGEST_FRAMES = 3L
 private val PAGE_SPACING = 8.dp
 private val FAILED_PADDING = 16.dp
 private val FAILED_TEXT_SIZE = 14.dp

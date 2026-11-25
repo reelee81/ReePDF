@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -34,6 +35,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import hu.reelee81.reepdf.viewer.resources.Res
@@ -51,8 +53,11 @@ internal fun BoxScope.ViewerUndoPanel(editor: ViewerEditor, colors: ReeColors, v
     var moved by remember { mutableStateOf(Offset.Zero) }
     val top = editor.settings.undoPanelTop
     BoxWithConstraints(Modifier.matchParentSize()) {
+        val gap = ViewerUndoPanelLayout.gap(maxWidth.value).dp
+        val panelHeight = ViewerUndoPanelLayout.height(maxWidth.value).dp
+        val buttonHeight = panelHeight / 2
         val margin = with(density) { PANEL_MARGIN.toPx() }
-        val height = with(density) { PANEL_HEIGHT.toPx() }
+        val height = with(density) { panelHeight.toPx() }
         val bottomY = (constraints.maxHeight - margin - height).coerceAtLeast(margin)
         val homeY = if (top) margin else bottomY
         val currentY = homeY + moved.y
@@ -68,14 +73,14 @@ internal fun BoxScope.ViewerUndoPanel(editor: ViewerEditor, colors: ReeColors, v
                 }
                 Box(
                     Modifier.offset { IntOffset(margin.roundToInt(), y.roundToInt()) }
-                        .size(PANEL_WIDTH, PANEL_HEIGHT)
+                        .size(PANEL_WIDTH, panelHeight)
                         .then(look)
                 )
             }
         }
         Column(
             Modifier.offset { IntOffset((margin + moved.x).roundToInt(), currentY.roundToInt()) }
-                .size(PANEL_WIDTH, PANEL_HEIGHT)
+                .size(PANEL_WIDTH, panelHeight)
                 .shadow(PANEL_SHADOW, RoundedCornerShape(PANEL_RADIUS))
                 .background(colors.alertdialogBackgroundColor.default, RoundedCornerShape(PANEL_RADIUS))
                 .pointerInput(editor, homeY, bottomY) {
@@ -102,39 +107,47 @@ internal fun BoxScope.ViewerUndoPanel(editor: ViewerEditor, colors: ReeColors, v
                 }
         ) {
             val tint = colors.normalTextColor.default
-            UndoButton(ViewerIcons.undo, stringResource(Res.string.edit_undo), editor.canUndo, tint, editor::undo)
-            UndoButton(ViewerIcons.redo, stringResource(Res.string.edit_redo), editor.canRedo, tint, editor::redo)
+            val edge = ViewerUndoPanelLayout.EDGE.dp
+            UndoButton(ViewerIcons.undo, stringResource(Res.string.edit_undo), editor.canUndo, tint, buttonHeight, top = edge, onClick = editor::undo)
+            UndoButton(ViewerIcons.redo, stringResource(Res.string.edit_redo), editor.canRedo, tint, buttonHeight, top = gap / 2, onClick = editor::redo)
         }
     }
 }
 
 @Composable
-private fun UndoButton(icon: ImageVector, label: String, enabled: Boolean, tint: Color, onClick: () -> Unit) {
+private fun UndoButton(icon: ImageVector, label: String, enabled: Boolean, tint: Color, height: Dp, top: Dp, onClick: () -> Unit) {
     val press = if (enabled) {
         Modifier.clickable(interactionSource = null, indication = null, role = Role.Button, onClick = onClick)
     } else {
         Modifier
     }
     Box(
-        Modifier.size(BUTTON_SIZE)
+        Modifier.size(PANEL_WIDTH, height)
             .then(press)
             .semantics {
                 contentDescription = label
                 if (!enabled) disabled()
             }
             .alpha(if (enabled) 1f else DISABLED_ALPHA),
-        contentAlignment = Alignment.Center
+        contentAlignment = Alignment.TopCenter
     ) {
-        Image(rememberVectorPainter(icon), null, Modifier.size(ICON_SIZE), colorFilter = ColorFilter.tint(tint))
+        Image(rememberVectorPainter(icon), null, Modifier.padding(top = top).size(ICON_SIZE), colorFilter = ColorFilter.tint(tint))
     }
+}
+
+internal object ViewerUndoPanelLayout {
+    const val WIDTH = 48f
+    const val EDGE = (WIDTH - ViewerEditBarLayout.ICON) / 2
+
+    fun gap(width: Float): Float = ViewerEditBarLayout.step(width) - ViewerEditBarLayout.ICON
+
+    fun height(width: Float): Float = EDGE * 2 + ViewerEditBarLayout.ICON * 2 + gap(width)
 }
 
 private const val NEAR_ALPHA = 0.5f
 private val ANCHOR_OUTLINE = 2.dp
 private val PANEL_SHADOW = 8.dp
 private val PANEL_MARGIN = 16.dp
-private val PANEL_WIDTH = 48.dp
-private val PANEL_HEIGHT = 96.dp
+private val PANEL_WIDTH = ViewerUndoPanelLayout.WIDTH.dp
 private val PANEL_RADIUS = 12.dp
-private val BUTTON_SIZE = 48.dp
-private val ICON_SIZE = 24.dp
+private val ICON_SIZE = ViewerEditBarLayout.ICON.dp

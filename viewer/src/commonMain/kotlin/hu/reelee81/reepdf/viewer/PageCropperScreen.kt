@@ -11,6 +11,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -63,6 +64,7 @@ fun PageCropperScreen(
     val edge = with(density) { AUTO_SCROLL_EDGE.toPx() }
     val edgeStep = with(density) { AUTO_SCROLL_STEP.toPx() }
     val motion = remember { ViewerMotion() }
+    val clock = rememberCoroutineScope()
     var origin by remember { mutableStateOf(Offset.Zero) }
     val currentExclude by rememberUpdatedState(excludeGestures)
     LaunchedEffect(state, markSlop) {
@@ -100,7 +102,7 @@ fun PageCropperScreen(
                 gutter = PAGE_GUTTER,
                 grab = { position ->
                     if (state.grab(position.x, position.y, markLength, markSlop, lineSlop)) {
-                        autoScrollDrag(state.surface, edge, edgeStep, state::dragTo, state::endDrag)
+                        autoScrollDrag(state.surface, clock, edge, edgeStep, state::dragTo, state::endDrag)
                     } else {
                         null
                     }

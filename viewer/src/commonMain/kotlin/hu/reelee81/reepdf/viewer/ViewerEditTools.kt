@@ -91,7 +91,7 @@ object ViewerEditPalettes {
         0xED9D82 to Res.string.mark_color_salmon
     )
 
-    val pen = ViewerEditPalette(penColors, floatArrayOf(1f, 2f, 3f, 5f, 10f), defaultColor = 0, defaultWidth = 1)
+    val pen = ViewerEditPalette(penColors, floatArrayOf(1f, 2f, 3f, 5f, 10f), defaultColor = 8, defaultWidth = 0)
 
     val underline = ViewerEditPalette(penColors, FloatArray(0), defaultColor = 10, defaultWidth = 0)
 
@@ -99,7 +99,12 @@ object ViewerEditPalettes {
 
     val signature = ViewerEditPalette(penColors, FloatArray(0), defaultColor = 1, defaultWidth = 0)
 
-    val text = ViewerEditPalette(penColors, ViewerMarkText.WEIGHTS.map { it.toFloat() }.toFloatArray(), defaultColor = 0, defaultWidth = 0)
+    val text = ViewerEditPalette(
+        penColors,
+        ViewerMarkText.WEIGHTS.map { it.toFloat() }.toFloatArray(),
+        defaultColor = 0,
+        defaultWidth = ViewerMarkText.WEIGHTS.indexOf(ViewerMarkText.DEFAULT_WEIGHT)
+    )
 
     val highlighter = ViewerEditPalette(
         listOf(
@@ -126,7 +131,7 @@ object ViewerEditPalettes {
             0xDEB887 to Res.string.mark_color_tan
         ),
         floatArrayOf(14f, 20f, 24f, 38f, 48f),
-        defaultColor = 10,
+        defaultColor = 6,
         defaultWidth = 2
     )
 }

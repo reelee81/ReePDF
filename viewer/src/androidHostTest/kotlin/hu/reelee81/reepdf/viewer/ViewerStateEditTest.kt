@@ -338,7 +338,17 @@ class ViewerStateEditTest {
         const val VIEW_WIDTH = 1_080
         const val VIEW_HEIGHT = 2_000
         const val SPACING = 16.0
-        val FONT_FILES = mapOf(400 to "regular", 500 to "medium", 600 to "semibold", 700 to "bold", 900 to "black")
+        val FONT_FILES = mapOf(
+            100 to "thin",
+            200 to "extralight",
+            300 to "light",
+            400 to "regular",
+            500 to "medium",
+            600 to "semibold",
+            700 to "bold",
+            800 to "extrabold",
+            900 to "black"
+        )
     }
 
     private class MemoryStore : ViewerSignatureStore {

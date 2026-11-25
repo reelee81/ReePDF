@@ -131,10 +131,14 @@ class PdfViewer : AppCompatActivity(), ViewerActions {
                     this@PdfViewer,
                     state,
                     this@PdfViewer,
+                    R.font.roboto_thin,
+                    R.font.roboto_extralight,
+                    R.font.roboto_light,
                     R.font.roboto_regular,
                     R.font.roboto_medium,
                     R.font.roboto_semibold,
                     R.font.roboto_bold,
+                    R.font.roboto_extrabold,
                     R.font.roboto_black,
                     R.dimen.dp_9999_main
                 )

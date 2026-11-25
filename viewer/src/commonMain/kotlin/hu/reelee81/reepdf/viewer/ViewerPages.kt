@@ -65,6 +65,7 @@ import hu.reelee81.reepdf.viewer.resources.page_description
 import hu.reelee81.reepdf.viewer.resources.page_description_text
 import hu.reelee81.reepdf.viewer.resources.page_indicator_range
 import hu.reelee81.reepdf.viewer.resources.page_indicator_single
+import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.CancellationException
@@ -111,6 +112,8 @@ internal fun ViewerPages(
     val tap by rememberUpdatedState(onTap)
     var frame by remember { mutableStateOf(PagesFrame(0f, 0)) }
     val keyboardCover = state.keyboardCover
+    val resizes = state.resizeCount
+    val shownCover = remember { mutableIntStateOf(0) }
     val editing = state.editor.isActive
     val scrolling = state.editor.paused
     val measurer = rememberTextMeasurer(0)
@@ -130,11 +133,13 @@ internal fun ViewerPages(
         scrollerAlpha.animateTo(0f, tween(ViewerFastScroll.HIDE_ANIMATION_MS.toInt()))
     }
 
-    LaunchedEffect(frame, keyboardCover) {
+    LaunchedEffect(frame, keyboardCover, resizes) {
         state.setUncoveredHeight((frame.rootHeight - keyboardCover - frame.top).roundToInt())
+        if (keyboardCover > 0 && shownCover.intValue <= 0) state.revealSearchHit() else state.keepSearchHitUncovered()
+        shownCover.intValue = keyboardCover
     }
 
-    LaunchedEffect(typing?.mark, typing?.cursor, keyboardCover, frame) {
+    LaunchedEffect(typing?.mark, typing?.cursor, keyboardCover, frame, resizes) {
         revealCaret(state)
     }
 
@@ -169,7 +174,7 @@ internal fun ViewerPages(
                     onTap = { tap() }
                 )
             },
-        grab = { position -> grabAt(state, fastScroll, scrollerAlpha, position, thumbWidth, thumbHeight, touch, typed) },
+        grab = { position -> grabAt(state, fastScroll, scrollerAlpha, position, thumbWidth, thumbHeight, touch, typed, scope) },
         drawPage = { page, x, y, zoom ->
             drawTexts(state, colors, page, x, y, zoom)
             if (state.editor.isActive) drawEditMarks(state, colors, glyphs, sizeLabel, page, x, y, zoom)
@@ -291,25 +296,26 @@ private fun grabAt(
     thumbWidth: Float,
     thumbHeight: Int,
     touch: ViewerTouch,
-    typed: TypedHooks
+    typed: TypedHooks,
+    clock: CoroutineScope
 ): ViewerDrag? {
     val thumbStart = thumbHit(state, fastScroll, alpha, position, thumbWidth, thumbHeight)
     if (thumbStart != null) {
         return { down ->
             dragThumb(state, fastScroll, down, thumbStart)
-            false
+            ViewerDragEnd.DONE
         }
     }
-    if (state.editor.isActive) return editGrab(state, position, touch, typed)
+    if (state.editor.isActive) return editGrab(state, position, touch, typed, clock)
     val grab = ViewerSelectionHandles.grab(state, position, touch.handleRadius, touch.handleSlop)
     if (grab != null && state.selection.beginDrag(grab.handle)) {
         return { down ->
             try {
-                dragHandle(state, down, grab, touch)
+                dragHandle(state, down, grab, touch, clock)
             } finally {
                 state.selection.endDrag()
             }
-            false
+            ViewerDragEnd.DONE
         }
     }
     return null
@@ -336,39 +342,34 @@ private suspend fun AwaitPointerEventScope.dragHandle(
     state: ViewerState,
     down: PointerInputChange,
     grab: ViewerHandleGrab,
-    touch: ViewerTouch
+    touch: ViewerTouch,
+    clock: CoroutineScope
 ) {
     val offset = grab.anchor - down.position
-    var finger = down.position
-    while (true) {
-        val event = withTimeoutOrNull(AUTO_SCROLL_FRAME_MS) { awaitPointerEvent() }
-        if (event != null) {
-            val change = event.changes.firstOrNull { it.id == down.id } ?: break
-            change.consume()
-            if (!change.pressed) break
-            finger = change.position
+    edgeScrollDrag(
+        down = down,
+        clock = clock,
+        secondFingerEnds = false,
+        step = { finger, scale ->
+            Offset(
+                edgeStep(finger.x, size.width, touch.edge, touch.edgeStep * scale),
+                edgeStep(finger.y, size.height, touch.edge, touch.edgeStep * scale)
+            )
+        },
+        scroll = { step -> state.scrollBy(step.x.toDouble(), step.y.toDouble()) },
+        moveTo = { finger ->
+            val anchor = finger + offset
+            state.pagePoint(anchor.x, anchor.y - grab.lineHeight / 2)?.let { (page, point) -> state.selection.dragTo(page, point) }
         }
-        val step = Offset(
-            edgeStep(finger.x, size.width, touch.edge, touch.edgeStep),
-            edgeStep(finger.y, size.height, touch.edge, touch.edgeStep)
-        )
-        if (step != Offset.Zero) {
-            state.scrollBy(step.x.toDouble(), step.y.toDouble())
-        } else if (event == null) {
-            continue
-        }
-        val anchor = finger + offset
-        val (page, point) = state.pagePoint(anchor.x, anchor.y - grab.lineHeight / 2) ?: continue
-        state.selection.dragTo(page, point)
-    }
+    )
 }
 
-private fun editGrab(state: ViewerState, position: Offset, touch: ViewerTouch, typed: TypedHooks): ViewerDrag? {
+private fun editGrab(state: ViewerState, position: Offset, touch: ViewerTouch, typed: TypedHooks, clock: CoroutineScope): ViewerDrag? {
     val editor = state.editor
     if (state.isWaiting || editor.paused) return null
     val tool = editor.settings.tool
-    if (tool == ViewerEditTool.SIGNATURE) return signatureGrab(state, position, touch)
-    if (tool == ViewerEditTool.TEXT) return textGrab(state, position, touch, typed)
+    if (tool == ViewerEditTool.SIGNATURE) return signatureGrab(state, position, touch, clock)
+    if (tool == ViewerEditTool.TEXT) return textGrab(state, position, touch, typed, clock)
     val erasing = tool == ViewerEditTool.ERASER
     if (!erasing && !tool.draws) return null
     val (page, point) = state.pageHit(position.x, position.y) ?: return null
@@ -380,12 +381,14 @@ private fun editGrab(state: ViewerState, position: Offset, touch: ViewerTouch, t
         } else {
             editor.beginStroke(page, point, touch.strokeStep / zoom, touch.wordTolerance / zoom)
         }
-        var zoomNext = false
+        var end = ViewerDragEnd.DONE
+        var crossed: Offset? = null
+        var crossedAt = 0L
         try {
             while (true) {
                 val event = awaitPointerEvent()
                 if (event.changes.count { it.pressed } > 1) {
-                    zoomNext = true
+                    end = ViewerDragEnd.GESTURE
                     break
                 }
                 val change = event.changes.firstOrNull { it.id == down.id } ?: break
@@ -393,24 +396,88 @@ private fun editGrab(state: ViewerState, position: Offset, touch: ViewerTouch, t
                 if (!change.pressed) break
                 if (erasing) {
                     state.pagePoint(change.position.x, change.position.y)?.let { (hitPage, hitPoint) -> editor.extendErase(hitPage, hitPoint) }
-                } else {
-                    state.pointOn(page, change.position.x, change.position.y)?.let(editor::extendStroke)
+                    continue
                 }
+                state.pointOn(page, change.position.x, change.position.y)?.let(editor::extendStroke)
+                if (!tool.onlyOnText) continue
+                if (crossed == null && (change.position - down.position).getDistance() > viewConfiguration.touchSlop) {
+                    crossed = change.position
+                    crossedAt = change.uptimeMillis
+                }
+                val waitedTooLong = crossed != null && editor.isDeciding && change.uptimeMillis - crossedAt >= WORD_WAIT_MS
+                if (waitedTooLong) editor.abandonStroke()
+                if (editor.isStroking) continue
+                val from = crossed
+                end = if (from != null) {
+                    val step = change.position - from
+                    state.scrollBy(-step.x.toDouble(), -step.y.toDouble())
+                    ViewerDragEnd.PAN
+                } else {
+                    pressEnd(awaitPress(state.surface, down))
+                }
+                break
             }
         } catch (e: CancellationException) {
             editor.cancelGesture()
             throw e
         }
         when {
-            zoomNext -> editor.cancelGesture()
+            end != ViewerDragEnd.DONE -> editor.cancelGesture()
             erasing -> editor.endErase()
             else -> editor.endStroke()
         }
-        zoomNext
+        end
     }
 }
 
-private fun signatureGrab(state: ViewerState, position: Offset, touch: ViewerTouch): ViewerDrag? {
+private fun pressEnd(press: ViewerPress): ViewerDragEnd = when (press) {
+    ViewerPress.TAP -> ViewerDragEnd.DONE
+    ViewerPress.PAN -> ViewerDragEnd.PAN
+    ViewerPress.PINCH -> ViewerDragEnd.GESTURE
+}
+
+private enum class FrameDrag { PINCH, MOVED, STILL }
+
+private suspend fun AwaitPointerEventScope.dragFrame(
+    state: ViewerState,
+    page: Int,
+    down: PointerInputChange,
+    touch: ViewerTouch,
+    clock: CoroutineScope,
+    dragTo: (ViewerTextPoint) -> Unit
+): FrameDrag {
+    val slop = viewConfiguration.touchSlop
+    var moved = false
+    val pinch = edgeScrollDrag(
+        down = down,
+        clock = clock,
+        secondFingerEnds = true,
+        step = { finger, scale -> if (moved) frameEdgeStep(state, page, finger, size.width, size.height, touch, scale) else Offset.Zero },
+        scroll = { step -> state.scrollBy(step.x.toDouble(), step.y.toDouble()) },
+        moveTo = { finger ->
+            if ((finger - down.position).getDistance() > slop) moved = true
+            state.pointOn(page, finger.x, finger.y)?.let(dragTo)
+        }
+    )
+    return when {
+        pinch -> FrameDrag.PINCH
+        moved -> FrameDrag.MOVED
+        else -> FrameDrag.STILL
+    }
+}
+
+private fun frameEdgeStep(state: ViewerState, page: Int, finger: Offset, width: Int, height: Int, touch: ViewerTouch, scale: Float): Offset {
+    val pages = state.layout ?: return Offset.Zero
+    val shown = state.screenRect(page, Rect(0f, 0f, pages.width(page).toFloat(), pages.height(page).toFloat())) ?: return Offset.Zero
+    val bottom = min(height, state.uncoveredHeight)
+    val maxStep = touch.edgeStep * scale
+    return Offset(
+        pageEdgeStep(finger.x, width, shown.left, shown.right, touch.edge, maxStep),
+        pageEdgeStep(finger.y, bottom, shown.top, shown.bottom, touch.edge, maxStep)
+    )
+}
+
+private fun signatureGrab(state: ViewerState, position: Offset, touch: ViewerTouch, clock: CoroutineScope): ViewerDrag? {
     val editor = state.editor
     val (page, point) = state.pageHit(position.x, position.y) ?: return null
     if (page in state.failedPages) return null
@@ -419,34 +486,25 @@ private fun signatureGrab(state: ViewerState, position: Offset, touch: ViewerTou
     val pageWidth = pages.width(page).toFloat()
     val pageHeight = pages.height(page).toFloat()
     val slop = touch.signatureSlop / zoom
-    val dragging = editor.grabSignature(page, point, touch.signatureReach / zoom, slop, touch.signatureMargin / zoom)
+    if (!editor.grabSignature(page, point, touch.signatureReach / zoom, slop, touch.signatureMargin / zoom)) {
+        return { down ->
+            val press = awaitPress(state.surface, down)
+            if (press == ViewerPress.TAP) editor.tapSignature(page, point, pageWidth, pageHeight, slop)
+            pressEnd(press)
+        }
+    }
     return { down ->
-        var zoomNext = false
-        var moved = false
-        try {
-            while (true) {
-                val event = awaitPointerEvent()
-                if (event.changes.count { it.pressed } > 1) {
-                    zoomNext = true
-                    break
-                }
-                val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                change.consume()
-                if (!change.pressed) break
-                if ((change.position - down.position).getDistance() > viewConfiguration.touchSlop) moved = true
-                if (dragging) state.pointOn(page, change.position.x, change.position.y)?.let { editor.dragSignature(it, pageWidth, pageHeight) }
-            }
+        val drag = try {
+            dragFrame(state, page, down, touch, clock) { editor.dragSignature(it, pageWidth, pageHeight) }
         } catch (e: CancellationException) {
             editor.cancelGesture()
             throw e
         }
-        when {
-            zoomNext -> editor.cancelGesture()
-            dragging && moved -> editor.endSignatureDrag()
-            dragging -> editor.cancelGesture()
-            !moved -> editor.tapSignature(page, point, pageWidth, pageHeight, slop)
+        when (drag) {
+            FrameDrag.MOVED -> editor.endSignatureDrag()
+            FrameDrag.PINCH, FrameDrag.STILL -> editor.cancelGesture()
         }
-        zoomNext
+        if (drag == FrameDrag.PINCH) ViewerDragEnd.GESTURE else ViewerDragEnd.DONE
     }
 }
 
@@ -494,30 +552,15 @@ private fun DrawScope.drawEditMarks(
     )
 }
 
-private fun textGrab(state: ViewerState, position: Offset, touch: ViewerTouch, typed: TypedHooks): ViewerDrag? {
+private fun textGrab(state: ViewerState, position: Offset, touch: ViewerTouch, typed: TypedHooks, clock: CoroutineScope): ViewerDrag? {
     val editor = state.editor
     val hit = state.pageHit(position.x, position.y)
     if (hit == null) {
         if (editor.typing == null) return null
         return { down ->
-            var zoomNext = false
-            var moved = false
-            while (true) {
-                val event = awaitPointerEvent()
-                if (event.changes.count { it.pressed } > 1) {
-                    zoomNext = true
-                    break
-                }
-                val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                if (!change.pressed) break
-                if ((change.position - down.position).getDistance() > viewConfiguration.touchSlop) {
-                    moved = true
-                    break
-                }
-                change.consume()
-            }
-            if (!zoomNext && !moved) editor.commitTyping()
-            zoomNext || moved
+            val press = awaitPress(state.surface, down)
+            if (press == ViewerPress.TAP) editor.commitTyping()
+            pressEnd(press)
         }
     }
     val (page, point) = hit
@@ -527,44 +570,36 @@ private fun textGrab(state: ViewerState, position: Offset, touch: ViewerTouch, t
     val pageWidth = pages.width(page).toFloat()
     val pageHeight = pages.height(page).toFloat()
     val slop = touch.signatureSlop / zoom
-    val dragging = editor.grabText(page, point, touch.signatureReach / zoom, slop, touch.signatureMargin / zoom)
-    return { down ->
-        var zoomNext = false
-        var moved = false
-        try {
-            while (true) {
-                val event = awaitPointerEvent()
-                if (event.changes.count { it.pressed } > 1) {
-                    zoomNext = true
-                    break
-                }
-                val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                change.consume()
-                if (!change.pressed) break
-                if ((change.position - down.position).getDistance() > viewConfiguration.touchSlop) moved = true
-                if (dragging) state.pointOn(page, change.position.x, change.position.y)?.let(editor::dragText)
-            }
-        } catch (e: CancellationException) {
-            editor.cancelGesture()
-            throw e
-        }
-        when {
-            zoomNext -> editor.cancelGesture()
-            dragging && moved -> editor.endTextDrag()
-            dragging -> {
-                editor.cancelGesture()
-                editor.placeCaret(page, point)
-                typed.askFocus()
-            }
-            !moved -> {
+    if (!editor.grabText(page, point, touch.signatureReach / zoom, slop, touch.signatureMargin / zoom)) {
+        return { down ->
+            val press = awaitPress(state.surface, down)
+            if (press == ViewerPress.TAP) {
                 val closed = editor.typing == null
                 editor.tapText(page, point, pageWidth, pageHeight, slop)
                 val open = editor.typing
                 if (open != null) typed.askFocus()
                 if (closed && open?.isNew == true) typed.opened(position)
             }
+            pressEnd(press)
         }
-        zoomNext
+    }
+    return { down ->
+        val drag = try {
+            dragFrame(state, page, down, touch, clock, editor::dragText)
+        } catch (e: CancellationException) {
+            editor.cancelGesture()
+            throw e
+        }
+        when (drag) {
+            FrameDrag.PINCH -> editor.cancelGesture()
+            FrameDrag.MOVED -> editor.endTextDrag()
+            FrameDrag.STILL -> {
+                editor.cancelGesture()
+                editor.placeCaret(page, point)
+                typed.askFocus()
+            }
+        }
+        if (drag == FrameDrag.PINCH) ViewerDragEnd.GESTURE else ViewerDragEnd.DONE
     }
 }
 
@@ -745,4 +780,5 @@ private val SIGNATURE_MARK_WIDTH = 4.dp
 private val SIGNATURE_MARK_LENGTH = 22.dp
 private val CARET_WIDTH = 2.dp
 private val READABLE_TEXT = 16.dp
+private const val WORD_WAIT_MS = 100L
 private const val CARET_BLINK_MS = 500L

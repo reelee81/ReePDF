@@ -562,6 +562,11 @@ class MainActivity : AppCompatActivity() {
             lastRootH = h
 
             requestRvThumbnailsHeightUpdate()
+            binding.rootScroll.post { keepFocusedFieldAbovePanel() }
+        }
+
+        binding.rootScroll.viewTreeObserver.addOnGlobalFocusChangeListener { _, focused ->
+            if (focused is EditText) binding.rootScroll.post { keepFocusedFieldAbovePanel() }
         }
 
         requestRvThumbnailsHeightUpdate()
@@ -4181,6 +4186,18 @@ class MainActivity : AppCompatActivity() {
         }
 
         return outFile
+    }
+
+    private fun keepFocusedFieldAbovePanel() {
+        if (!::binding.isInitialized || isFinishing || isDestroyed) return
+        val scroll = binding.rootScroll
+        val field = currentFocus as? EditText ?: return
+        if (generateSequence(field.parent) { it.parent }.none { it === scroll }) return
+        val panel = bottomPanelView?.takeIf { it.isShown && it.height > 0 } ?: return
+        val fieldAt = IntArray(2).also(field::getLocationInWindow)
+        val panelAt = IntArray(2).also(panel::getLocationInWindow)
+        val step = FieldAbovePanel.scrollFor(fieldAt[1], fieldAt[1] + field.height, panelAt[1], panelAt[1] + panel.height)
+        if (step > 0) scroll.smoothScrollBy(0, step)
     }
 
     private fun applySoftInputModeForPasswordOverlay() {

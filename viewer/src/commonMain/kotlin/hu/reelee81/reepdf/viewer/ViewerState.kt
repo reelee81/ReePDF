@@ -18,18 +18,24 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-class ViewerState(val title: String, val canEdit: Boolean, private val scope: CoroutineScope) {
+class ViewerState(
+    val title: String,
+    val canEdit: Boolean,
+    private val scope: CoroutineScope,
+    searchDebounceMs: Long = ViewerSearch.DEBOUNCE_MS
+) {
     private val started = TimeSource.Monotonic.markNow()
     private val wait = ViewerWait { started.elapsedNow().inWholeMilliseconds }
     private var document: ViewerDocument? = null
     private var openJob: Job? = null
     private var revealJob: Job? = null
-    private var uncoveredHeight = Int.MAX_VALUE
+    internal var uncoveredHeight = Int.MAX_VALUE
+        private set
     private var visibleRange = IntRange.EMPTY
     private val pageTexts = mutableStateMapOf<Int, String>()
     private val textJobs = HashMap<Int, Job>()
 
-    val search = ViewerSearch(scope) { page, bounds -> reveal(page, bounds) }
+    val search = ViewerSearch(scope, searchDebounceMs) { page, bounds -> reveal(page, bounds) }
     val selection = ViewerSelection(scope)
     val editor = ViewerEditor(scope) { pages -> surface.refresh(pages) }
     private var saveJob: Job? = null
@@ -53,7 +59,9 @@ class ViewerState(val title: String, val canEdit: Boolean, private val scope: Co
             editor.onVisible(range)
             readTexts(range)
         },
-        onLayout = { stopWait() }
+        onLayout = { stopWait() },
+        onResized = { resizeCount++ },
+        keep = { if (search.isActive) search.currentBox() else null }
     )
 
     private var readsTexts by mutableStateOf(false)
@@ -67,6 +75,8 @@ class ViewerState(val title: String, val canEdit: Boolean, private val scope: Co
         }
 
     var keyboardCover by mutableIntStateOf(0)
+    var resizeCount by mutableIntStateOf(0)
+        private set
 
     var bottomGap by mutableStateOf(true)
 
@@ -298,6 +308,7 @@ class ViewerState(val title: String, val canEdit: Boolean, private val scope: Co
 
     fun setUncoveredHeight(height: Int) {
         uncoveredHeight = if (height > 0) height else Int.MAX_VALUE
+        surface.setUncovered(uncoveredHeight)
     }
 
     fun pageText(page: Int): String? = pageTexts[page]
@@ -338,6 +349,20 @@ class ViewerState(val title: String, val canEdit: Boolean, private val scope: Co
 
     fun reveal(page: Int, box: Rect) {
         surface.reveal(page, box, uncoveredHeight)
+    }
+
+    fun keepUncovered(page: Int, box: Rect) {
+        surface.uncover(page, box, uncoveredHeight)
+    }
+
+    fun keepSearchHitUncovered() {
+        if (!search.isActive) return
+        search.currentBox()?.let { (page, box) -> keepUncovered(page, box) }
+    }
+
+    fun revealSearchHit() {
+        if (!search.isActive) return
+        search.currentBox()?.let { (page, box) -> reveal(page, box) }
     }
 
     private fun closeDocument() {

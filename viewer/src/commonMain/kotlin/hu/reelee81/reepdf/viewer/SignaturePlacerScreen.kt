@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.platform.LocalDensity
@@ -41,6 +42,7 @@ fun SignaturePlacerScreen(state: SignaturePlacerState, actions: SignaturePlacerA
     val edge = with(density) { AUTO_SCROLL_EDGE.toPx() }
     val edgeStep = with(density) { AUTO_SCROLL_STEP.toPx() }
     val motion = remember { ViewerMotion() }
+    val clock = rememberCoroutineScope()
     Box(Modifier.fillMaxSize().background(colors.pdfViewerSbBgColor.default)) {
         Column(Modifier.fillMaxSize()) {
             val save = ViewerBarAction(ViewerIcons.save, stringResource(Res.string.viewer_save)) {
@@ -61,7 +63,7 @@ fun SignaturePlacerScreen(state: SignaturePlacerState, actions: SignaturePlacerA
                 modifier = Modifier.weight(1f).fillMaxWidth(),
                 grab = { position ->
                     if (state.grab(position.x, position.y, slop)) {
-                        autoScrollDrag(state.surface, edge, edgeStep, state::dragTo, state::endDrag)
+                        autoScrollDrag(state.surface, clock, edge, edgeStep, state::dragTo, state::endDrag)
                     } else {
                         null
                     }

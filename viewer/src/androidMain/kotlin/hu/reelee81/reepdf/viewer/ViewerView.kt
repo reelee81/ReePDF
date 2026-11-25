@@ -16,18 +16,26 @@ fun viewerView(
     context: Context,
     state: ViewerState,
     actions: ViewerActions,
+    thinFont: Int,
+    extraLightFont: Int,
+    lightFont: Int,
     regularFont: Int,
     mediumFont: Int,
     semiBoldFont: Int,
     boldFont: Int,
+    extraBoldFont: Int,
     blackFont: Int,
     mainPanelWidth: Int
 ): View {
     val fontFamily = FontFamily(
+        Font(thinFont, FontWeight.Thin),
+        Font(extraLightFont, FontWeight.ExtraLight),
+        Font(lightFont, FontWeight.Light),
         Font(regularFont, FontWeight.Normal),
         Font(mediumFont, FontWeight.Medium),
         Font(semiBoldFont, FontWeight.SemiBold),
         Font(boldFont, FontWeight.Bold),
+        Font(extraBoldFont, FontWeight.ExtraBold),
         Font(blackFont, FontWeight.Black)
     )
     return ComposeView(context).apply {
