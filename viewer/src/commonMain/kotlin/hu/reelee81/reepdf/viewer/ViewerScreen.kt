@@ -65,7 +65,10 @@ fun ViewerScreen(state: ViewerState, actions: ViewerActions, fontFamily: FontFam
                     editor = state.editor,
                     colors = colors,
                     viewerColors = viewerColors,
-                    onBack = actions::onBack,
+                    onBack = {
+                        state.editor.commitTyping()
+                        actions.onBack()
+                    },
                     onEraseVisible = {
                         state.editor.closePanel()
                         state.editor.eraseVisible(state.labeledPages())

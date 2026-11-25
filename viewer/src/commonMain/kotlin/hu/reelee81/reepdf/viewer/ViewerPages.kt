@@ -4,6 +4,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -19,6 +20,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -51,11 +53,13 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import hu.reelee81.reepdf.viewer.ViewerSelectionHandles.drawHandles
+import hu.reelee81.reepdf.viewer.ViewerTypedFrame.drawCaret
 import hu.reelee81.reepdf.viewer.resources.Res
+import hu.reelee81.reepdf.viewer.resources.decimal_separator
 import hu.reelee81.reepdf.viewer.resources.fast_scroller_thumb
 import hu.reelee81.reepdf.viewer.resources.page_description
 import hu.reelee81.reepdf.viewer.resources.page_description_text
@@ -96,7 +100,8 @@ internal fun ViewerPages(
                 eraserTolerance = ERASER_TOLERANCE.toPx(),
                 signatureSlop = SIGNATURE_SLOP.toPx(),
                 signatureReach = SIGNATURE_HANDLE_SLOP.toPx(),
-                signatureMargin = SIGNATURE_FRAME_MARGIN.toPx()
+                signatureMargin = SIGNATURE_FRAME_MARGIN.toPx(),
+                readableText = READABLE_TEXT.toPx()
             )
         }
     }
@@ -108,6 +113,15 @@ internal fun ViewerPages(
     val keyboardCover = state.keyboardCover
     val editing = state.editor.isActive
     val scrolling = state.editor.paused
+    val measurer = rememberTextMeasurer(0)
+    val glyphs = remember(measurer, fontFamily, editing) { ViewerTypedGlyphs(measurer, fontFamily) }
+    val separator = stringResource(Res.string.decimal_separator)
+    val sizeLabel = remember(measurer, fontFamily, separator) { ViewerSizeLabel(measurer, fontFamily, separator) }
+    val caretColor = reeColors.appControlActivatedOtherColor.default
+    val typing = state.editor.typing
+    var caretShown by remember { mutableStateOf(true) }
+    var focusRequests by remember { mutableIntStateOf(0) }
+    val typed = TypedHooks(askFocus = { focusRequests += 1 }, opened = { position -> motion.zoomToText(state, scope, position, touch.readableText) })
 
     LaunchedEffect(state.scrollCount) {
         if (state.scrollCount == 0) return@LaunchedEffect
@@ -118,6 +132,19 @@ internal fun ViewerPages(
 
     LaunchedEffect(frame, keyboardCover) {
         state.setUncoveredHeight((frame.rootHeight - keyboardCover - frame.top).roundToInt())
+    }
+
+    LaunchedEffect(typing?.mark, typing?.cursor, keyboardCover, frame) {
+        revealCaret(state)
+    }
+
+    LaunchedEffect(typing != null, typing?.mark, typing?.cursor) {
+        caretShown = true
+        if (typing == null) return@LaunchedEffect
+        while (true) {
+            delay(CARET_BLINK_MS.milliseconds)
+            caretShown = !caretShown
+        }
     }
 
     ViewerSurfaceView(
@@ -142,22 +169,48 @@ internal fun ViewerPages(
                     onTap = { tap() }
                 )
             },
-        grab = { position -> grabAt(state, fastScroll, scrollerAlpha, position, thumbWidth, thumbHeight, touch) },
+        grab = { position -> grabAt(state, fastScroll, scrollerAlpha, position, thumbWidth, thumbHeight, touch, typed) },
         drawPage = { page, x, y, zoom ->
             drawTexts(state, colors, page, x, y, zoom)
-            if (state.editor.isActive) drawEditMarks(state, colors, page, x, y, zoom)
+            if (state.editor.isActive) drawEditMarks(state, colors, glyphs, sizeLabel, page, x, y, zoom)
         },
         drawOver = { drawHandles(state, touch.handleRadius, colors.selectionHandle) }
     ) {
+        if (editing && typing != null) TypingCaret(state, caretColor) { caretShown }
         PageDescriptions(state)
         FastScroller(state, fastScroll, colors, fontFamily) { scrollerAlpha.value }
         if (state.selection.isActive && state.selection.dragged == null && !motion.busy) {
             ViewerSelectionBubble(state, reeColors, fontFamily, onCopy, Modifier.matchParentSize())
         }
+        if (editing && typing != null) ViewerTypingField(state.editor, focusRequests, fontFamily)
     }
 }
 
+@Composable
+private fun BoxScope.TypingCaret(state: ViewerState, color: Color, shown: () -> Boolean) {
+    Canvas(Modifier.matchParentSize().graphicsLayer()) {
+        val editor = state.editor
+        val typing = editor.typing ?: return@Canvas
+        val dragged = editor.draggedText
+        if (!editor.isActive || (dragged != null && dragged !== typing.mark) || !shown()) return@Canvas
+        val text = typing.mark.text ?: return@Canvas
+        val fonts = editor.textFonts ?: return@Canvas
+        val zoom = state.viewport?.zoom ?: return@Canvas
+        val origin = state.screenRect(typing.mark.page, Rect.Zero) ?: return@Canvas
+        drawCaret(text, fonts.font(text.weight), typing.cursor, origin.left, origin.top, zoom, color, CARET_WIDTH.toPx())
+    }
+}
+
+private fun revealCaret(state: ViewerState) {
+    val open = state.editor.typing ?: return
+    val fonts = state.editor.textFonts ?: return
+    val text = open.mark.text ?: return
+    state.reveal(open.mark.page, ViewerTypedFrame.caretBox(text, fonts.font(text.weight), open.cursor))
+}
+
 private data class PagesFrame(val top: Float, val rootHeight: Int)
+
+private class TypedHooks(val askFocus: () -> Unit, val opened: (Offset) -> Unit)
 
 private class ViewerTouch(
     val handleRadius: Float,
@@ -169,7 +222,8 @@ private class ViewerTouch(
     val eraserTolerance: Float,
     val signatureSlop: Float,
     val signatureReach: Float,
-    val signatureMargin: Float
+    val signatureMargin: Float,
+    val readableText: Float
 )
 
 private fun ViewerMotion.doubleTap(state: ViewerState, scope: CoroutineScope, tap: Offset) {
@@ -185,6 +239,23 @@ private fun ViewerMotion.doubleTap(state: ViewerState, scope: CoroutineScope, ta
         } finally {
             state.endZoom()
         }
+    }
+}
+
+private fun ViewerMotion.zoomToText(state: ViewerState, scope: CoroutineScope, tap: Offset, readable: Float) {
+    val start = state.viewport ?: return
+    val pages = state.layout ?: return
+    val text = state.editor.typing?.mark?.text ?: return
+    val target = start.readableZoom(text.size, readable, pages) ?: return
+    start(scope) {
+        try {
+            animate(start.zoom, target, animationSpec = tween(ViewerViewport.DOUBLE_TAP_ANIMATION_MS.toInt())) { value, _ ->
+                state.zoomFrom(start, value, tap.x.toDouble(), tap.y.toDouble())
+            }
+        } finally {
+            state.endZoom()
+        }
+        revealCaret(state)
     }
 }
 
@@ -219,7 +290,8 @@ private fun grabAt(
     position: Offset,
     thumbWidth: Float,
     thumbHeight: Int,
-    touch: ViewerTouch
+    touch: ViewerTouch,
+    typed: TypedHooks
 ): ViewerDrag? {
     val thumbStart = thumbHit(state, fastScroll, alpha, position, thumbWidth, thumbHeight)
     if (thumbStart != null) {
@@ -228,7 +300,7 @@ private fun grabAt(
             false
         }
     }
-    if (state.editor.isActive) return editGrab(state, position, touch)
+    if (state.editor.isActive) return editGrab(state, position, touch, typed)
     val grab = ViewerSelectionHandles.grab(state, position, touch.handleRadius, touch.handleSlop)
     if (grab != null && state.selection.beginDrag(grab.handle)) {
         return { down ->
@@ -291,11 +363,12 @@ private suspend fun AwaitPointerEventScope.dragHandle(
     }
 }
 
-private fun editGrab(state: ViewerState, position: Offset, touch: ViewerTouch): ViewerDrag? {
+private fun editGrab(state: ViewerState, position: Offset, touch: ViewerTouch, typed: TypedHooks): ViewerDrag? {
     val editor = state.editor
     if (state.isWaiting || editor.paused) return null
     val tool = editor.settings.tool
     if (tool == ViewerEditTool.SIGNATURE) return signatureGrab(state, position, touch)
+    if (tool == ViewerEditTool.TEXT) return textGrab(state, position, touch, typed)
     val erasing = tool == ViewerEditTool.ERASER
     if (!erasing && !tool.draws) return null
     val (page, point) = state.pageHit(position.x, position.y) ?: return null
@@ -369,34 +442,130 @@ private fun signatureGrab(state: ViewerState, position: Offset, touch: ViewerTou
         }
         when {
             zoomNext -> editor.cancelGesture()
-            dragging -> editor.endSignatureDrag()
+            dragging && moved -> editor.endSignatureDrag()
+            dragging -> editor.cancelGesture()
             !moved -> editor.tapSignature(page, point, pageWidth, pageHeight, slop)
         }
         zoomNext
     }
 }
 
-private fun DrawScope.drawEditMarks(state: ViewerState, colors: ViewerColors, page: Int, x: Double, y: Double, zoom: Float) {
+private fun DrawScope.drawEditMarks(
+    state: ViewerState,
+    colors: ViewerColors,
+    glyphs: ViewerTypedGlyphs,
+    sizeLabel: ViewerSizeLabel,
+    page: Int,
+    x: Double,
+    y: Double,
+    zoom: Float
+) {
     val editor = state.editor
     val pages = state.layout ?: return
     val marks = editor.addedMarks(page)
     val wet = editor.wet?.takeIf { it.page == page }
     val moved = editor.movedSignature?.takeIf { it.page == page }
     val framed = editor.framed?.takeIf { it.mark.page == page }
-    if (marks.isEmpty() && wet == null && moved == null && framed == null) return
+    val typing = editor.typing?.takeIf { it.mark.page == page }
+    val dragged = editor.draggedText?.takeIf { it.page == page }
+    val open = dragged ?: typing?.mark
+    if (marks.isEmpty() && wet == null && moved == null && framed == null && open == null) return
+    val fonts = editor.textFonts
     val left = x.toFloat()
     val top = y.toFloat()
     clipRect(left, top, left + (pages.width(page) * zoom).toFloat(), top + (pages.height(page) * zoom).toFloat()) {
-        for (mark in marks) drawMark(mark, left, top, zoom)
-        if (wet != null) drawMark(wet, left, top, zoom)
-        if (moved != null) drawMark(moved, left, top, zoom)
+        for (mark in marks) drawMark(mark, left, top, zoom, glyphs, fonts)
+        if (wet != null) drawMark(wet, left, top, zoom, glyphs, fonts)
+        if (moved != null) drawMark(moved, left, top, zoom, glyphs, fonts)
+        if (open != null) drawMark(open, left, top, zoom, glyphs, fonts)
+    }
+    val margin = SIGNATURE_FRAME_MARGIN.toPx()
+    val text = open?.text
+    if (text != null && fonts != null) {
+        val box = ViewerTypedPlacement.shown(text, fonts.font(text.weight), pages.width(page).toFloat(), pages.height(page).toFloat())
+        val frame = ViewerTypedFrame.screenFrame(box, left, top, zoom, margin)
+        drawSignatureFrame(colors.cropFrame, frame)
+        with(sizeLabel) { drawSize(text.size, frame, zoom, colors.cropFrame, colors.page, top) }
     }
     val box = moved?.let { ViewerSignaturePlacement.box(it.path, it.width) } ?: framed?.box ?: return
-    val margin = SIGNATURE_FRAME_MARGIN.toPx()
     drawSignatureFrame(
         colors.cropFrame,
         Rect(left + box[0] * zoom - margin, top + box[1] * zoom - margin, left + box[2] * zoom + margin, top + box[3] * zoom + margin)
     )
+}
+
+private fun textGrab(state: ViewerState, position: Offset, touch: ViewerTouch, typed: TypedHooks): ViewerDrag? {
+    val editor = state.editor
+    val hit = state.pageHit(position.x, position.y)
+    if (hit == null) {
+        if (editor.typing == null) return null
+        return { down ->
+            var zoomNext = false
+            var moved = false
+            while (true) {
+                val event = awaitPointerEvent()
+                if (event.changes.count { it.pressed } > 1) {
+                    zoomNext = true
+                    break
+                }
+                val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                if (!change.pressed) break
+                if ((change.position - down.position).getDistance() > viewConfiguration.touchSlop) {
+                    moved = true
+                    break
+                }
+                change.consume()
+            }
+            if (!zoomNext && !moved) editor.commitTyping()
+            zoomNext || moved
+        }
+    }
+    val (page, point) = hit
+    if (page in state.failedPages) return null
+    val pages = state.layout ?: return null
+    val zoom = state.viewport?.zoom ?: return null
+    val pageWidth = pages.width(page).toFloat()
+    val pageHeight = pages.height(page).toFloat()
+    val slop = touch.signatureSlop / zoom
+    val dragging = editor.grabText(page, point, touch.signatureReach / zoom, slop, touch.signatureMargin / zoom)
+    return { down ->
+        var zoomNext = false
+        var moved = false
+        try {
+            while (true) {
+                val event = awaitPointerEvent()
+                if (event.changes.count { it.pressed } > 1) {
+                    zoomNext = true
+                    break
+                }
+                val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                change.consume()
+                if (!change.pressed) break
+                if ((change.position - down.position).getDistance() > viewConfiguration.touchSlop) moved = true
+                if (dragging) state.pointOn(page, change.position.x, change.position.y)?.let(editor::dragText)
+            }
+        } catch (e: CancellationException) {
+            editor.cancelGesture()
+            throw e
+        }
+        when {
+            zoomNext -> editor.cancelGesture()
+            dragging && moved -> editor.endTextDrag()
+            dragging -> {
+                editor.cancelGesture()
+                editor.placeCaret(page, point)
+                typed.askFocus()
+            }
+            !moved -> {
+                val closed = editor.typing == null
+                editor.tapText(page, point, pageWidth, pageHeight, slop)
+                val open = editor.typing
+                if (open != null) typed.askFocus()
+                if (closed && open?.isNew == true) typed.opened(position)
+            }
+        }
+        zoomNext
+    }
 }
 
 private fun DrawScope.drawSignatureFrame(color: Color, shown: Rect) {
@@ -408,7 +577,12 @@ private fun DrawScope.drawSignatureFrame(color: Color, shown: Rect) {
     drawLine(color, corner, Offset(corner.x, corner.y - length), width, StrokeCap.Square)
 }
 
-private fun DrawScope.drawMark(mark: ViewerMark, left: Float, top: Float, zoom: Float) {
+private fun DrawScope.drawMark(mark: ViewerMark, left: Float, top: Float, zoom: Float, glyphs: ViewerTypedGlyphs, fonts: ViewerTextFonts?) {
+    val text = mark.text
+    if (text != null) {
+        if (fonts != null) with(glyphs) { drawTyped(mark, fonts.font(text.weight), left, top, zoom) }
+        return
+    }
     val path = mark.path.toPath(left, top, zoom)
     val color = Color(OPAQUE or mark.color).copy(alpha = if (mark.kind.translucent) MARK_ALPHA else 1f)
     if (mark.kind.fills) {
@@ -509,6 +683,7 @@ private fun BoxScope.FastScroller(
 ) {
     val pages = state.layout ?: return
     val view = state.viewport ?: return
+    val density = LocalDensity.current
     val contentHeight = pages.totalHeight * view.zoom
     if (!fastScroll.canScroll(view.height, contentHeight)) return
     val thumbTop = fastScroll.thumbTop(view.scrollY, view.height, contentHeight)
@@ -544,7 +719,7 @@ private fun BoxScope.FastScroller(
             .padding(horizontal = INDICATOR_PADDING),
         contentAlignment = Alignment.Center
     ) {
-        BasicText(text, style = TextStyle(color = colors.scrollerText, fontSize = INDICATOR_TEXT_SIZE, fontFamily = fontFamily))
+        BasicText(text, style = TextStyle(color = colors.scrollerText, fontSize = with(density) { INDICATOR_TEXT_SIZE.toSp() }, fontFamily = fontFamily))
     }
 }
 
@@ -558,7 +733,7 @@ private val INDICATOR_END = 42.dp
 private val INDICATOR_HEIGHT = 24.dp
 private val INDICATOR_RADIUS = 16.dp
 private val INDICATOR_PADDING = 12.dp
-private val INDICATOR_TEXT_SIZE = 12.sp
+private val INDICATOR_TEXT_SIZE = 12.dp
 private val WORD_TOLERANCE = 8.dp
 private val STROKE_STEP = 1.dp
 private val ERASER_TOLERANCE = 10.dp
@@ -568,3 +743,6 @@ private val SIGNATURE_FRAME_WIDTH = 1.5.dp
 private val SIGNATURE_FRAME_MARGIN = 4.dp
 private val SIGNATURE_MARK_WIDTH = 4.dp
 private val SIGNATURE_MARK_LENGTH = 22.dp
+private val CARET_WIDTH = 2.dp
+private val READABLE_TEXT = 16.dp
+private const val CARET_BLINK_MS = 500L

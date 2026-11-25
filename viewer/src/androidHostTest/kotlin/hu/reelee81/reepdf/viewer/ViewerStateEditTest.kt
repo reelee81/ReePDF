@@ -1,5 +1,6 @@
 package hu.reelee81.reepdf.viewer
 
+import java.io.File
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -108,6 +109,44 @@ class ViewerStateEditTest {
 
         assertNull(state.editor.signatures.pad)
         assertTrue(state.editor.isActive)
+    }
+
+    @Test
+    fun backFirstClosesAnOpenTextBoxThenAsksBeforeLeaving() {
+        opened()
+        state.startEditing()
+        typeSomething("Back")
+
+        assertTrue(state.handleBack())
+        assertNull(state.editor.typing)
+        assertNull(state.editor.question)
+        assertEquals("Back", state.editor.plan().added.getValue(0).single().text?.text)
+        assertTrue(state.handleBack())
+        assertEquals(ViewerEditQuestion.EXIT, state.editor.question)
+    }
+
+    @Test
+    fun savingTakesTheOpenTextBoxAlong() {
+        opened()
+        state.startEditing()
+        typeSomething("Saved")
+        var plan: ViewerEditPlan? = null
+        state.editSaver = { chosen ->
+            plan = chosen
+            ViewerEditSaveResult.Saved { MarkDocument() }
+        }
+
+        state.saveEdits()
+
+        assertEquals("Saved", plan?.added?.get(0)?.single()?.text?.text)
+        assertFalse(state.editor.isActive)
+    }
+
+    private fun typeSomething(text: String) {
+        state.editor.textFonts = ViewerTextFonts { weight -> File("../app/src/main/res/font/roboto_${FONT_FILES.getValue(weight)}.ttf").readBytes() }
+        state.editor.selectTool(ViewerEditTool.TEXT)
+        state.editor.tapText(0, ViewerTextPoint(50f, 100f), PAGE_WIDTH, PAGE_HEIGHT, 2f)
+        state.editor.typeText(text, text.length)
     }
 
     @Test
@@ -299,6 +338,7 @@ class ViewerStateEditTest {
         const val VIEW_WIDTH = 1_080
         const val VIEW_HEIGHT = 2_000
         const val SPACING = 16.0
+        val FONT_FILES = mapOf(400 to "regular", 500 to "medium", 600 to "semibold", 700 to "bold", 900 to "black")
     }
 
     private class MemoryStore : ViewerSignatureStore {

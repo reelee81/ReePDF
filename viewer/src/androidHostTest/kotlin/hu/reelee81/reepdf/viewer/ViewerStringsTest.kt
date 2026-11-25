@@ -56,6 +56,7 @@ class ViewerStringsTest {
             "pdf_edits_restore_incomplete",
             "pdf_edits_save_interrupted",
             "edit_scroll",
+            "edit_text_weight",
             "edit_signature_1",
             "edit_signature_2",
             "edit_signature_add",

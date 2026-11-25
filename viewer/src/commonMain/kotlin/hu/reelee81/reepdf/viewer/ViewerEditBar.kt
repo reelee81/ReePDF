@@ -75,7 +75,7 @@ internal fun ViewerEditBar(
         }
         val swatchEnabled = settings.tool.palette != null
         BarItem(ViewerEditBarLayout.SWATCH, width, Res.string.edit_color_palette, enabled = swatchEnabled, onClick = editor::tapSwatch) {
-            val color = Color(OPAQUE or settings.color(settings.swatchTool))
+            val color = Color(OPAQUE or editor.shownColor(settings.swatchTool))
             val outline = viewerColors.colorOutline
             Canvas(Modifier.size(SWATCH_SIZE)) {
                 drawCircle(color)

@@ -7,18 +7,34 @@ import kotlin.math.roundToLong
 
 internal object PdfMarkContent {
     const val TAG = "ReePDF"
+    const val FONT_PREFIX = "ReeText"
+    private const val BYTE_ORDER_MARK = 0xFEFF
     private const val COORDINATE_DECIMALS = 3
     private const val COLOR_DECIMALS = 4
+    private const val MATRIX_DECIMALS = 6
     private val PATH_OPERATORS = setOf("m", "l", "c", "v", "y", "h", "re")
     private val PAINT_OPERATORS = setOf("S", "s", "f", "F", "f*", "B", "B*", "b", "b*")
     private val BLANK_OPERATORS = setOf("q", "Q", "cm", "m", "l", "c", "v", "y", "h", "re", "W", "W*", "n")
 
     class Stored(val mark: PdfMark, val start: Int, val end: Int, val clip: DoubleArray? = null)
 
-    fun write(marks: List<PdfMark>, alpha: String?): ByteArray {
+    interface Fonts {
+        fun name(weight: Int): String
+
+        fun encode(weight: Int, line: String): ByteArray
+
+        fun width(weight: Int, line: String): Double
+    }
+
+    fun write(marks: List<PdfMark>, alpha: String?, fonts: Fonts? = null): ByteArray {
         val text = StringBuilder()
         for (mark in marks) {
             require(!mark.kind.translucent || alpha != null) { "A translucent mark needs an alpha state" }
+            val typed = mark.text
+            if (typed != null) {
+                text.typed(mark.id, mark.color, typed, requireNotNull(fonts) { "A typed mark needs its fonts" })
+                continue
+            }
             text.append('/').append(TAG).append(" <</Id(").append(mark.id).append(")/K/").append(mark.kind.code).append(">> BDC\nq\n")
             if (mark.kind.translucent) text.append('/').append(alpha).append(" gs\n")
             for (shift in intArrayOf(16, 8, 0)) text.number(((mark.color shr shift) and 0xFF) / 255.0, COLOR_DECIMALS).append(' ')
@@ -43,7 +59,60 @@ internal object PdfMarkContent {
         return text.toString().toByteArray(Charsets.ISO_8859_1)
     }
 
+    private fun StringBuilder.typed(id: String, color: Int, mark: PdfMarkText, fonts: Fonts) {
+        val lines = mark.lines
+        append('/').append(TAG).append(" <</Id(").append(id).append(")/K/").append(PdfMarkKind.TYPED.code)
+        append("/Wt ").append(mark.weight).append("/T <").append(String.format(java.util.Locale.ROOT, "%04X", BYTE_ORDER_MARK))
+        for (char in mark.text) append(String.format(java.util.Locale.ROOT, "%04X", char.code))
+        append(">/L [")
+        lines.forEachIndexed { index, line ->
+            if (index > 0) append(' ')
+            number(fonts.width(mark.weight, line), COORDINATE_DECIMALS)
+        }
+        append("]>> BDC\nq\n")
+        for (shift in intArrayOf(16, 8, 0)) number(((color shr shift) and 0xFF) / 255.0, COLOR_DECIMALS).append(' ')
+        append("rg\nBT\n/").append(fonts.name(mark.weight)).append(' ')
+        number(mark.size.toDouble(), COORDINATE_DECIMALS).append(" Tf\n")
+        val m = mark.matrix
+        lines.forEachIndexed { index, line ->
+            val shift = -(PdfMarkText.ASCENT + index * PdfMarkText.LINE_HEIGHT) * mark.size
+            for (value in 0 until 4) number(m[value], MATRIX_DECIMALS).append(' ')
+            number(m[4] + m[2] * shift, COORDINATE_DECIMALS).append(' ')
+            number(m[5] + m[3] * shift, COORDINATE_DECIMALS).append(" Tm\n")
+            if (line.isNotEmpty()) {
+                append('<')
+                for (byte in fonts.encode(mark.weight, line)) append(String.format(java.util.Locale.ROOT, "%02X", byte.toInt() and 0xFF))
+                append("> Tj\n")
+            }
+        }
+        append("ET\nQ\nEMC\n")
+    }
+
     fun read(content: ByteArray): List<Stored> = Reader(content).read()
+
+    fun fontNames(content: ByteArray): Set<String> {
+        val lexer = Lexer(content)
+        val names = HashSet<String>()
+        var last: Any? = null
+        var beforeLast: Any? = null
+        while (true) {
+            when (val token = lexer.next() ?: return names) {
+                is Token.Operator -> {
+                    if (token.name == "Tf") (beforeLast as? Name)?.let { names += it.value }
+                    last = null
+                    beforeLast = null
+                }
+                is Token.Value -> {
+                    beforeLast = last
+                    last = token.value
+                }
+                is Token.InlineImage -> {
+                    last = null
+                    beforeLast = null
+                }
+            }
+        }
+    }
 
     fun without(content: ByteArray, ids: Set<String>): ByteArray {
         val removed = read(content).filter { it.mark.id in ids }
@@ -155,7 +224,8 @@ internal object PdfMarkContent {
                     val properties = operands[1] as? Map<*, *>
                     val id = properties?.get("Id") as? String
                     if (!id.isNullOrEmpty() && id.all { it in 'a'..'z' || it in '0'..'9' }) {
-                        open = Open(id, PdfMarkKind.of((properties["K"] as? Name)?.value), start, clip)
+                        val kind = PdfMarkKind.of((properties["K"] as? Name)?.value)
+                        open = Open(id, kind, start, clip, if (kind == PdfMarkKind.TYPED) typedData(properties) else null)
                     }
                 } else {
                     outside(name, operands)
@@ -168,6 +238,8 @@ internal object PdfMarkContent {
                 "w" -> numbers(operands, 1)?.let { current.width = it[0] }
                 "RG", "rg" -> numbers(operands, 3)?.let { current.color = color(it) }
                 "gs" -> current.translucent = true
+                "Tf" -> (operands.getOrNull(1) as? Double)?.let { current.fontSize = it }
+                "Tm" -> if (current.firstLine == null) numbers(operands, 6)?.let { current.firstLine = PdfMatrix.concat(it, ctm) }
                 in PATH_OPERATORS -> current.build(name, numbers(operands, operands.size) ?: return, ctm)
                 in PAINT_OPERATORS -> current.paint(name, ctm)
                 "n" -> current.discard()
@@ -212,6 +284,10 @@ internal object PdfMarkContent {
 
         private fun finish(current: Open) {
             open = null
+            if (current.kind == PdfMarkKind.TYPED) {
+                typed(current)?.let { found += Stored(it, current.start, lexer.position, current.clip) }
+                return
+            }
             val path = current.path.build()
             if (path.verbs.isEmpty()) return
             val kind = current.kind ?: when {
@@ -221,6 +297,36 @@ internal object PdfMarkContent {
             }
             val mark = PdfMark(current.id, kind, current.color, if (kind.fills) 0f else current.paintedWidth.toFloat(), path)
             found += Stored(mark, current.start, lexer.position, current.clip)
+        }
+
+        private fun typed(current: Open): PdfMark? {
+            val data = current.typed ?: return null
+            val line = current.firstLine ?: return null
+            val size = current.fontSize.takeIf { it > 0.0 && it.isFinite() } ?: return null
+            val box = PdfMatrix.concat(doubleArrayOf(1.0, 0.0, 0.0, 1.0, 0.0, PdfMarkText.ASCENT * size), line)
+            val text = try {
+                PdfMarkText.placed(data.text, data.weight, size, box)
+            } catch (_: IllegalArgumentException) {
+                return null
+            }
+            val widths = DoubleArray(text.lines.size) { data.widths.getOrElse(it) { 0.0 } }
+            return PdfMark(current.id, PdfMarkKind.TYPED, current.color, 0f, text.boxes(widths), text)
+        }
+
+        private fun typedData(properties: Map<*, *>): Typed? {
+            val weight = (properties["Wt"] as? Double)?.toInt() ?: return null
+            val text = utf16(properties["T"] as? String ?: return null) ?: return null
+            val widths = (properties["L"] as? List<*>)?.map { (it as? Double) ?: 0.0 }?.toDoubleArray() ?: return null
+            return Typed(text, weight, widths)
+        }
+
+        private fun utf16(hex: String): String? {
+            val digits = hex.filter { !it.isWhitespace() }
+            if (digits.any { Character.digit(it, 16) < 0 }) return null
+            val padded = if (digits.length % 2 == 0) digits else digits + "0"
+            val bytes = ByteArray(padded.length / 2) { ((Character.digit(padded[it * 2], 16) shl 4) or Character.digit(padded[it * 2 + 1], 16)).toByte() }
+            if (bytes.size < 2 || bytes[0] != 0xFE.toByte() || bytes[1] != 0xFF.toByte() || bytes.size % 2 != 0) return null
+            return String(bytes, 2, bytes.size - 2, Charsets.UTF_16BE)
         }
 
         private fun numbers(operands: List<Any?>, count: Int): DoubleArray? {
@@ -235,7 +341,11 @@ internal object PdfMarkContent {
         }
     }
 
-    private class Open(val id: String, val kind: PdfMarkKind?, val start: Int, val clip: DoubleArray?) {
+    private class Typed(val text: String, val weight: Int, val widths: DoubleArray)
+
+    private class Open(val id: String, val kind: PdfMarkKind?, val start: Int, val clip: DoubleArray?, val typed: Typed? = null) {
+        var fontSize = 0.0
+        var firstLine: DoubleArray? = null
         var depth = 0
         var width = 1.0
         var paintedWidth = 0.0

@@ -127,6 +127,20 @@ class ViewerViewportTest {
     }
 
     @Test
+    fun aNewTextZoomsInUntilItIsReadableButNeverOutOrPastTheLimit() {
+        val fit = ViewerViewport.atPage(0, 1080, 2000, layout)
+        assertEquals(44f / 12f, fit.readableZoom(12f, 44f, layout)!!, 1e-6f)
+        assertEquals(ViewerViewport.MAX_ZOOM, fit.readableZoom(1f, 44f, layout)!!, 0f)
+        assertNull(fit.readableZoom(30f, 44f, layout))
+        assertNull(fit.zoomedTo(3.5f, 0.0, 0.0, layout).readableZoom(12f, 44f, layout))
+        assertNull(fit.zoomedTo(ViewerViewport.MAX_ZOOM, 0.0, 0.0, layout).readableZoom(1f, 44f, layout))
+        assertNull(fit.readableZoom(0f, 44f, layout))
+        assertNull(fit.readableZoom(Float.NaN, 44f, layout))
+        val placer = ViewerViewport.atPage(0, 1080, 2000, single, fitLimits)
+        assertEquals(placer.zoom * ViewerViewport.DOUBLE_TAP_FIT_FACTOR, placer.readableZoom(1f, 44f, single)!!, 1e-5f)
+    }
+
+    @Test
     fun doubleTapNeedsAWidth() {
         assertNull(ViewerViewport.atPage(0, 0, 2000, layout).doubleTapZoom(layout))
     }

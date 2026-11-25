@@ -33,6 +33,7 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.Role
@@ -44,7 +45,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import hu.reelee81.reepdf.viewer.resources.Res
 import hu.reelee81.reepdf.viewer.resources.search_match_count
 import hu.reelee81.reepdf.viewer.resources.search_next
@@ -67,10 +67,11 @@ internal fun ViewerSearchBar(
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
+    val density = LocalDensity.current
     val iconTint = ColorFilter.tint(colors.toolbarNavigationIconColor.default)
     val textStyle = TextStyle(
         color = viewerColors.searchText,
-        fontSize = TEXT_SIZE,
+        fontSize = with(density) { TEXT_SIZE.toSp() },
         fontFamily = fontFamily,
         fontWeight = FontWeight.Normal
     )
@@ -199,4 +200,4 @@ private val STATUS_GAP = 14.5.dp
 private val PREVIOUS_CENTER = 63.dp
 private val NEXT_CENTER = 28.dp
 private val SPLIT = (PREVIOUS_CENTER + NEXT_CENTER) / 2
-private val TEXT_SIZE = 16.sp
+private val TEXT_SIZE = 16.dp

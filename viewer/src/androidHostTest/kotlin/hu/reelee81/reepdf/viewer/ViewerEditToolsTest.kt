@@ -58,16 +58,21 @@ class ViewerEditToolsTest {
     }
 
     @Test
-    fun theTextToolCannotBeChosenYet() {
-        assertEquals(
-            listOf(
-                ViewerEditTool.UNDERLINE, ViewerEditTool.STRIKETHROUGH, ViewerEditTool.PEN, ViewerEditTool.HIGHLIGHTER,
-                ViewerEditTool.SIGNATURE, ViewerEditTool.ERASER
-            ),
-            ViewerEditTool.entries.filter { it.enabled }
-        )
+    fun everyToolCanBeChosenAndTheTextToolRemembersItsOwnColorAndWeight() {
+        assertEquals(ViewerEditTool.entries, ViewerEditTool.entries.filter { it.enabled })
         val settings = ViewerEditSettings()
-        assertSame(settings, settings.withTool(ViewerEditTool.TEXT))
+        val text = settings.withTool(ViewerEditTool.TEXT)
+        assertEquals(ViewerEditTool.TEXT, text.tool)
+        assertEquals(ViewerEditTool.TEXT, text.drawingTool)
+        assertEquals(0x000000, text.color(ViewerEditTool.TEXT))
+        assertEquals(400f, text.width(ViewerEditTool.TEXT), 0f)
+        assertEquals(ViewerEditPalettes.pen.size, ViewerEditPalettes.text.size)
+        val chosen = text.withColor(ViewerEditTool.TEXT, 2).withWidth(ViewerEditTool.TEXT, 3)
+        assertEquals(0xDD0000, chosen.color(ViewerEditTool.TEXT))
+        assertEquals(700, chosen.weight)
+        assertEquals(settings.penColor, chosen.penColor)
+        assertEquals(settings.penWidth, chosen.penWidth)
+        assertSame(chosen, chosen.withWidth(ViewerEditTool.TEXT, 5))
         assertSame(ViewerEditPalettes.signature, ViewerEditTool.SIGNATURE.palette)
         assertSame(underline, ViewerEditTool.UNDERLINE.palette)
         assertSame(strikethrough, ViewerEditTool.STRIKETHROUGH.palette)
@@ -146,12 +151,14 @@ class ViewerEditToolsTest {
             highlighterWidth = 5,
             underlineColor = 28,
             strikethroughColor = -1,
-            undoPanelTop = true
+            undoPanelTop = true,
+            textColor = 28,
+            textWeight = 5
         )
 
         val fixed = broken.sanitized()
 
-        assertEquals(ViewerEditSettings(undoPanelTop = true), fixed)
+        assertEquals(ViewerEditSettings(tool = ViewerEditTool.TEXT, undoPanelTop = true), fixed)
         assertTrue(ViewerEditSettings().sanitized() == ViewerEditSettings())
     }
 

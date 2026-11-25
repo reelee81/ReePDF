@@ -19,12 +19,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import hu.reelee81.reepdf.viewer.resources.Res
 import hu.reelee81.reepdf.viewer.resources.selection_copy
 import hu.reelee81.reepdf.viewer.resources.selection_select_all
@@ -84,6 +84,7 @@ private fun BubbleButton(text: String, colors: ReeColors, fontFamily: FontFamily
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val textColor = colors.materialTextbuttonTextColor.let { if (pressed) it.of(ReeColorState.PRESSED) else it.default }
+    val density = LocalDensity.current
     Box(
         Modifier.fillMaxHeight()
             .clickable(interactionSource = interaction, indication = null, role = Role.Button, onClick = onClick)
@@ -92,7 +93,7 @@ private fun BubbleButton(text: String, colors: ReeColors, fontFamily: FontFamily
     ) {
         BasicText(
             text = text,
-            style = TextStyle(color = textColor, fontSize = TEXT_SIZE, fontFamily = fontFamily, fontWeight = FontWeight.Normal),
+            style = TextStyle(color = textColor, fontSize = with(density) { TEXT_SIZE.toSp() }, fontFamily = fontFamily, fontWeight = FontWeight.Normal),
             maxLines = 1
         )
     }
@@ -102,7 +103,7 @@ private val HEIGHT = 35.dp
 private val ELEVATION = 8.dp
 private val ROW_PADDING = 8.dp
 private val BUTTON_PADDING = 8.dp
-private val TEXT_SIZE = 14.sp
+private val TEXT_SIZE = 14.dp
 private val GAP = 8.dp
 private val HANDLE_HEIGHT = 24.dp
 private val MARGIN = 8.dp

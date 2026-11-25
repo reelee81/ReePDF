@@ -29,17 +29,29 @@ class PdfViewerModel : ViewModel() {
     @Volatile
     private var document: AndroidViewerDocument? = null
     private var journal: AndroidEditJournal? = null
+    private var fonts: AndroidTextFonts? = null
 
-    fun start(title: String, file: File, page: Int, outputUri: String?, journal: AndroidEditJournal, resume: ViewerResume?) {
+    fun start(
+        title: String,
+        file: File,
+        page: Int,
+        outputUri: String?,
+        journal: AndroidEditJournal,
+        fonts: AndroidTextFonts,
+        resume: ViewerResume?
+    ) {
         this.file = file
         this.outputUri = outputUri
         this.journal = journal
+        this.fonts = fonts
         state = ViewerState(title, true, viewModelScope).also { viewer ->
             viewer.editor.journal = journal
+            val loading = viewModelScope.async(Dispatchers.IO) { fonts.preloaded() }
             val reading = resume?.let {
                 viewModelScope.async { journal.read(withContext(Dispatchers.IO) { AndroidEditJournal.identity(file) }) }
             }
             viewer.open(ViewerWait.Reason.OPENING, page, resume, reading?.let { edits -> { edits.await() } }) {
+                viewer.editor.textFonts = loading.await()
                 opened(file, fresh = resume == null)
             }
         }
@@ -52,7 +64,7 @@ class PdfViewerModel : ViewModel() {
             val markPlan = current.markPlan(plan)
             val uri = withContext(Dispatchers.IO) {
                 val tracker = ProgressTracker { System.currentTimeMillis() }
-                if (PdfMarkSave.write(File(current.path), output, markPlan, PageBatch.PAGES, tracker::stage) { ensureActive() }) {
+                if (PdfMarkSave.write(File(current.path), output, markPlan, PageBatch.PAGES, tracker::stage, fonts) { ensureActive() }) {
                     uriFor(output)
                 } else {
                     output.delete()

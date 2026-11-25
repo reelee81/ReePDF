@@ -74,6 +74,8 @@ class PdfViewer : AppCompatActivity(), ViewerActions {
         private const val KEY_SIGNATURE_COLOR = "signature_color"
         private const val KEY_SIGNATURE_WIDTH = "signature_width"
         private const val KEY_SIGNATURE_SLOT = "signature_slot"
+        private const val KEY_TEXT_COLOR = "text_color"
+        private const val KEY_TEXT_WEIGHT = "text_weight"
     }
 
     private lateinit var model: PdfViewerModel
@@ -104,7 +106,10 @@ class PdfViewer : AppCompatActivity(), ViewerActions {
             val title = savedInstanceState?.getString(STATE_TITLE) ?: intent.getStringExtra(EXTRA_TITLE) ?: file.name
             val page = savedInstanceState?.getInt(STATE_PAGE) ?: intent.getIntExtra(EXTRA_INITIAL_PAGE_INDEX, 0)
             val resume = savedInstanceState?.let(::resumeFrom)
-            model.start(title, file, page, savedInstanceState?.getString(STATE_OUTPUT_URI), AndroidEditJournal.of(this), resume)
+            model.start(
+                title, file, page, savedInstanceState?.getString(STATE_OUTPUT_URI), AndroidEditJournal.of(this),
+                AndroidTextFonts(applicationContext.resources), resume
+            )
         }
         val state = model.state ?: return
         model.outputUri?.let(::setEditedDocumentResult)
@@ -121,7 +126,19 @@ class PdfViewer : AppCompatActivity(), ViewerActions {
 
         val frame = FrameLayout(this).apply {
             fitsSystemWindows = true
-            addView(viewerView(this@PdfViewer, state, this@PdfViewer, R.font.roboto_regular, R.font.roboto_medium, R.dimen.dp_9999_main))
+            addView(
+                viewerView(
+                    this@PdfViewer,
+                    state,
+                    this@PdfViewer,
+                    R.font.roboto_regular,
+                    R.font.roboto_medium,
+                    R.font.roboto_semibold,
+                    R.font.roboto_bold,
+                    R.font.roboto_black,
+                    R.dimen.dp_9999_main
+                )
+            )
         }
         ViewCompat.setOnApplyWindowInsetsListener(frame) { view, insets ->
             val applied = ViewCompat.onApplyWindowInsets(view, insets)
@@ -291,7 +308,9 @@ class PdfViewer : AppCompatActivity(), ViewerActions {
             undoPanelTop = prefs.getBoolean(KEY_UNDO_PANEL_TOP, defaults.undoPanelTop),
             signatureColor = prefs.getInt(KEY_SIGNATURE_COLOR, defaults.signatureColor),
             signatureWidth = prefs.getInt(KEY_SIGNATURE_WIDTH, defaults.signatureWidth),
-            signatureSlot = prefs.getInt(KEY_SIGNATURE_SLOT, defaults.signatureSlot)
+            signatureSlot = prefs.getInt(KEY_SIGNATURE_SLOT, defaults.signatureSlot),
+            textColor = prefs.getInt(KEY_TEXT_COLOR, defaults.textColor),
+            textWeight = prefs.getInt(KEY_TEXT_WEIGHT, defaults.textWeight)
         )
     }
 
@@ -310,6 +329,8 @@ class PdfViewer : AppCompatActivity(), ViewerActions {
             putInt(KEY_SIGNATURE_COLOR, settings.signatureColor)
             putInt(KEY_SIGNATURE_WIDTH, settings.signatureWidth)
             putInt(KEY_SIGNATURE_SLOT, settings.signatureSlot)
+            putInt(KEY_TEXT_COLOR, settings.textColor)
+            putInt(KEY_TEXT_WEIGHT, settings.textWeight)
         }
     }
 

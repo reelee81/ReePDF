@@ -231,6 +231,7 @@ class ViewerState(val title: String, val canEdit: Boolean, private val scope: Co
         if (isWaiting || saveJob != null || !editor.isActive) return
         editor.closePanel()
         editor.question = null
+        editor.commitTyping()
         val plan = editor.plan()
         if (plan.isEmpty) {
             editMessage = ViewerEditMessage.NothingToSave
@@ -278,6 +279,7 @@ class ViewerState(val title: String, val canEdit: Boolean, private val scope: Co
                 editor.signatures.deleting != null -> editor.signatures.dismissDelete()
                 editor.question != null -> editor.question = null
                 editor.panel != null || editor.rowOpen -> editor.closePanel()
+                editor.typing != null -> editor.commitTyping()
                 editor.state.hasChanges -> editor.question = ViewerEditQuestion.EXIT
                 else -> editor.discard()
             }

@@ -102,8 +102,8 @@ internal fun BoxScope.ViewerUndoPanel(editor: ViewerEditor, colors: ReeColors, v
                 }
         ) {
             val tint = colors.normalTextColor.default
-            UndoButton(ViewerIcons.undo, stringResource(Res.string.edit_undo), editor.state.canUndo, tint, editor::undo)
-            UndoButton(ViewerIcons.redo, stringResource(Res.string.edit_redo), editor.state.canRedo, tint, editor::redo)
+            UndoButton(ViewerIcons.undo, stringResource(Res.string.edit_undo), editor.canUndo, tint, editor::undo)
+            UndoButton(ViewerIcons.redo, stringResource(Res.string.edit_redo), editor.canRedo, tint, editor::redo)
         }
     }
 }

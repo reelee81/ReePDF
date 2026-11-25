@@ -509,17 +509,19 @@ class ViewerEditorTest {
     }
 
     @Test
-    fun theEraserAndTheDisabledToolOpenNothing() {
+    fun theEraserOpensNothingAndASecondTapOnTextOpensItsWeights() {
         editing()
 
         editor.tapTool(ViewerEditTool.TEXT)
         editor.tapTool(ViewerEditTool.TEXT)
         val tool = editor.settings.tool
+        val textPanel = editor.panel
         editor.tapTool(ViewerEditTool.ERASER)
         editor.tapTool(ViewerEditTool.ERASER)
         editor.tapSwatch()
 
-        assertEquals(ViewerEditTool.PEN, tool)
+        assertEquals(ViewerEditTool.TEXT, tool)
+        assertEquals(ViewerEditPanel.WIDTH, textPanel)
         assertEquals(ViewerEditTool.ERASER, editor.settings.tool)
         assertNull(editor.panel)
     }
@@ -651,6 +653,23 @@ class ViewerEditorTest {
         assertNull(editor.movedSignature)
         assertFalse(editor.grabSignature(0, ViewerTextPoint(1f, 1f), 3f, 1f, 0f))
         assertFalse(editor.grabSignature(1, ViewerTextPoint(50f, 50f), 3f, 1f, 0f))
+    }
+
+    @Test
+    fun aSignatureDraggedBackToWhereItStartedMakesNoStep() {
+        signatureReady()
+        editor.tapSignature(0, ViewerTextPoint(50f, 50f), 100f, 100f, 2f)
+        val placed = editor.framed!!
+
+        assertTrue(editor.grabSignature(0, ViewerTextPoint(50f, 50f), 3f, 1f, 0f))
+        editor.dragSignature(ViewerTextPoint(60f, 60f), 100f, 100f)
+        editor.dragSignature(ViewerTextPoint(50f, 50f), 100f, 100f)
+        editor.endSignatureDrag()
+
+        assertSame(placed, editor.framed)
+        assertSame(placed.mark, editor.addedMarks(0).single())
+        editor.undo()
+        assertTrue(editor.addedMarks(0).isEmpty())
     }
 
     @Test

@@ -50,6 +50,7 @@
     <string name="edit_undo">Visszavonás</string>
     <string name="edit_redo">Újra</string>
     <string name="edit_line_width">Vonalvastagság</string>
+    <string name="edit_text_weight">Betűvastagság</string>
     <string name="edit_question">Mented a szerkesztéseket?</string>
     <string name="mark_color_black">Fekete</string>
     <string name="mark_color_white">Fehér</string>

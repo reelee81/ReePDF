@@ -60,6 +60,7 @@ import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Density
@@ -75,6 +76,7 @@ import hu.reelee81.reepdf.viewer.resources.edit_signature_add
 import hu.reelee81.reepdf.viewer.resources.edit_signature_delete
 import hu.reelee81.reepdf.viewer.resources.edit_signature_edit
 import hu.reelee81.reepdf.viewer.resources.edit_signature_empty
+import hu.reelee81.reepdf.viewer.resources.edit_text_weight
 import hu.reelee81.reepdf.viewer.resources.edit_underline_straight
 import hu.reelee81.reepdf.viewer.resources.edit_underline_wavy
 import kotlin.math.roundToInt
@@ -125,7 +127,11 @@ internal fun ViewerEditPanels(
         ) {
             when (panel) {
                 ViewerEditPanel.COLORS -> Palette(editor, tool, palette, colors, viewerColors, cell)
-                ViewerEditPanel.WIDTH -> Widths(state, tool, palette, colors, fontFamily, cell * COLUMNS)
+                ViewerEditPanel.WIDTH -> if (tool == ViewerEditTool.TEXT) {
+                    Weights(editor, tool, palette, colors, fontFamily, cell * COLUMNS)
+                } else {
+                    Widths(state, tool, palette, colors, fontFamily, cell * COLUMNS)
+                }
                 ViewerEditPanel.STYLE -> Styles(editor, colors)
                 ViewerEditPanel.SIGNATURES -> Signatures(editor, colors, viewerColors, cell * COLUMNS)
             }
@@ -184,7 +190,7 @@ private fun Palette(
     viewerColors: ViewerColors,
     cell: Dp
 ) {
-    val chosen = editor.settings.colorIndex(tool)
+    val chosen = editor.shownColorIndex(tool)
     val ring = colors.normalTextColor.default
     Column {
         for (row in 0 until (palette.size + COLUMNS - 1) / COLUMNS) {
@@ -237,6 +243,34 @@ private fun Widths(
 }
 
 @Composable
+private fun Weights(editor: ViewerEditor, tool: ViewerEditTool, palette: ViewerEditPalette, colors: ReeColors, fontFamily: FontFamily, width: Dp) {
+    val density = LocalDensity.current
+    val index = editor.shownWidthIndex(tool)
+    val style = TextStyle(
+        color = colors.normalTextColor.default,
+        fontSize = with(density) { WEIGHT_SAMPLE_SIZE.toSp() },
+        fontFamily = fontFamily,
+        fontWeight = FontWeight(palette.widths[index].roundToInt())
+    )
+    Row(Modifier.width(width).height(ROW_HEIGHT), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(SAMPLE_WIDTH, ROW_HEIGHT).padding(start = SIDE_INSET), contentAlignment = Alignment.CenterStart) {
+            BasicText(WEIGHT_SAMPLE, style = style, maxLines = 1)
+        }
+        StopSlider(
+            palette.widths.size,
+            index,
+            stringResource(Res.string.edit_text_weight),
+            null,
+            colors,
+            editor::chooseWidth,
+            Modifier.weight(1f).padding(end = WEIGHT_END),
+            onStart = editor::beginWidthChoice,
+            onEnd = editor::endWidthChoice
+        )
+    }
+}
+
+@Composable
 internal fun ViewerWidthSlider(
     values: FloatArray,
     index: Int,
@@ -252,10 +286,6 @@ internal fun ViewerWidthSlider(
     val text = widthText(value, separator)
     val label = stringResource(Res.string.edit_line_width)
     val sample = colors.normalTextColor.default
-    val thumb = colors.switchThumbColor.of(ReeColorState.CHECKED)
-    val filled = colors.switchTrackColor.of(ReeColorState.CHECKED)
-    val empty = colors.switchTrackColor.default
-    val stops = values.size
     val valueStyle = TextStyle(
         color = colors.normalTextColor.default,
         fontSize = with(density) { VALUE_TEXT_SIZE.toSp() },
@@ -272,44 +302,62 @@ internal fun ViewerWidthSlider(
             val inset = SIDE_INSET.toPx()
             drawLine(sample, Offset(inset, size.height / 2), Offset(size.width - inset, size.height / 2), line, StrokeCap.Butt)
         }
-        Canvas(
-            Modifier.weight(1f)
-                .height(ROW_HEIGHT)
-                .pointerInput(stops) {
-                    detectTapGestures { onChoose(stopAt(it.x, size.width, stops, STOP_INSET.toPx())) }
-                }
-                .pointerInput(stops) {
-                    detectHorizontalDragGestures { change, _ ->
-                        change.consume()
-                        onChoose(stopAt(change.position.x, size.width, stops, STOP_INSET.toPx()))
-                    }
-                }
-                .semantics {
-                    contentDescription = label
-                    stateDescription = text
-                    progressBarRangeInfo = ProgressBarRangeInfo(index.toFloat(), 0f..(stops - 1).toFloat(), stops - 2)
-                    setProgress { target ->
-                        onChoose(target.roundToInt().coerceIn(0, stops - 1))
-                        true
-                    }
-                }
-        ) {
-            val inset = STOP_INSET.toPx()
-            val step = (size.width - inset * 2) / (stops - 1)
-            val y = size.height / 2
-            val track = TRACK_WIDTH.toPx()
-            val thumbX = inset + step * index
-            drawLine(empty, Offset(inset, y), Offset(size.width - inset, y), track, StrokeCap.Round)
-            drawLine(filled, Offset(inset, y), Offset(thumbX, y), track, StrokeCap.Round)
-            for (stop in 0 until stops) drawCircle(if (stop <= index) filled else empty, STOP_RADIUS.toPx(), Offset(inset + step * stop, y))
-            drawCircle(thumb, THUMB_RADIUS.toPx(), Offset(thumbX, y))
-        }
+        StopSlider(values.size, index, label, text, colors, onChoose, Modifier.weight(1f))
         BasicText(
             text = text,
             modifier = Modifier.padding(horizontal = SIDE_INSET).width(valueWidth),
             style = valueStyle,
             maxLines = 1
         )
+    }
+}
+
+@Composable
+private fun StopSlider(
+    stops: Int,
+    index: Int,
+    label: String,
+    stateText: String?,
+    colors: ReeColors,
+    onChoose: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+    onStart: () -> Unit = {},
+    onEnd: () -> Unit = {}
+) {
+    val thumb = colors.switchThumbColor.of(ReeColorState.CHECKED)
+    val filled = colors.switchTrackColor.of(ReeColorState.CHECKED)
+    val empty = colors.switchTrackColor.default
+    Canvas(
+        modifier
+            .height(ROW_HEIGHT)
+            .pointerInput(stops) {
+                detectTapGestures { onChoose(stopAt(it.x, size.width, stops, STOP_INSET.toPx())) }
+            }
+            .pointerInput(stops) {
+                detectHorizontalDragGestures(onDragStart = { onStart() }, onDragEnd = onEnd, onDragCancel = onEnd) { change, _ ->
+                    change.consume()
+                    onChoose(stopAt(change.position.x, size.width, stops, STOP_INSET.toPx()))
+                }
+            }
+            .semantics {
+                contentDescription = label
+                if (stateText != null) stateDescription = stateText
+                progressBarRangeInfo = ProgressBarRangeInfo(index.toFloat(), 0f..(stops - 1).toFloat(), stops - 2)
+                setProgress { target ->
+                    onChoose(target.roundToInt().coerceIn(0, stops - 1))
+                    true
+                }
+            }
+    ) {
+        val inset = STOP_INSET.toPx()
+        val step = (size.width - inset * 2) / (stops - 1)
+        val y = size.height / 2
+        val track = TRACK_WIDTH.toPx()
+        val thumbX = inset + step * index
+        drawLine(empty, Offset(inset, y), Offset(size.width - inset, y), track, StrokeCap.Round)
+        drawLine(filled, Offset(inset, y), Offset(thumbX, y), track, StrokeCap.Round)
+        for (stop in 0 until stops) drawCircle(if (stop <= index) filled else empty, STOP_RADIUS.toPx(), Offset(inset + step * stop, y))
+        drawCircle(thumb, THUMB_RADIUS.toPx(), Offset(thumbX, y))
     }
 }
 
@@ -512,8 +560,11 @@ private val SLIDER_GAP = 16.dp
 private val STOP_RADIUS = 4.dp
 private val STOP_INSET = SLIDER_GAP - SIDE_INSET + STOP_RADIUS
 private val THUMB_RADIUS = 10.dp
+private val WEIGHT_END = SIDE_INSET - (STOP_INSET - THUMB_RADIUS)
 private val TRACK_WIDTH = 4.dp
 private val VALUE_TEXT_SIZE = 16.dp
+private val WEIGHT_SAMPLE_SIZE = 24.dp
+private const val WEIGHT_SAMPLE = "Aa"
 private val CHECK_GAP = 8.dp
 private val CHECK_SIZE = 24.dp
 private val STYLE_GAP = 32.dp

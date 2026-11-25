@@ -6,10 +6,11 @@ enum class ViewerMarkKind {
     TEXT_HIGHLIGHT,
     UNDERLINE,
     STRIKETHROUGH,
-    SIGNATURE;
+    SIGNATURE,
+    TYPED;
 
     internal val fills: Boolean
-        get() = this == TEXT_HIGHLIGHT || this == UNDERLINE || this == STRIKETHROUGH
+        get() = this == TEXT_HIGHLIGHT || this == UNDERLINE || this == STRIKETHROUGH || this == TYPED
 
     internal val translucent: Boolean
         get() = this == HIGHLIGHTER || this == TEXT_HIGHLIGHT
@@ -48,7 +49,18 @@ class ViewerMarkPath(val verbs: ByteArray, val points: FloatArray) {
     }
 }
 
-class ViewerMark(val page: Int, val kind: ViewerMarkKind, val color: Int, val width: Float, val path: ViewerMarkPath)
+class ViewerMark(
+    val page: Int,
+    val kind: ViewerMarkKind,
+    val color: Int,
+    val width: Float,
+    val path: ViewerMarkPath,
+    val text: ViewerMarkText? = null
+) {
+    init {
+        require((kind == ViewerMarkKind.TYPED) == (text != null)) { "Only a typed mark carries text" }
+    }
+}
 
 class ViewerSavedMark(
     val id: String,
@@ -57,7 +69,8 @@ class ViewerSavedMark(
     val color: Int,
     val width: Float,
     val path: ViewerMarkPath,
-    val clip: FloatArray? = null
+    val clip: FloatArray? = null,
+    val text: ViewerMarkText? = null
 )
 
 class ViewerPageMarks(val marks: List<ViewerSavedMark>, val streams: IntArray) {
@@ -90,7 +103,8 @@ class ViewerEditPlan(
     val added: Map<Int, List<ViewerMark>>,
     val erased: Map<Int, Set<String>>,
     val blankPages: Set<Int>,
-    val blankAll: Boolean
+    val blankAll: Boolean,
+    val erasedPages: Set<Int> = emptySet()
 ) {
     val isEmpty: Boolean
         get() = added.isEmpty() && erased.isEmpty() && blankPages.isEmpty() && !blankAll

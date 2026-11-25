@@ -85,6 +85,12 @@ We publish the source code so that others can use it, modify it and learn from i
   on text the highlighter follows the text lines
 - Underline (straight or wavy) and strikethrough on text, in the pen's colors, each tool remembering its own color;
   the line follows the text line, and its thickness follows the letter size
+- Typed text: tap the page to type new text in Roboto, in five weights and the pen's colors (the last used
+  color and weight are remembered); the view zooms in until the text is readable, and new text always starts
+  at 12 pt, with the size shown above the box; move the box, resize it proportionally by its bottom-right
+  corner, and touch it again later to edit it
+- After saving, the typed text is real text in the PDF with an embedded Roboto subset, so it can be searched,
+  selected and copied; only characters that Roboto has can be typed (Latin, Greek and Cyrillic)
 - Vector signature: draw up to two signatures, each with its own line width, and keep them in the app;
   place the chosen one with a tap, in the pen's colors with its own remembered color, move it, resize it
   proportionally by its bottom-right corner, and touch it again later to adjust it

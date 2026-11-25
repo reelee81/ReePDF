@@ -1,6 +1,7 @@
 package hu.reelee81.reepdf.viewer
 
 import kotlin.math.abs
+import kotlin.math.min
 
 class ViewerViewport private constructor(
     val width: Int,
@@ -57,12 +58,19 @@ class ViewerViewport private constructor(
         return target
     }
 
+    fun readableZoom(textSize: Float, readable: Float, layout: ViewerPageLayout): Float? {
+        if (!(textSize > 0f) || !(readable > 0f)) return null
+        val target = min(readable / textSize, limits.max(width, layout, gutter))
+        return if (target > zoom * READABLE_STEP) target else null
+    }
+
     companion object {
         const val MIN_ZOOM = 0.5f
         const val MAX_ZOOM = 25f
         const val DOUBLE_TAP_FIT_FACTOR = 2f
         const val DOUBLE_TAP_EPSILON = 0.25f
         const val DOUBLE_TAP_ANIMATION_MS = 200L
+        const val READABLE_STEP = 1.1f
 
         fun fitWidthZoom(width: Int, layout: ViewerPageLayout, gutter: Double = 0.0): Float {
             val fit = ((width - 2 * gutter) / layout.maxWidth).toFloat()

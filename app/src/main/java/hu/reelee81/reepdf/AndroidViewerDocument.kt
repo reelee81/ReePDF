@@ -6,6 +6,7 @@ import hu.reelee81.reepdf.pdf.PdfMark
 import hu.reelee81.reepdf.pdf.PdfMarkKind
 import hu.reelee81.reepdf.pdf.PdfMarkPath
 import hu.reelee81.reepdf.pdf.PdfMarkSave
+import hu.reelee81.reepdf.pdf.PdfMarkText
 import hu.reelee81.reepdf.pdf.PdfRasterTarget
 import hu.reelee81.reepdf.pdf.PdfSearchCounter
 import hu.reelee81.reepdf.pdf.PdfStreamEdit
@@ -14,8 +15,10 @@ import hu.reelee81.reepdf.pdf.PdfViewerDocument
 import hu.reelee81.reepdf.viewer.ViewerDocument
 import hu.reelee81.reepdf.viewer.ViewerEditPlan
 import hu.reelee81.reepdf.viewer.ViewerImage
+import hu.reelee81.reepdf.viewer.ViewerMark
 import hu.reelee81.reepdf.viewer.ViewerMarkKind
 import hu.reelee81.reepdf.viewer.ViewerMarkPath
+import hu.reelee81.reepdf.viewer.ViewerMarkText
 import hu.reelee81.reepdf.viewer.ViewerMarkSource
 import hu.reelee81.reepdf.viewer.ViewerPageMarks
 import hu.reelee81.reepdf.viewer.ViewerPageSizes
@@ -82,7 +85,7 @@ class AndroidViewerDocument private constructor(
                 val mark = found.mark
                 ViewerSavedMark(
                     mark.id, found.stream, ViewerMarkKind.valueOf(mark.kind.name), mark.color, mark.width,
-                    ViewerMarkPath(mark.path.verbs, mark.path.points), found.clip
+                    ViewerMarkPath(mark.path.verbs, mark.path.points), found.clip, mark.text?.toViewer()
                 )
             },
             marks.streams
@@ -96,16 +99,14 @@ class AndroidViewerDocument private constructor(
         val added = plan.added.mapValues { (page, marks) ->
             val toPage = toPages[page] ?: document.pageMarks(page).toPage.also { toPages[page] = it }
             val toUser = checkNotNull(PdfEditProjection.inverse(toPage)) { "Page ${page + 1} has no usable transform" }
-            marks.map { mark ->
-                PdfMark(PdfMark.newId(), PdfMarkKind.valueOf(mark.kind.name), mark.color, mark.width, PdfMarkPath(mark.path.verbs, mark.path.points))
-                    .transformed(toUser)
-            }
+            marks.map { mark -> mark.toPdf(toUser) }
         }
         return PdfMarkSave.Plan(
             added = added,
             streams = plan.erased.mapValues { (_, ids) -> PdfStreamEdit(false, ids) },
             blankPages = plan.blankPages,
-            blankAll = plan.blankAll
+            blankAll = plan.blankAll,
+            editedPages = plan.erasedPages
         )
     }
 
@@ -123,6 +124,17 @@ class AndroidViewerDocument private constructor(
     }
 
     companion object {
+        fun ViewerMark.toPdf(toUser: DoubleArray): PdfMark {
+            val typed = text?.let { PdfMarkText(it.text, it.weight, it.size, DoubleArray(it.matrix.size) { index -> it.matrix[index].toDouble() }) }
+            return PdfMark(PdfMark.newId(), PdfMarkKind.valueOf(kind.name), color, width, PdfMarkPath(path.verbs, path.points), typed)
+                .transformed(toUser)
+        }
+
+        fun PdfMarkText.toViewer(): ViewerMarkText? {
+            val values = FloatArray(matrix.size) { matrix[it].toFloat() }
+            return if (values.all { it.isFinite() }) ViewerMarkText(text, weight, size, values) else null
+        }
+
         suspend fun open(path: String): AndroidViewerDocument {
             val ownBytes = AtomicLong()
             val nativeBytes = AndroidPageRaster.nativeBytes(ownBytes)

@@ -31,12 +31,16 @@ class ViewerEditSession {
             else -> erased[stream]?.let { ViewerStreamEdit(false, it) } ?: ViewerStreamEdit.ORIGINAL
         }
 
-        fun plan(): ViewerEditPlan = ViewerEditPlan(
-            added = added,
-            erased = erased.filterKeys { stream -> erasedPages[stream]?.let { !isBlank(it) } ?: true },
-            blankPages = if (blankAll) emptySet() else blankPages,
-            blankAll = blankAll
-        )
+        fun plan(): ViewerEditPlan {
+            val kept = erased.filterKeys { stream -> erasedPages[stream]?.let { !isBlank(it) } ?: true }
+            return ViewerEditPlan(
+                added = added,
+                erased = kept,
+                blankPages = if (blankAll) emptySet() else blankPages,
+                blankAll = blankAll,
+                erasedPages = kept.keys.mapNotNullTo(LinkedHashSet()) { erasedPages[it] }
+            )
+        }
 
         val hasChanges: Boolean
             get() = !plan().isEmpty
@@ -58,6 +62,8 @@ class ViewerEditSession {
     internal fun redoActions(): List<Action> = actions.subList(done, actions.size).toList()
 
     internal fun refsOf(action: Action): IntArray = refsOf(actions, done, action)
+
+    internal fun refsOf(marks: Set<ViewerMark>): IntArray = refsOf(actions, done, marks)
 
     internal fun records(): List<ViewerEditRecord> {
         val records = ArrayList<ViewerEditRecord>(actions.size + 1)
@@ -151,6 +157,10 @@ class ViewerEditSession {
                 is Action.Replace -> action.marks
                 else -> return IntArray(0)
             }
+            return refsOf(actions, upTo, marks)
+        }
+
+        fun refsOf(actions: List<Action>, upTo: Int, marks: Set<ViewerMark>): IntArray {
             val refs = ArrayList<Int>(marks.size)
             for (mark in marks) {
                 for (index in upTo - 1 downTo 0) {

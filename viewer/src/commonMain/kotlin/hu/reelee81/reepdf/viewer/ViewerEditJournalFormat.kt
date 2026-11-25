@@ -2,7 +2,8 @@ package hu.reelee81.reepdf.viewer
 
 object ViewerEditJournalFormat {
     private val MAGIC = byteArrayOf(0x52, 0x45, 0x45, 0x4A)
-    private const val VERSION = 1
+    private const val VERSION = 2
+    private const val OLDEST_VERSION = 1
     private const val HEAD = 9
     private const val FRAME = 5
     private const val CHECK = 4
@@ -19,6 +20,9 @@ object ViewerEditJournalFormat {
     private const val PAD_WIDTH = 8
     private const val PAD_CLEAR = 9
     private const val PAD_CLOSE = 10
+    private const val TYPING = 11
+    private const val TYPED_STEP = 12
+    private const val MATRIX = 6
 
     internal const val MOVE_WEIGHT = 13L
 
@@ -38,7 +42,18 @@ object ViewerEditJournalFormat {
         out.byte(0)
         out.int(0)
         val type = when (record) {
-            is ViewerEditRecord.Performed -> performed(out, record)
+            is ViewerEditRecord.Performed -> {
+                val box = record.typing
+                if (box == null) {
+                    performed(out, record)
+                } else {
+                    val at = out.size
+                    out.byte(0)
+                    out.data[at] = performed(out, record).toByte()
+                    typing(out, box)
+                    TYPED_STEP
+                }
+            }
             is ViewerEditRecord.Moved -> {
                 out.int(record.position)
                 POSITION
@@ -60,6 +75,10 @@ object ViewerEditJournalFormat {
             }
             ViewerEditRecord.PadCleared -> PAD_CLEAR
             ViewerEditRecord.PadClosed -> PAD_CLOSE
+            is ViewerEditRecord.Typing -> {
+                typing(out, record)
+                TYPING
+            }
         }
         out.data[0] = type.toByte()
         out.putInt(1, out.size - FRAME)
@@ -71,7 +90,7 @@ object ViewerEditJournalFormat {
         val source = Source(input)
         val head = ByteArray(HEAD)
         if (source.fill(head, 0, HEAD) < HEAD) return ViewerEditJournalRead.Unreadable
-        if (!MAGIC.indices.all { head[it] == MAGIC[it] } || head[MAGIC.size].toInt() != VERSION) return ViewerEditJournalRead.Unreadable
+        if (!MAGIC.indices.all { head[it] == MAGIC[it] } || head[MAGIC.size].toInt() !in OLDEST_VERSION..VERSION) return ViewerEditJournalRead.Unreadable
         val length = intAt(head, MAGIC.size + 1)
         if (length !in 0..MAX_IDENTITY) return ViewerEditJournalRead.Unreadable
         val name = ByteArray(length + CHECK)
@@ -91,15 +110,17 @@ object ViewerEditJournalFormat {
     }
 
     internal fun weight(record: ViewerEditRecord): Long = when (record) {
-        is ViewerEditRecord.Performed -> weight(record.action)
+        is ViewerEditRecord.Performed -> weight(record.action) + (record.typing?.let { weight(it) - FRAME - CHECK + 1L } ?: 0L)
         is ViewerEditRecord.Moved -> MOVE_WEIGHT
         is ViewerEditRecord.PadOpened -> 21L + record.strokes.sumOf { 4L + it.size * 4L }
         is ViewerEditRecord.PadStroke -> 13L + record.points.size * 4L
         is ViewerEditRecord.PadWidth -> 13L
         ViewerEditRecord.PadCleared, ViewerEditRecord.PadClosed -> 9L
+        is ViewerEditRecord.Typing -> 10L + (record.draft?.let { weight(it.mark) + 17L + record.refs.size * 4L + weight(it.saved) } ?: 0L)
     }
 
-    private fun weight(mark: ViewerMark): Long = 25L + mark.path.verbs.size + mark.path.points.size * 4L
+    private fun weight(mark: ViewerMark): Long =
+        25L + mark.path.verbs.size + mark.path.points.size * 4L + (mark.text?.let { 4L + it.text.length * 3L + 8L + MATRIX * 4L } ?: 0L)
 
     private fun weight(saved: Set<ViewerEditSession.SavedRef>): Long = 4L + saved.sumOf { 12L + it.id.length }
 
@@ -130,6 +151,19 @@ object ViewerEditJournalFormat {
         }
     }
 
+    private fun typing(out: JournalBytes, record: ViewerEditRecord.Typing) {
+        val draft = record.draft
+        out.byte(if (draft == null) 0 else 1)
+        if (draft == null) return
+        mark(out, draft.mark)
+        out.int(draft.cursor)
+        out.float(draft.pageWidth)
+        out.float(draft.pageHeight)
+        out.byte(if (draft.changed) 1 else 0)
+        refs(out, record.refs)
+        saved(out, draft.saved)
+    }
+
     private fun mark(out: JournalBytes, mark: ViewerMark) {
         out.int(mark.page)
         out.byte(code(mark.kind))
@@ -138,6 +172,11 @@ object ViewerEditJournalFormat {
         out.int(mark.path.verbs.size)
         out.bytes(mark.path.verbs)
         out.floats(mark.path.points)
+        val text = mark.text ?: return
+        out.string(text.text)
+        out.int(text.weight)
+        out.float(text.size)
+        for (value in text.matrix) out.float(value)
     }
 
     private fun refs(out: JournalBytes, refs: IntArray) {
@@ -161,6 +200,7 @@ object ViewerEditJournalFormat {
         ViewerMarkKind.UNDERLINE -> 3
         ViewerMarkKind.STRIKETHROUGH -> 4
         ViewerMarkKind.SIGNATURE -> 5
+        ViewerMarkKind.TYPED -> 6
     }
 
     private fun kind(code: Int): ViewerMarkKind = when (code) {
@@ -170,6 +210,7 @@ object ViewerEditJournalFormat {
         3 -> ViewerMarkKind.UNDERLINE
         4 -> ViewerMarkKind.STRIKETHROUGH
         5 -> ViewerMarkKind.SIGNATURE
+        6 -> ViewerMarkKind.TYPED
         else -> throw IllegalArgumentException("Unknown mark kind $code")
     }
 
@@ -194,29 +235,17 @@ object ViewerEditJournalFormat {
 
     private fun apply(type: Int, cursor: Cursor, builder: Builder) {
         when (type) {
-            ADD -> {
-                val mark = cursor.mark()
+            ADD, ERASE, BLANK, REPLACE -> {
+                val action = cursor.action(type, builder)
                 cursor.done()
-                builder.perform(ViewerEditSession.Action.Add(mark))
+                builder.perform(action)
             }
-            ERASE -> {
-                val marks = cursor.refs(builder)
-                val saved = cursor.saved()
+            TYPED_STEP -> {
+                val action = cursor.action(cursor.byte(), builder)
+                val open = cursor.typing(builder, action)
                 cursor.done()
-                builder.perform(ViewerEditSession.Action.Erase(marks, saved))
-            }
-            BLANK -> {
-                val all = cursor.byte() == 1
-                val pages = if (all) null else cursor.ints().toSet()
-                cursor.done()
-                builder.perform(ViewerEditSession.Action.Blank(pages))
-            }
-            REPLACE -> {
-                val marks = cursor.refs(builder)
-                val saved = cursor.saved()
-                val mark = cursor.mark()
-                cursor.done()
-                builder.perform(ViewerEditSession.Action.Replace(marks, saved, mark))
+                builder.perform(action)
+                builder.typing = open
             }
             POSITION -> {
                 val position = cursor.int()
@@ -251,6 +280,11 @@ object ViewerEditJournalFormat {
                 cursor.done()
                 builder.pad = null
             }
+            TYPING -> {
+                val open = cursor.typing(builder, null)
+                cursor.done()
+                builder.typing = open
+            }
             else -> throw IllegalArgumentException("Unknown record $type")
         }
     }
@@ -263,6 +297,7 @@ object ViewerEditJournalFormat {
         val actions = ArrayList<ViewerEditSession.Action>()
         var position = 0
         var pad: PadBuilder? = null
+        var typing: ViewerTypingDraft? = null
 
         fun perform(action: ViewerEditSession.Action) {
             while (actions.size > position) actions.removeAt(actions.lastIndex)
@@ -270,9 +305,14 @@ object ViewerEditJournalFormat {
             position++
         }
 
-        fun mark(ref: Int): ViewerMark {
-            require(ref in 0 until position) { "Invalid mark reference $ref" }
-            return when (val action = actions[ref]) {
+        fun mark(ref: Int, pending: ViewerEditSession.Action?): ViewerMark {
+            val action = if (pending != null && ref == position) {
+                pending
+            } else {
+                require(ref in 0 until position) { "Invalid mark reference $ref" }
+                actions[ref]
+            }
+            return when (action) {
                 is ViewerEditSession.Action.Add -> action.mark
                 is ViewerEditSession.Action.Replace -> action.mark
                 else -> throw IllegalArgumentException("Step $ref adds no mark")
@@ -283,7 +323,8 @@ object ViewerEditJournalFormat {
             actions.toList(),
             position,
             pad?.let { ViewerPadRestore(it.slot, it.width, it.strokes.toList()) },
-            complete
+            complete,
+            typing
         )
     }
 
@@ -356,12 +397,46 @@ object ViewerEditJournalFormat {
             at += verbs.size
             val points = floats()
             require(width.isFinite() && width >= 0f && points.all { it.isFinite() }) { "Invalid mark values" }
-            return ViewerMark(page, kind, color, width, ViewerMarkPath(verbs, points))
+            val text = if (kind == ViewerMarkKind.TYPED) ViewerMarkText(string(), int(), float(), FloatArray(MATRIX) { float() }) else null
+            return ViewerMark(page, kind, color, width, ViewerMarkPath(verbs, points), text)
         }
 
-        fun refs(builder: Builder): Set<ViewerMark> {
+        fun refs(builder: Builder, pending: ViewerEditSession.Action? = null): Set<ViewerMark> {
             val refs = ints()
-            return refs.mapTo(LinkedHashSet()) { builder.mark(it) }
+            return refs.mapTo(LinkedHashSet()) { builder.mark(it, pending) }
+        }
+
+        fun action(type: Int, builder: Builder): ViewerEditSession.Action = when (type) {
+            ADD -> ViewerEditSession.Action.Add(mark())
+            ERASE -> {
+                val marks = refs(builder)
+                ViewerEditSession.Action.Erase(marks, saved())
+            }
+            BLANK -> {
+                val all = byte() == 1
+                ViewerEditSession.Action.Blank(if (all) null else ints().toSet())
+            }
+            REPLACE -> {
+                val marks = refs(builder)
+                val saved = saved()
+                ViewerEditSession.Action.Replace(marks, saved, mark())
+            }
+            else -> throw IllegalArgumentException("Unknown step $type")
+        }
+
+        fun typing(builder: Builder, pending: ViewerEditSession.Action?): ViewerTypingDraft? {
+            if (byte() != 1) return null
+            val mark = mark()
+            val caret = int()
+            val pageWidth = float()
+            val pageHeight = float()
+            val changed = byte() == 1
+            val marks = refs(builder, pending)
+            val saved = saved()
+            val text = requireNotNull(mark.text) { "An open text box needs a typed mark" }
+            require(caret in 0..text.text.length) { "Invalid caret $caret" }
+            require(pageWidth > 0f && pageHeight > 0f && pageWidth.isFinite() && pageHeight.isFinite()) { "Invalid page size" }
+            return ViewerTypingDraft(mark, caret, pageWidth, pageHeight, marks, saved, changed)
         }
 
         fun saved(): Set<ViewerEditSession.SavedRef> {

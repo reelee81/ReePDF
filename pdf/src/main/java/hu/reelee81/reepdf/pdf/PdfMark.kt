@@ -10,10 +10,11 @@ enum class PdfMarkKind(internal val code: String) {
     TEXT_HIGHLIGHT("Text"),
     UNDERLINE("Under"),
     STRIKETHROUGH("Strike"),
-    SIGNATURE("Sign");
+    SIGNATURE("Sign"),
+    TYPED("Typed");
 
     internal val fills: Boolean
-        get() = this == TEXT_HIGHLIGHT || this == UNDERLINE || this == STRIKETHROUGH
+        get() = this == TEXT_HIGHLIGHT || this == UNDERLINE || this == STRIKETHROUGH || this == TYPED
 
     internal val translucent: Boolean
         get() = this == HIGHLIGHTER || this == TEXT_HIGHLIGHT
@@ -28,20 +29,72 @@ class PdfMark(
     val kind: PdfMarkKind,
     val color: Int,
     val width: Float,
-    val path: PdfMarkPath
+    val path: PdfMarkPath,
+    val text: PdfMarkText? = null
 ) {
     init {
         require(id.isNotEmpty() && id.all { it in 'a'..'z' || it in '0'..'9' }) { "Invalid mark id $id" }
         require(width >= 0f && width.isFinite()) { "Invalid mark width $width" }
+        require((kind == PdfMarkKind.TYPED) == (text != null)) { "Only a typed mark carries text" }
     }
 
     fun transformed(matrix: DoubleArray): PdfMark =
-        PdfMark(id, kind, color, (width * PdfMarkPath.scaleOf(matrix)).toFloat(), path.transformed(matrix))
+        PdfMark(id, kind, color, (width * PdfMarkPath.scaleOf(matrix)).toFloat(), path.transformed(matrix), text?.transformed(matrix))
 
     companion object {
         const val ALPHA = 0.4f
 
         fun newId(): String = java.lang.Long.toUnsignedString(UUID.randomUUID().mostSignificantBits, 36)
+    }
+}
+
+class PdfMarkText(val text: String, val weight: Int, val size: Float, val matrix: DoubleArray) {
+    init {
+        require(weight in WEIGHTS) { "Invalid text weight $weight" }
+        require(size > 0f && size.isFinite()) { "Invalid text size $size" }
+        require(matrix.size == 6 && matrix.all { it.isFinite() }) { "Invalid text matrix" }
+        require(text.codePointCount(0, text.length) <= MAX_CHARS) { "The text is longer than $MAX_CHARS characters" }
+    }
+
+    val lines: List<String>
+        get() = text.split('\n')
+
+    fun transformed(by: DoubleArray): PdfMarkText = placed(text, weight, size.toDouble(), PdfMatrix.concat(matrix, by))
+
+    fun boxes(widths: DoubleArray): PdfMarkPath {
+        val builder = PdfMarkPath.Builder()
+        val line = LINE_HEIGHT * size
+        for ((index, width) in widths.withIndex()) {
+            if (width <= 0.0) continue
+            val top = -index * line
+            val bottom = top - line
+            val right = width * size
+            val corners = doubleArrayOf(0.0, top, right, top, right, bottom, 0.0, bottom)
+            for (corner in 0 until 4) {
+                val x = corners[corner * 2]
+                val y = corners[corner * 2 + 1]
+                val px = (matrix[0] * x + matrix[2] * y + matrix[4]).toFloat()
+                val py = (matrix[1] * x + matrix[3] * y + matrix[5]).toFloat()
+                if (corner == 0) builder.moveTo(px, py) else builder.lineTo(px, py)
+            }
+            builder.close()
+        }
+        return builder.build()
+    }
+
+    companion object {
+        val WEIGHTS = intArrayOf(400, 500, 600, 700, 900)
+        const val UNITS_PER_EM = 2048.0
+        const val ASCENT = 1900.0 / UNITS_PER_EM
+        const val LINE_HEIGHT = 2400.0 / UNITS_PER_EM
+        const val MAX_CHARS = 5000
+
+        fun placed(text: String, weight: Int, size: Double, matrix: DoubleArray): PdfMarkText {
+            val scale = PdfMarkPath.scaleOf(matrix)
+            if (!(scale > 1e-9) || !scale.isFinite()) return PdfMarkText(text, weight, size.toFloat(), matrix)
+            val unit = doubleArrayOf(matrix[0] / scale, matrix[1] / scale, matrix[2] / scale, matrix[3] / scale, matrix[4], matrix[5])
+            return PdfMarkText(text, weight, (size * scale).toFloat(), unit)
+        }
     }
 }
 

@@ -396,6 +396,7 @@ object PdfEditProjection {
         layer.remove(PdfName.Filter)
         layer.remove(PdfName.DecodeParms)
         layer.setData(content)
+        PdfMarkSave.pruneFonts(layer, PdfMarkContent.fontNames(content), ownOnly = false)
     }
 
     private fun removeLayer(page: PdfPage) {

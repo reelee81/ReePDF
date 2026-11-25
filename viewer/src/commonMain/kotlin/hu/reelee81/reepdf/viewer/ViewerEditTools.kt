@@ -99,6 +99,8 @@ object ViewerEditPalettes {
 
     val signature = ViewerEditPalette(penColors, FloatArray(0), defaultColor = 1, defaultWidth = 0)
 
+    val text = ViewerEditPalette(penColors, ViewerMarkText.WEIGHTS.map { it.toFloat() }.toFloatArray(), defaultColor = 0, defaultWidth = 0)
+
     val highlighter = ViewerEditPalette(
         listOf(
             0x000000 to Res.string.mark_color_black,
@@ -130,7 +132,7 @@ object ViewerEditPalettes {
 }
 
 enum class ViewerEditTool(val enabled: Boolean) {
-    TEXT(false),
+    TEXT(true),
     UNDERLINE(true),
     STRIKETHROUGH(true),
     PEN(true),
@@ -145,6 +147,7 @@ enum class ViewerEditTool(val enabled: Boolean) {
             PEN -> ViewerEditPalettes.pen
             HIGHLIGHTER -> ViewerEditPalettes.highlighter
             SIGNATURE -> ViewerEditPalettes.signature
+            TEXT -> ViewerEditPalettes.text
             else -> null
         }
 
@@ -170,7 +173,9 @@ data class ViewerEditSettings(
     val undoPanelTop: Boolean = false,
     val signatureColor: Int = ViewerEditPalettes.signature.defaultColor,
     val signatureWidth: Int = ViewerSignature.DEFAULT_WIDTH,
-    val signatureSlot: Int = 0
+    val signatureSlot: Int = 0,
+    val textColor: Int = ViewerEditPalettes.text.defaultColor,
+    val textWeight: Int = ViewerEditPalettes.text.defaultWidth
 ) {
     val swatchTool: ViewerEditTool
         get() = if (tool.palette != null) tool else drawingTool
@@ -180,14 +185,19 @@ data class ViewerEditSettings(
         ViewerEditTool.UNDERLINE -> underlineColor
         ViewerEditTool.STRIKETHROUGH -> strikethroughColor
         ViewerEditTool.SIGNATURE -> signatureColor
+        ViewerEditTool.TEXT -> textColor
         else -> penColor
     }
 
     fun widthIndex(tool: ViewerEditTool): Int = when (drawing(tool)) {
         ViewerEditTool.HIGHLIGHTER -> highlighterWidth
         ViewerEditTool.PEN -> penWidth
+        ViewerEditTool.TEXT -> textWeight
         else -> 0
     }
+
+    val weight: Int
+        get() = ViewerMarkText.WEIGHTS.getOrElse(textWeight) { ViewerMarkText.DEFAULT_WEIGHT }
 
     fun color(tool: ViewerEditTool): Int = paletteOf(tool).color(colorIndex(tool))
 
@@ -205,13 +215,18 @@ data class ViewerEditSettings(
             ViewerEditTool.UNDERLINE -> copy(underlineColor = index)
             ViewerEditTool.STRIKETHROUGH -> copy(strikethroughColor = index)
             ViewerEditTool.SIGNATURE -> copy(signatureColor = index)
+            ViewerEditTool.TEXT -> copy(textColor = index)
             else -> copy(penColor = index)
         }
     }
 
     fun withWidth(tool: ViewerEditTool, index: Int): ViewerEditSettings {
         if (index !in paletteOf(tool).widths.indices) return this
-        return if (drawing(tool) == ViewerEditTool.HIGHLIGHTER) copy(highlighterWidth = index) else copy(penWidth = index)
+        return when (drawing(tool)) {
+            ViewerEditTool.HIGHLIGHTER -> copy(highlighterWidth = index)
+            ViewerEditTool.TEXT -> copy(textWeight = index)
+            else -> copy(penWidth = index)
+        }
     }
 
     fun sanitized(): ViewerEditSettings {
@@ -220,6 +235,7 @@ data class ViewerEditSettings(
         val underline = ViewerEditPalettes.underline
         val strikethrough = ViewerEditPalettes.strikethrough
         val signature = ViewerEditPalettes.signature
+        val text = ViewerEditPalettes.text
         return copy(
             tool = tool.takeIf { it.enabled } ?: ViewerEditTool.PEN,
             drawingTool = drawingTool.takeIf { it.palette != null } ?: ViewerEditTool.PEN,
@@ -231,7 +247,9 @@ data class ViewerEditSettings(
             strikethroughColor = strikethroughColor.takeIf { it in 0 until strikethrough.size } ?: strikethrough.defaultColor,
             signatureColor = signatureColor.takeIf { it in 0 until signature.size } ?: signature.defaultColor,
             signatureWidth = signatureWidth.takeIf { it in ViewerSignature.WIDTHS.indices } ?: ViewerSignature.DEFAULT_WIDTH,
-            signatureSlot = signatureSlot.takeIf { it in 0 until ViewerSignature.SLOTS } ?: 0
+            signatureSlot = signatureSlot.takeIf { it in 0 until ViewerSignature.SLOTS } ?: 0,
+            textColor = textColor.takeIf { it in 0 until text.size } ?: text.defaultColor,
+            textWeight = textWeight.takeIf { it in text.widths.indices } ?: text.defaultWidth
         )
     }
 
