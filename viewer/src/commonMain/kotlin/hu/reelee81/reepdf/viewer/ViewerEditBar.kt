@@ -41,6 +41,7 @@ import hu.reelee81.reepdf.viewer.resources.edit_color_palette
 import hu.reelee81.reepdf.viewer.resources.edit_erase_all
 import hu.reelee81.reepdf.viewer.resources.edit_erase_visible
 import hu.reelee81.reepdf.viewer.resources.edit_eraser
+import hu.reelee81.reepdf.viewer.resources.edit_form_marks
 import hu.reelee81.reepdf.viewer.resources.edit_highlighter
 import hu.reelee81.reepdf.viewer.resources.edit_pen
 import hu.reelee81.reepdf.viewer.resources.edit_scroll
@@ -84,9 +85,9 @@ internal fun ViewerEditBar(
             }
         }
         val groupActive = settings.tool in GROUP_TOOLS
-        val (_, groupLabel, groupIcon) = TOOLS.first { it.first == (if (groupActive) settings.tool else settings.drawingTool) }
+        val groupTool = if (groupActive) settings.tool else settings.drawingTool
         val open = editor.rowOpen
-        BarItem(ViewerEditBarLayout.GROUP, width, groupLabel, selected = groupActive, onClick = editor::tapGroup) {
+        BarItem(ViewerEditBarLayout.GROUP, width, toolLabel(groupTool), selected = groupActive, onClick = editor::tapGroup) {
             if (open) {
                 val tab = viewerColors.activeTool
                 Canvas(Modifier.fillMaxSize()) {
@@ -103,13 +104,13 @@ internal fun ViewerEditBar(
             } else if (groupActive) {
                 Box(Modifier.size(ACTIVE_SIZE).background(viewerColors.activeTool, CircleShape))
             }
-            BarIcon(groupIcon, if (open || groupActive) viewerColors.activeToolIcon else iconColor)
+            BarIcon(toolIcon(groupTool, editor), if (open || groupActive) viewerColors.activeToolIcon else iconColor)
         }
-        val (eraser, eraserLabel, eraserIcon) = TOOLS.first { it.first == ViewerEditTool.ERASER }
+        val eraser = ViewerEditTool.ERASER
         val erasing = settings.tool == eraser
-        BarItem(ViewerEditBarLayout.ERASER, width, eraserLabel, selected = erasing, onClick = { editor.tapTool(eraser) }) {
+        BarItem(ViewerEditBarLayout.ERASER, width, toolLabel(eraser), selected = erasing, onClick = { editor.tapTool(eraser) }) {
             if (erasing) Box(Modifier.size(ACTIVE_SIZE).background(viewerColors.activeTool, CircleShape))
-            BarIcon(eraserIcon, if (erasing) viewerColors.activeToolIcon else iconColor)
+            BarIcon(toolIcon(eraser, editor), if (erasing) viewerColors.activeToolIcon else iconColor)
         }
         BarItem(ViewerEditBarLayout.ERASE_VISIBLE, width, Res.string.edit_erase_visible, onClick = onEraseVisible) { BarIcon(ViewerIcons.eraseOnePage, iconColor) }
         BarItem(ViewerEditBarLayout.ERASE_ALL, width, Res.string.edit_erase_all, onClick = onEraseAll) { BarIcon(ViewerIcons.eraseAllPages, iconColor) }
@@ -128,10 +129,9 @@ internal fun ViewerToolRow(editor: ViewerEditor, colors: ReeColors, viewerColors
             .pointerInput(Unit) { detectTapGestures { } }
     ) {
         val shown = if (settings.tool in GROUP_TOOLS) settings.tool else settings.drawingTool
-        for ((tool, label, icon) in TOOLS) {
-            if (tool !in GROUP_TOOLS) continue
+        for (tool in GROUP_TOOLS) {
             val chosen = tool == shown
-            val description = stringResource(label)
+            val description = stringResource(toolLabel(tool))
             val center = ViewerEditBarLayout.rowCenter(tool, width.value)
             val press = if (tool.enabled) {
                 Modifier.clickable(interactionSource = null, indication = null, role = Role.Button) { editor.tapTool(tool) }
@@ -152,7 +152,7 @@ internal fun ViewerToolRow(editor: ViewerEditor, colors: ReeColors, viewerColors
                 contentAlignment = Alignment.Center
             ) {
                 if (chosen) Box(Modifier.size(ACTIVE_SIZE).background(colors.pdfViewerSbBgColor.default, CircleShape))
-                BarIcon(icon, if (chosen) colors.toolbarNavigationIconColor.default else viewerColors.activeToolIcon)
+                BarIcon(toolIcon(tool, editor), if (chosen) colors.toolbarNavigationIconColor.default else viewerColors.activeToolIcon)
             }
         }
     }
@@ -202,15 +202,27 @@ private fun BarIcon(icon: ImageVector, tint: Color) {
     Image(rememberVectorPainter(icon), null, Modifier.size(ICON_SIZE), colorFilter = ColorFilter.tint(tint))
 }
 
-private val TOOLS = listOf(
-    Triple(ViewerEditTool.TEXT, Res.string.edit_text, ViewerIcons.textEdit),
-    Triple(ViewerEditTool.UNDERLINE, Res.string.edit_underline, ViewerIcons.underline),
-    Triple(ViewerEditTool.STRIKETHROUGH, Res.string.edit_strikethrough, ViewerIcons.strikethrough),
-    Triple(ViewerEditTool.PEN, Res.string.edit_pen, ViewerIcons.drawEdit),
-    Triple(ViewerEditTool.HIGHLIGHTER, Res.string.edit_highlighter, ViewerIcons.inkEdit),
-    Triple(ViewerEditTool.SIGNATURE, Res.string.edit_vector_signature, ViewerIcons.vectorSign),
-    Triple(ViewerEditTool.ERASER, Res.string.edit_eraser, ViewerIcons.eraserEdit)
-)
+private fun toolLabel(tool: ViewerEditTool): StringResource = when (tool) {
+    ViewerEditTool.TEXT -> Res.string.edit_text
+    ViewerEditTool.UNDERLINE -> Res.string.edit_underline
+    ViewerEditTool.STRIKETHROUGH -> Res.string.edit_strikethrough
+    ViewerEditTool.PEN -> Res.string.edit_pen
+    ViewerEditTool.HIGHLIGHTER -> Res.string.edit_highlighter
+    ViewerEditTool.FORM_MARK -> Res.string.edit_form_marks
+    ViewerEditTool.SIGNATURE -> Res.string.edit_vector_signature
+    ViewerEditTool.ERASER -> Res.string.edit_eraser
+}
+
+private fun toolIcon(tool: ViewerEditTool, editor: ViewerEditor): ImageVector = when (tool) {
+    ViewerEditTool.TEXT -> ViewerIcons.textEdit
+    ViewerEditTool.UNDERLINE -> ViewerIcons.underline
+    ViewerEditTool.STRIKETHROUGH -> ViewerIcons.strikethrough
+    ViewerEditTool.PEN -> ViewerIcons.drawEdit
+    ViewerEditTool.HIGHLIGHTER -> ViewerIcons.inkEdit
+    ViewerEditTool.FORM_MARK -> ViewerFormIcons.of(editor.shownFormSymbol)
+    ViewerEditTool.SIGNATURE -> ViewerIcons.vectorSign
+    ViewerEditTool.ERASER -> ViewerIcons.eraserEdit
+}
 
 internal object ViewerEditBarLayout {
     const val BACK = 0
@@ -245,6 +257,7 @@ private val GROUP_TOOLS = listOf(
     ViewerEditTool.STRIKETHROUGH,
     ViewerEditTool.PEN,
     ViewerEditTool.HIGHLIGHTER,
+    ViewerEditTool.FORM_MARK,
     ViewerEditTool.SIGNATURE
 )
 

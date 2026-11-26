@@ -27,6 +27,7 @@ import hu.reelee81.reepdf.viewer.ViewerEditQuestion
 import hu.reelee81.reepdf.viewer.ViewerEditSaveResult
 import hu.reelee81.reepdf.viewer.ViewerEditSettings
 import hu.reelee81.reepdf.viewer.ViewerEditTool
+import hu.reelee81.reepdf.viewer.ViewerFormSymbol
 import hu.reelee81.reepdf.viewer.ViewerResume
 import hu.reelee81.reepdf.viewer.ViewerState
 import hu.reelee81.reepdf.viewer.ViewerUnderlineStyle
@@ -76,6 +77,9 @@ class PdfViewer : AppCompatActivity(), ViewerActions {
         private const val KEY_SIGNATURE_SLOT = "signature_slot"
         private const val KEY_TEXT_COLOR = "text_color"
         private const val KEY_TEXT_WEIGHT = "text_weight"
+        private const val KEY_FORM_MARK_SYMBOL = "form_mark_symbol"
+        private const val KEY_FORM_MARK_COLOR = "form_mark_color"
+        private const val KEY_FORM_MARK_WIDTH = "form_mark_width"
     }
 
     private lateinit var model: PdfViewerModel
@@ -314,7 +318,11 @@ class PdfViewer : AppCompatActivity(), ViewerActions {
             signatureWidth = prefs.getInt(KEY_SIGNATURE_WIDTH, defaults.signatureWidth),
             signatureSlot = prefs.getInt(KEY_SIGNATURE_SLOT, defaults.signatureSlot),
             textColor = prefs.getInt(KEY_TEXT_COLOR, defaults.textColor),
-            textWeight = prefs.getInt(KEY_TEXT_WEIGHT, defaults.textWeight)
+            textWeight = prefs.getInt(KEY_TEXT_WEIGHT, defaults.textWeight),
+            formSymbol = prefs.getString(KEY_FORM_MARK_SYMBOL, null)
+                ?.let { name -> ViewerFormSymbol.entries.firstOrNull { it.name == name } } ?: defaults.formSymbol,
+            formColor = prefs.getInt(KEY_FORM_MARK_COLOR, defaults.formColor),
+            formWidth = prefs.getInt(KEY_FORM_MARK_WIDTH, defaults.formWidth)
         )
     }
 
@@ -335,6 +343,9 @@ class PdfViewer : AppCompatActivity(), ViewerActions {
             putInt(KEY_SIGNATURE_SLOT, settings.signatureSlot)
             putInt(KEY_TEXT_COLOR, settings.textColor)
             putInt(KEY_TEXT_WEIGHT, settings.textWeight)
+            putString(KEY_FORM_MARK_SYMBOL, settings.formSymbol.name)
+            putInt(KEY_FORM_MARK_COLOR, settings.formColor)
+            putInt(KEY_FORM_MARK_WIDTH, settings.formWidth)
         }
     }
 

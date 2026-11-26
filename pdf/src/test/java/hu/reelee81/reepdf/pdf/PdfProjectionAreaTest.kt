@@ -274,6 +274,31 @@ class PdfProjectionAreaTest {
     }
 
     @Test
+    fun formMarksPlacedAgainAndAgainKeepTheSheetDepthAndStayOnTheirOwnLabelWithTheirKinds() {
+        val kinds = listOf(PdfMarkKind.BOX_X, PdfMarkKind.BOX_CHECK, PdfMarkKind.BOX_DASH, PdfMarkKind.BOX_DOT)
+        build(scaled)
+        var depthAfterFirst = -1
+        for (round in 0 until 8) {
+            val area = areas()[round % 4]
+            project(save(formMark("r$round", kinds[round / 2], area, round.toDouble())))
+            build(scaled)
+            val depth = maxDepth(nup())
+            if (round == 0) depthAfterFirst = depth else assertEquals("round $round", depthAfterFirst, depth)
+        }
+
+        for (index in 0..3) {
+            val marks = PdfMarkContent.read(layer(index)!!).map { it.mark }
+            assertEquals(listOf("r$index", "r${index + 4}"), marks.map { it.id })
+            assertEquals(listOf(kinds[index / 2], kinds[(index + 4) / 2]), marks.map { it.kind })
+            for (mark in marks) {
+                assertEquals(0x202FB0, mark.color)
+                assertEquals(mark.kind == PdfMarkKind.BOX_DOT, mark.width == 0f)
+                assertEquals(formMark("x", mark.kind, areas()[0], 0.0).path.verbs.toList(), mark.path.verbs.toList())
+            }
+        }
+    }
+
+    @Test
     fun erasingEveryMarkOfAProjectedPieceRemovesTheLayer() {
         build(scaled)
         val area = areas()[2]
@@ -378,6 +403,22 @@ class PdfProjectionAreaTest {
             PdfMarkPath.Builder().moveTo(left + 10, y).lineTo(left + 30, y + 8)
                 .moveTo(left + 35, y).curveTo(left + 40, y + 10, left + 50, y - 10, right - 10, y).build()
         )
+    }
+
+    private fun formMark(id: String, kind: PdfMarkKind, area: NupArea, shift: Double): PdfMark {
+        val x = (area.left + 10).toFloat()
+        val y = (mid(area) + shift).toFloat()
+        val path = when (kind) {
+            PdfMarkKind.BOX_X -> PdfMarkPath.Builder().moveTo(x, y + 10).curveTo(x + 3, y + 7, x + 6, y + 4, x + 9, y)
+                .moveTo(x + 9, y + 10).curveTo(x + 6, y + 8, x + 3, y + 4, x + 1, y)
+            PdfMarkKind.BOX_CHECK -> PdfMarkPath.Builder().moveTo(x, y + 4).curveTo(x + 1, y + 3.5f, x + 3, y + 2, x + 4, y)
+                .curveTo(x + 5, y + 3, x + 7, y + 7, x + 10, y + 10)
+            PdfMarkKind.BOX_DASH -> PdfMarkPath.Builder().moveTo(x, y + 5).lineTo(x + 10, y + 5)
+            else -> PdfMarkPath.Builder().moveTo(x + 8, y + 5).curveTo(x + 8, y + 6.6f, x + 6.6f, y + 8, x + 5, y + 8)
+                .curveTo(x + 3.4f, y + 8, x + 2, y + 6.6f, x + 2, y + 5).curveTo(x + 2, y + 3.4f, x + 3.4f, y + 2, x + 5, y + 2)
+                .curveTo(x + 6.6f, y + 2, x + 8, y + 3.4f, x + 8, y + 5).close()
+        }
+        return PdfMark(id, kind, 0x202FB0, if (kind == PdfMarkKind.BOX_DOT) 0f else 1f, path.build())
     }
 
     private fun save(vararg marks: PdfMark): File = write(PdfMarkSave.Plan(added = mapOf(0 to marks.toList())))

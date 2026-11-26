@@ -201,6 +201,10 @@ object ViewerEditJournalFormat {
         ViewerMarkKind.STRIKETHROUGH -> 4
         ViewerMarkKind.SIGNATURE -> 5
         ViewerMarkKind.TYPED -> 6
+        ViewerMarkKind.BOX_X -> 7
+        ViewerMarkKind.BOX_CHECK -> 8
+        ViewerMarkKind.BOX_DASH -> 9
+        ViewerMarkKind.BOX_DOT -> 10
     }
 
     private fun kind(code: Int): ViewerMarkKind = when (code) {
@@ -211,6 +215,10 @@ object ViewerEditJournalFormat {
         4 -> ViewerMarkKind.STRIKETHROUGH
         5 -> ViewerMarkKind.SIGNATURE
         6 -> ViewerMarkKind.TYPED
+        7 -> ViewerMarkKind.BOX_X
+        8 -> ViewerMarkKind.BOX_CHECK
+        9 -> ViewerMarkKind.BOX_DASH
+        10 -> ViewerMarkKind.BOX_DOT
         else -> throw IllegalArgumentException("Unknown mark kind $code")
     }
 

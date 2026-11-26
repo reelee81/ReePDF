@@ -92,7 +92,7 @@ internal object ViewerMarkHit {
         }
     }
 
-    private fun flatten(path: ViewerMarkPath): List<FloatArray> {
+    fun flatten(path: ViewerMarkPath): List<FloatArray> {
         val polygons = ArrayList<FloatArray>()
         var current = ArrayList<Float>()
         var index = 0

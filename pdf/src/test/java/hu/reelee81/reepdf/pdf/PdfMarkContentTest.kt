@@ -91,6 +91,40 @@ class PdfMarkContentTest {
     }
 
     @Test
+    fun formMarksAreOpaqueStrokesAndTheDotAnOpaqueFillReadBackAsTheirKinds() {
+        val cross = PdfMark(
+            "bx7", PdfMarkKind.BOX_X, 0x000000, 0.5f,
+            PdfMarkPath.Builder().moveTo(1f, 11f).curveTo(3f, 8f, 6f, 5f, 9f, 1f).moveTo(10f, 11f).curveTo(7f, 9f, 4f, 5f, 2f, 1f).build()
+        )
+        val check = PdfMark(
+            "bc8", PdfMarkKind.BOX_CHECK, 0xDD0000, 1f,
+            PdfMarkPath.Builder().moveTo(1f, 5f).curveTo(2f, 4.5f, 4f, 3f, 5f, 1f).curveTo(6f, 4f, 8f, 8f, 11f, 11f).build()
+        )
+        val dash = PdfMark(
+            "bd9", PdfMarkKind.BOX_DASH, 0x202FB0, 2f,
+            PdfMarkPath.Builder().moveTo(1f, 6f).lineTo(11f, 6f).build()
+        )
+        val dot = PdfMark(
+            "bp10", PdfMarkKind.BOX_DOT, 0x00854C, 0f,
+            PdfMarkPath.Builder().moveTo(9f, 6f).curveTo(9f, 7.5f, 7.5f, 9f, 6f, 9f).curveTo(4.5f, 9f, 3f, 7.5f, 3f, 6f)
+                .curveTo(3f, 4.5f, 4.5f, 3f, 6f, 3f).curveTo(7.5f, 3f, 9f, 4.5f, 9f, 6f).close().build()
+        )
+
+        val content = PdfMarkContent.write(listOf(cross, check, dash, dot), null)
+        val read = PdfMarkContent.read(content)
+
+        assertEquals(
+            "/ReePDF <</Id(bx7)/K/BoxX>> BDC\nq\n0 0 0 RG\n0.5 w 1 J 1 j\n1 11 m\n3 8 6 5 9 1 c\n10 11 m\n7 9 4 5 2 1 c\nS\nQ\nEMC\n" +
+                "/ReePDF <</Id(bc8)/K/BoxCheck>> BDC\nq\n0.8667 0 0 RG\n1 w 1 J 1 j\n1 5 m\n2 4.5 4 3 5 1 c\n6 4 8 8 11 11 c\nS\nQ\nEMC\n" +
+                "/ReePDF <</Id(bd9)/K/BoxDash>> BDC\nq\n0.1255 0.1843 0.6902 RG\n2 w 1 J 1 j\n1 6 m\n11 6 l\nS\nQ\nEMC\n" +
+                "/ReePDF <</Id(bp10)/K/BoxDot>> BDC\nq\n0 0.5216 0.298 rg\n9 6 m\n9 7.5 7.5 9 6 9 c\n4.5 9 3 7.5 3 6 c\n" +
+                "3 4.5 4.5 3 6 3 c\n7.5 3 9 4.5 9 6 c\nh\nf\nQ\nEMC\n",
+            String(content, Charsets.ISO_8859_1)
+        )
+        for ((stored, expected) in read.zip(listOf(cross, check, dash, dot))) assertSameMark(expected, stored.mark)
+    }
+
+    @Test
     fun aMarkOfAnUnknownKindIsJudgedByHowItIsPainted() {
         val content = "/ReePDF <</Id(f)/K/Future>> BDC q 0 0 1 RG 2 w 0 0 m 1 1 l S Q EMC".toByteArray()
 

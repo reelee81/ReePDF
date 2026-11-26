@@ -169,6 +169,37 @@ class ViewerTypedEditorTest {
     }
 
     @Test
+    fun dragsThatThePageEdgeOrTheSizeLimitsStopMakeNoStep() {
+        editing()
+        tap(137.37f, 211.13f)
+        editor.typeText("Edge", 4)
+        tap(250f, 380f)
+        tap(139f, 211.13f)
+
+        repeat(2) {
+            val frame = ViewerTypedPlacement.shown(open().mark.typed, fonts.font(400), 300f, 400f)
+            val middle = ViewerTextPoint((frame[0] + frame[2]) / 2, (frame[1] + frame[3]) / 2)
+            assertTrue(editor.grabText(0, middle, 1f, 2f, 4f))
+            editor.dragText(ViewerTextPoint(middle.x + 300f, middle.y + 400f))
+            editor.endTextDrag()
+        }
+        for (reach in listOf(100f, -1000f, -1000f)) {
+            val frame = ViewerTypedPlacement.shown(open().mark.typed, fonts.font(400), 300f, 400f)
+            assertTrue(editor.grabText(0, ViewerTextPoint(frame[2] + 4f, frame[3] + 4f), 10f, 2f, 4f))
+            editor.dragText(ViewerTextPoint(frame[2] + 4f + reach, frame[3] + 4f + reach))
+            editor.endTextDrag()
+        }
+        editor.commitTyping()
+
+        var steps = 0
+        while (editor.canUndo) {
+            editor.undo()
+            steps++
+        }
+        assertEquals(3, steps)
+    }
+
+    @Test
     fun retouchingATextEditsItAndEveryChangeIsItsOwnStep() {
         editing()
         tap(50f, 100f)

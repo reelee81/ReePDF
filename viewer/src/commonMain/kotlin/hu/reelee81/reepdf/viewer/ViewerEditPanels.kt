@@ -70,6 +70,10 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import hu.reelee81.reepdf.viewer.resources.Res
 import hu.reelee81.reepdf.viewer.resources.decimal_separator
+import hu.reelee81.reepdf.viewer.resources.edit_form_check
+import hu.reelee81.reepdf.viewer.resources.edit_form_dash
+import hu.reelee81.reepdf.viewer.resources.edit_form_dot
+import hu.reelee81.reepdf.viewer.resources.edit_form_x
 import hu.reelee81.reepdf.viewer.resources.edit_line_width
 import hu.reelee81.reepdf.viewer.resources.edit_signature_1
 import hu.reelee81.reepdf.viewer.resources.edit_signature_2
@@ -103,7 +107,7 @@ internal fun ViewerEditPanels(
         val palette = tool.palette ?: return@BoxWithConstraints
         val cell = minOf(CELL, (maxWidth - PANEL_EDGE * 2 - PANEL_PADDING * 2) / COLUMNS)
         val contentWidth = if (panel == ViewerEditPanel.STYLE) STYLE_WIDTH else cell * COLUMNS
-        val underRow = row && (panel == ViewerEditPanel.WIDTH || panel == ViewerEditPanel.STYLE || panel == ViewerEditPanel.SIGNATURES)
+        val underRow = row && (panel == ViewerEditPanel.WIDTH || panel == ViewerEditPanel.STYLE || panel == ViewerEditPanel.SIGNATURES || panel == ViewerEditPanel.MARKS)
         val iconCenter = when {
             underRow -> ViewerEditBarLayout.rowCenter(tool, maxWidth.value)
             panel == ViewerEditPanel.COLORS -> ViewerEditBarLayout.center(ViewerEditBarLayout.SWATCH, maxWidth.value)
@@ -135,6 +139,7 @@ internal fun ViewerEditPanels(
                 }
                 ViewerEditPanel.STYLE -> Styles(editor, colors)
                 ViewerEditPanel.SIGNATURES -> Signatures(editor, colors, viewerColors, cell * COLUMNS)
+                ViewerEditPanel.MARKS -> FormMarks(state, palette, colors, viewerColors, fontFamily, cell * COLUMNS)
             }
         }
     }
@@ -273,6 +278,60 @@ private fun Weights(editor: ViewerEditor, tool: ViewerEditTool, palette: ViewerE
 }
 
 @Composable
+private fun FormMarks(
+    state: ViewerState,
+    palette: ViewerEditPalette,
+    colors: ReeColors,
+    viewerColors: ViewerColors,
+    fontFamily: FontFamily,
+    width: Dp
+) {
+    val editor = state.editor
+    val chosen = editor.shownFormSymbol
+    val ink = colors.normalTextColor.default
+    val ring = viewerColors.signatureCheck
+    val window = LocalWindowInfo.current.containerSize
+    val fitZoom = fitZoom(state, minOf(window.width, window.height))
+    Column(Modifier.width(width)) {
+        Row(Modifier.fillMaxWidth().height(CELL)) {
+            for (symbol in ViewerFormSymbol.entries) {
+                val name = stringResource(FORM_SYMBOL_NAMES.getValue(symbol))
+                val selected = symbol == chosen
+                Box(
+                    Modifier.weight(1f)
+                        .fillMaxHeight()
+                        .clickable(interactionSource = null, indication = null, role = Role.RadioButton) { editor.chooseFormSymbol(symbol) }
+                        .semantics {
+                            contentDescription = name
+                            this.selected = selected
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (selected) {
+                        Canvas(Modifier.fillMaxSize()) {
+                            val stroke = RING_WIDTH.toPx()
+                            drawCircle(ring, FORM_ICON_SIZE.toPx() / 2 + RING_GAP.toPx() + stroke / 2, style = Stroke(stroke))
+                        }
+                    }
+                    Image(rememberVectorPainter(ViewerFormIcons.of(symbol)), null, Modifier.size(FORM_ICON_SIZE), colorFilter = ColorFilter.tint(ink))
+                }
+            }
+        }
+        ViewerWidthSlider(
+            values = palette.widths,
+            index = editor.shownWidthIndex(ViewerEditTool.FORM_MARK),
+            thickness = { it * fitZoom },
+            colors = colors,
+            fontFamily = fontFamily,
+            onChoose = editor::chooseWidth,
+            modifier = Modifier.fillMaxWidth(),
+            onStart = editor::beginWidthChoice,
+            onEnd = editor::endWidthChoice
+        )
+    }
+}
+
+@Composable
 internal fun ViewerWidthSlider(
     values: FloatArray,
     index: Int,
@@ -280,7 +339,9 @@ internal fun ViewerWidthSlider(
     colors: ReeColors,
     fontFamily: FontFamily,
     onChoose: (Int) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onStart: () -> Unit = {},
+    onEnd: () -> Unit = {}
 ) {
     val density = LocalDensity.current
     val value = values[index]
@@ -304,7 +365,7 @@ internal fun ViewerWidthSlider(
             val inset = SIDE_INSET.toPx()
             drawLine(sample, Offset(inset, size.height / 2), Offset(size.width - inset, size.height / 2), line, StrokeCap.Butt)
         }
-        StopSlider(values.size, index, label, text, colors, onChoose, Modifier.weight(1f))
+        StopSlider(values.size, index, label, text, colors, onChoose, Modifier.weight(1f), onStart = onStart, onEnd = onEnd)
         BasicText(
             text = text,
             modifier = Modifier.padding(horizontal = SIDE_INSET).width(valueWidth),
@@ -576,6 +637,13 @@ private val SIGNATURE_ROW_GAP = 16.dp
 private val SIGNATURE_EDGE = 8.dp
 private val SIGNATURE_INSET = 6.dp
 private val SIGNATURE_NAMES = listOf(Res.string.edit_signature_1, Res.string.edit_signature_2)
+private val FORM_ICON_SIZE = 24.dp
+private val FORM_SYMBOL_NAMES = mapOf(
+    ViewerFormSymbol.X to Res.string.edit_form_x,
+    ViewerFormSymbol.CHECK to Res.string.edit_form_check,
+    ViewerFormSymbol.DASH to Res.string.edit_form_dash,
+    ViewerFormSymbol.DOT to Res.string.edit_form_dot
+)
 private val STYLE_SAMPLE_WIDTH = 40.dp
 private val STYLE_SAMPLE_LETTER = 32.dp
 private val STYLE_WIDTH = SIDE_INSET * 2 + (STYLE_SAMPLE_WIDTH + CHECK_GAP + CHECK_SIZE) * 2 + STYLE_GAP

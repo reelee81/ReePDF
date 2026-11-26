@@ -99,6 +99,8 @@ object ViewerEditPalettes {
 
     val signature = ViewerEditPalette(penColors, FloatArray(0), defaultColor = 1, defaultWidth = 0)
 
+    val formMark = ViewerEditPalette(penColors, ViewerSignature.WIDTHS, defaultColor = signature.defaultColor, defaultWidth = ViewerSignature.DEFAULT_WIDTH)
+
     val text = ViewerEditPalette(
         penColors,
         ViewerMarkText.WEIGHTS.map { it.toFloat() }.toFloatArray(),
@@ -142,6 +144,7 @@ enum class ViewerEditTool(val enabled: Boolean) {
     STRIKETHROUGH(true),
     PEN(true),
     HIGHLIGHTER(true),
+    FORM_MARK(true),
     SIGNATURE(true),
     ERASER(true);
 
@@ -153,6 +156,7 @@ enum class ViewerEditTool(val enabled: Boolean) {
             HIGHLIGHTER -> ViewerEditPalettes.highlighter
             SIGNATURE -> ViewerEditPalettes.signature
             TEXT -> ViewerEditPalettes.text
+            FORM_MARK -> ViewerEditPalettes.formMark
             else -> null
         }
 
@@ -180,7 +184,10 @@ data class ViewerEditSettings(
     val signatureWidth: Int = ViewerSignature.DEFAULT_WIDTH,
     val signatureSlot: Int = 0,
     val textColor: Int = ViewerEditPalettes.text.defaultColor,
-    val textWeight: Int = ViewerEditPalettes.text.defaultWidth
+    val textWeight: Int = ViewerEditPalettes.text.defaultWidth,
+    val formSymbol: ViewerFormSymbol = ViewerFormSymbol.X,
+    val formColor: Int = ViewerEditPalettes.formMark.defaultColor,
+    val formWidth: Int = ViewerEditPalettes.formMark.defaultWidth
 ) {
     val swatchTool: ViewerEditTool
         get() = if (tool.palette != null) tool else drawingTool
@@ -191,6 +198,7 @@ data class ViewerEditSettings(
         ViewerEditTool.STRIKETHROUGH -> strikethroughColor
         ViewerEditTool.SIGNATURE -> signatureColor
         ViewerEditTool.TEXT -> textColor
+        ViewerEditTool.FORM_MARK -> formColor
         else -> penColor
     }
 
@@ -198,6 +206,7 @@ data class ViewerEditSettings(
         ViewerEditTool.HIGHLIGHTER -> highlighterWidth
         ViewerEditTool.PEN -> penWidth
         ViewerEditTool.TEXT -> textWeight
+        ViewerEditTool.FORM_MARK -> formWidth
         else -> 0
     }
 
@@ -221,6 +230,7 @@ data class ViewerEditSettings(
             ViewerEditTool.STRIKETHROUGH -> copy(strikethroughColor = index)
             ViewerEditTool.SIGNATURE -> copy(signatureColor = index)
             ViewerEditTool.TEXT -> copy(textColor = index)
+            ViewerEditTool.FORM_MARK -> copy(formColor = index)
             else -> copy(penColor = index)
         }
     }
@@ -230,6 +240,7 @@ data class ViewerEditSettings(
         return when (drawing(tool)) {
             ViewerEditTool.HIGHLIGHTER -> copy(highlighterWidth = index)
             ViewerEditTool.TEXT -> copy(textWeight = index)
+            ViewerEditTool.FORM_MARK -> copy(formWidth = index)
             else -> copy(penWidth = index)
         }
     }
@@ -241,6 +252,7 @@ data class ViewerEditSettings(
         val strikethrough = ViewerEditPalettes.strikethrough
         val signature = ViewerEditPalettes.signature
         val text = ViewerEditPalettes.text
+        val formMark = ViewerEditPalettes.formMark
         return copy(
             tool = tool.takeIf { it.enabled } ?: ViewerEditTool.PEN,
             drawingTool = drawingTool.takeIf { it.palette != null } ?: ViewerEditTool.PEN,
@@ -254,7 +266,9 @@ data class ViewerEditSettings(
             signatureWidth = signatureWidth.takeIf { it in ViewerSignature.WIDTHS.indices } ?: ViewerSignature.DEFAULT_WIDTH,
             signatureSlot = signatureSlot.takeIf { it in 0 until ViewerSignature.SLOTS } ?: 0,
             textColor = textColor.takeIf { it in 0 until text.size } ?: text.defaultColor,
-            textWeight = textWeight.takeIf { it in text.widths.indices } ?: text.defaultWidth
+            textWeight = textWeight.takeIf { it in text.widths.indices } ?: text.defaultWidth,
+            formColor = formColor.takeIf { it in 0 until formMark.size } ?: formMark.defaultColor,
+            formWidth = formWidth.takeIf { it in formMark.widths.indices } ?: formMark.defaultWidth
         )
     }
 

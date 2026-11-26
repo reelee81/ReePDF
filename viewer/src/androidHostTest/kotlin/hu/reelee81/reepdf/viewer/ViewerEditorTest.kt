@@ -1,5 +1,6 @@
 package hu.reelee81.reepdf.viewer
 
+import androidx.compose.runtime.snapshots.Snapshot
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -650,16 +651,16 @@ class ViewerEditorTest {
         val box = placed.box
         assertEquals(ViewerSignature.PAD_WIDTH_ON_PAGE * (SIGNATURE.bounds()[2] - SIGNATURE.bounds()[0]), box[2] - box[0], 0.01f)
 
-        assertTrue(editor.grabSignature(0, ViewerTextPoint(box[0] + 1f, box[1] + 1f), 3f, 1f, 0f))
+        assertTrue(editor.grabFramed(0, ViewerTextPoint(box[0] + 1f, box[1] + 1f), 3f, 1f, 0f))
         assertTrue(editor.addedMarks(0).isEmpty())
-        editor.dragSignature(ViewerTextPoint(box[0] - 200f, box[1] + 6f), 300f, 300f)
-        editor.endSignatureDrag()
+        editor.dragFramed(ViewerTextPoint(box[0] - 200f, box[1] + 6f), 300f, 300f)
+        editor.endFramedDrag()
         val moved = editor.framed!!.box
         assertEquals(0f, moved[0], 0.01f)
         assertEquals(box[1] + 5f, moved[1], 0.01f)
-        assertTrue(editor.grabSignature(0, ViewerTextPoint(moved[2], moved[3]), 3f, 1f, 0f))
-        editor.dragSignature(ViewerTextPoint(moved[2] + 1000f, moved[3] + 1000f), 300f, 300f)
-        editor.endSignatureDrag()
+        assertTrue(editor.grabFramed(0, ViewerTextPoint(moved[2], moved[3]), 3f, 1f, 0f))
+        editor.dragFramed(ViewerTextPoint(moved[2] + 1000f, moved[3] + 1000f), 300f, 300f)
+        editor.endFramedDrag()
         val grown = editor.framed!!.box
         assertEquals(0f, grown[0], 0.01f)
         assertEquals(300f, grown[2], 0.01f)
@@ -682,12 +683,12 @@ class ViewerEditorTest {
         editor.tapSignature(0, ViewerTextPoint(70f, 150f), 300f, 300f, 2f)
         val box = editor.framed!!.box
 
-        assertFalse(editor.grabSignature(0, ViewerTextPoint(box[2] + 4f, box[3] + 4f), 1f, 1f, 0f))
-        assertTrue(editor.grabSignature(0, ViewerTextPoint(box[2] + 4f, box[3] + 4f), 1f, 1f, 4f))
-        editor.dragSignature(ViewerTextPoint(box[2] + 4f, box[3] + 4f), 300f, 300f)
-        assertEquals(box.toList(), ViewerSignaturePlacement.box(editor.movedSignature!!.path, editor.movedSignature!!.width).toList())
-        editor.dragSignature(ViewerTextPoint(box[2] + 4f + (box[2] - box[0]), box[3] + 4f + (box[3] - box[1])), 300f, 300f)
-        editor.endSignatureDrag()
+        assertFalse(editor.grabFramed(0, ViewerTextPoint(box[2] + 4f, box[3] + 4f), 1f, 1f, 0f))
+        assertTrue(editor.grabFramed(0, ViewerTextPoint(box[2] + 4f, box[3] + 4f), 1f, 1f, 4f))
+        editor.dragFramed(ViewerTextPoint(box[2] + 4f, box[3] + 4f), 300f, 300f)
+        assertEquals(box.toList(), ViewerSignaturePlacement.box(editor.movedFramed!!.path, editor.movedFramed!!.width).toList())
+        editor.dragFramed(ViewerTextPoint(box[2] + 4f + (box[2] - box[0]), box[3] + 4f + (box[3] - box[1])), 300f, 300f)
+        editor.endFramedDrag()
 
         val doubled = editor.framed!!.box
         assertEquals(box[0], doubled[0], 0.01f)
@@ -700,17 +701,17 @@ class ViewerEditorTest {
         editor.tapSignature(0, ViewerTextPoint(50f, 50f), 100f, 100f, 2f)
         val placed = editor.framed!!
 
-        assertTrue(editor.grabSignature(0, ViewerTextPoint(50f, 50f), 3f, 1f, 0f))
-        editor.endSignatureDrag()
-        assertTrue(editor.grabSignature(0, ViewerTextPoint(50f, 50f), 3f, 1f, 0f))
-        editor.dragSignature(ViewerTextPoint(60f, 60f), 100f, 100f)
+        assertTrue(editor.grabFramed(0, ViewerTextPoint(50f, 50f), 3f, 1f, 0f))
+        editor.endFramedDrag()
+        assertTrue(editor.grabFramed(0, ViewerTextPoint(50f, 50f), 3f, 1f, 0f))
+        editor.dragFramed(ViewerTextPoint(60f, 60f), 100f, 100f)
         editor.cancelGesture()
 
         assertSame(placed, editor.framed)
         assertSame(placed.mark, editor.addedMarks(0).single())
-        assertNull(editor.movedSignature)
-        assertFalse(editor.grabSignature(0, ViewerTextPoint(1f, 1f), 3f, 1f, 0f))
-        assertFalse(editor.grabSignature(1, ViewerTextPoint(50f, 50f), 3f, 1f, 0f))
+        assertNull(editor.movedFramed)
+        assertFalse(editor.grabFramed(0, ViewerTextPoint(1f, 1f), 3f, 1f, 0f))
+        assertFalse(editor.grabFramed(1, ViewerTextPoint(50f, 50f), 3f, 1f, 0f))
     }
 
     @Test
@@ -719,10 +720,10 @@ class ViewerEditorTest {
         editor.tapSignature(0, ViewerTextPoint(50f, 50f), 100f, 100f, 2f)
         val placed = editor.framed!!
 
-        assertTrue(editor.grabSignature(0, ViewerTextPoint(50f, 50f), 3f, 1f, 0f))
-        editor.dragSignature(ViewerTextPoint(60f, 60f), 100f, 100f)
-        editor.dragSignature(ViewerTextPoint(50f, 50f), 100f, 100f)
-        editor.endSignatureDrag()
+        assertTrue(editor.grabFramed(0, ViewerTextPoint(50f, 50f), 3f, 1f, 0f))
+        editor.dragFramed(ViewerTextPoint(60f, 60f), 100f, 100f)
+        editor.dragFramed(ViewerTextPoint(50f, 50f), 100f, 100f)
+        editor.endFramedDrag()
 
         assertSame(placed, editor.framed)
         assertSame(placed.mark, editor.addedMarks(0).single())
@@ -743,10 +744,10 @@ class ViewerEditorTest {
         val framed = editor.framed!!
         assertEquals(0x3D5FEC, framed.mark.color)
         assertTrue(editor.addedMarks(0).isEmpty())
-        assertTrue(editor.grabSignature(0, ViewerTextPoint(30f, 25f), 3f, 1f, 0f))
+        assertTrue(editor.grabFramed(0, ViewerTextPoint(30f, 25f), 3f, 1f, 0f))
         assertEquals(setOf("s"), document.edits.last().getValue(7).erased)
-        editor.dragSignature(ViewerTextPoint(40f, 35f), 100f, 100f)
-        editor.endSignatureDrag()
+        editor.dragFramed(ViewerTextPoint(40f, 35f), 100f, 100f)
+        editor.endFramedDrag()
 
         val copy = editor.addedMarks(0).single()
         assertEquals(ViewerMarkKind.SIGNATURE, copy.kind)
@@ -771,6 +772,306 @@ class ViewerEditorTest {
         assertNotNull(editor.framed)
         editor.tapSwatch()
         assertNull(editor.framed)
+    }
+
+    private fun formMarks() {
+        editing()
+        editor.selectTool(ViewerEditTool.FORM_MARK)
+    }
+
+    private fun tapForm(x: Float, y: Float): Boolean = editor.tapFormMark(0, ViewerTextPoint(x, y), 100f, 100f, 2f)
+
+    @Test
+    fun aTapPlacesTheRememberedFormMarkFramedAndATapBesideItOnlyReleasesIt() {
+        formMarks()
+
+        assertTrue(tapForm(50f, 50f))
+
+        val placed = editor.addedMarks(0).single()
+        assertEquals(ViewerMarkKind.BOX_X, placed.kind)
+        assertEquals(0x202FB0, placed.color)
+        assertEquals(1f, placed.width, 0.0001f)
+        assertSame(placed, editor.framed?.mark)
+        assertArrayEquals(floatArrayOf(44f, 44f, 56f, 56f), editor.framed!!.box, 0.001f)
+        assertFalse(tapForm(90f, 90f))
+        assertNull(editor.framed)
+        assertEquals(1, editor.addedMarks(0).size)
+        assertTrue(tapForm(90f, 90f))
+        assertEquals(2, editor.addedMarks(0).size)
+        assertArrayEquals(floatArrayOf(84f, 84f, 96f, 96f), editor.framed!!.box, 0.001f)
+    }
+
+    @Test
+    fun colorSymbolAndWidthChangesOnAFramedFormMarkAreSeparateStepsThatTheNextMarksFollow() {
+        formMarks()
+        tapForm(50f, 50f)
+        val placed = editor.framed!!.mark
+
+        editor.chooseColor(2)
+        editor.chooseFormSymbol(ViewerFormSymbol.CHECK)
+        editor.chooseWidth(3)
+
+        val changed = editor.addedMarks(0).single()
+        assertSame(changed, editor.framed?.mark)
+        assertEquals(ViewerMarkKind.BOX_CHECK, changed.kind)
+        assertEquals(0xDD0000, changed.color)
+        assertEquals(2f, changed.width, 0.0001f)
+        assertArrayEquals(floatArrayOf(44f, 44f, 56f, 56f), editor.framed!!.box, 0.001f)
+        editor.undo()
+        assertEquals(ViewerMarkKind.BOX_CHECK, editor.addedMarks(0).single().kind)
+        assertEquals(1f, editor.addedMarks(0).single().width, 0.0001f)
+        editor.undo()
+        assertEquals(ViewerMarkKind.BOX_X, editor.addedMarks(0).single().kind)
+        assertEquals(0xDD0000, editor.addedMarks(0).single().color)
+        editor.undo()
+        assertSame(placed, editor.addedMarks(0).single())
+        editor.undo()
+        assertTrue(editor.addedMarks(0).isEmpty())
+        assertTrue(tapForm(20f, 20f))
+        val next = editor.addedMarks(0).single()
+        assertEquals(ViewerMarkKind.BOX_CHECK, next.kind)
+        assertEquals(0xDD0000, next.color)
+        assertEquals(2f, next.width, 0.0001f)
+    }
+
+    @Test
+    fun oneSliderDragOnAFramedFormMarkIsOneStepAndShowsItsWidthMeanwhile() {
+        formMarks()
+        tapForm(50f, 50f)
+
+        editor.beginWidthChoice()
+        editor.chooseWidth(2)
+
+        assertTrue(editor.addedMarks(0).isEmpty())
+        assertEquals(1.5f, editor.movedFramed!!.width, 0.0001f)
+        assertEquals(2, editor.shownWidthIndex(ViewerEditTool.FORM_MARK))
+        editor.chooseWidth(4)
+        editor.endWidthChoice()
+        assertEquals(2.5f, editor.addedMarks(0).single().width, 0.0001f)
+        assertNull(editor.movedFramed)
+        assertEquals(4, editor.shownWidthIndex(ViewerEditTool.FORM_MARK))
+        editor.undo()
+        assertEquals(1f, editor.addedMarks(0).single().width, 0.0001f)
+        editor.undo()
+        assertTrue(editor.addedMarks(0).isEmpty())
+    }
+
+    @Test
+    fun theMarksSliderIsToldAboutEveryStopOfADragOnAFramedFormMark() {
+        formMarks()
+        tapForm(50f, 50f)
+        val reads = HashSet<Any>()
+        Snapshot.observe(readObserver = { reads += it }) { editor.shownWidthIndex(ViewerEditTool.FORM_MARK) }
+        Snapshot.sendApplyNotifications()
+        var told = false
+        val observer = Snapshot.registerApplyObserver { changed, _ -> if (changed.any { it in reads }) told = true }
+        try {
+            editor.beginWidthChoice()
+            editor.chooseWidth(3)
+            Snapshot.sendApplyNotifications()
+        } finally {
+            observer.dispose()
+        }
+
+        assertTrue(told)
+        assertEquals(3, editor.shownWidthIndex(ViewerEditTool.FORM_MARK))
+    }
+
+    @Test
+    fun aFramedDotKeepsItsLookWhenTheWidthChangesAndAnotherSymbolTakesTheChosenWidth() {
+        formMarks()
+        editor.chooseFormSymbol(ViewerFormSymbol.DOT)
+        tapForm(50f, 50f)
+        val dot = editor.framed!!.mark
+
+        editor.beginWidthChoice()
+        editor.chooseWidth(1)
+        editor.endWidthChoice()
+        editor.chooseWidth(3)
+
+        assertEquals(ViewerMarkKind.BOX_DOT, dot.kind)
+        assertSame(dot, editor.addedMarks(0).single())
+        editor.chooseFormSymbol(ViewerFormSymbol.DASH)
+        val dash = editor.addedMarks(0).single()
+        assertEquals(ViewerMarkKind.BOX_DASH, dash.kind)
+        assertEquals(2f, dash.width, 0.0001f)
+        editor.undo()
+        assertSame(dot, editor.addedMarks(0).single())
+    }
+
+    @Test
+    fun choicesThatLeaveAFramedFormMarkAsItWasMakeNoUndoStepAnywhereOnAPage() {
+        formMarks()
+        for (symbol in ViewerFormSymbol.entries) {
+            editor.chooseFormSymbol(symbol)
+            assertTrue(editor.tapFormMark(0, ViewerTextPoint(337.37f, 611.13f), 595.28f, 841.89f, 2f))
+            val placed = editor.framed!!.mark
+            val color = editor.settings.formColor
+            val width = editor.settings.formWidth
+
+            editor.beginWidthChoice()
+            for (stop in listOf(0, 4, 2, 3, width)) editor.chooseWidth(stop)
+            editor.endWidthChoice()
+            editor.beginWidthChoice()
+            editor.chooseWidth(width)
+            editor.endWidthChoice()
+            editor.chooseColor(color)
+            editor.chooseFormSymbol(symbol)
+
+            assertSame(symbol.name, placed, editor.addedMarks(0).single())
+            editor.undo()
+            assertTrue(symbol.name, editor.addedMarks(0).isEmpty())
+            assertFalse(symbol.name, editor.canUndo)
+        }
+    }
+
+    @Test
+    fun theMarksPanelTheSwatchAndTheToolRowKeepAFramedFormMark() {
+        formMarks()
+        tapForm(50f, 50f)
+        val framed = editor.framed
+
+        editor.tapTool(ViewerEditTool.FORM_MARK)
+        assertEquals(ViewerEditPanel.MARKS, editor.panel)
+        editor.tapSwatch()
+        assertEquals(ViewerEditPanel.COLORS, editor.panel)
+        editor.tapGroup()
+        assertTrue(editor.rowOpen)
+
+        assertSame(framed, editor.framed)
+        editor.selectTool(ViewerEditTool.PEN)
+        assertNull(editor.framed)
+    }
+
+    @Test
+    fun retouchingAFormMarkTakesItsLookButEveryNewMarkStartsAtTwelvePoints() {
+        formMarks()
+        editor.chooseColor(2)
+        editor.chooseFormSymbol(ViewerFormSymbol.DASH)
+        editor.chooseWidth(3)
+        tapForm(50f, 50f)
+        tapForm(90f, 90f)
+        editor.chooseColor(0)
+        editor.chooseFormSymbol(ViewerFormSymbol.X)
+        editor.chooseWidth(0)
+
+        assertFalse(tapForm(50f, 50f))
+
+        assertEquals(ViewerFormSymbol.DASH, editor.settings.formSymbol)
+        assertEquals(2, editor.settings.formColor)
+        assertEquals(3, editor.settings.formWidth)
+        val box = editor.framed!!.box
+        assertTrue(editor.grabFramed(0, ViewerTextPoint(box[2], box[3]), 3f, 1f, 0f))
+        editor.dragFramed(ViewerTextPoint(box[2] + 12f, box[3] + 12f), 100f, 100f)
+        editor.endFramedDrag()
+        assertArrayEquals(floatArrayOf(44f, 44f, 68f, 68f), editor.framed!!.box, 0.001f)
+        assertEquals(4f, editor.addedMarks(0).single().width, 0.0001f)
+        assertFalse(tapForm(90f, 90f))
+        assertTrue(tapForm(80f, 20f))
+        val next = editor.framed!!.mark
+        assertEquals(ViewerMarkKind.BOX_DASH, next.kind)
+        assertEquals(12f, ViewerFormMarks.size(next), 0.001f)
+        assertEquals(2f, next.width, 0.0001f)
+    }
+
+    @Test
+    fun aSavedFormMarkIsFramedByATapAndRestylingItErasesTheSavedOneAndAddsItsCopy() {
+        val saved = ViewerFormMarks.place(ViewerFormSymbol.DASH, 0x202FB0, 1f, 12f, 0, ViewerTextPoint(30f, 30f), 100f, 100f)
+        document.marks[0] = ViewerPageMarks(
+            listOf(ViewerSavedMark("d", 7, saved.kind, saved.color, saved.width, saved.path), savedLine("p", 7, 60f)),
+            intArrayOf(7)
+        )
+        formMarks()
+
+        assertFalse(tapForm(30f, 30f))
+        assertEquals(0x202FB0, editor.framed!!.mark.color)
+        assertEquals(ViewerFormSymbol.DASH, editor.settings.formSymbol)
+        editor.chooseColor(2)
+
+        val copy = editor.addedMarks(0).single()
+        assertEquals(ViewerMarkKind.BOX_DASH, copy.kind)
+        assertEquals(0xDD0000, copy.color)
+        assertArrayEquals(saved.path.points, copy.path.points, 0.001f)
+        assertEquals(setOf("d"), editor.plan().erased[7])
+        assertEquals(setOf("d"), document.edits.last().getValue(7).erased)
+        editor.undo()
+        assertTrue(editor.addedMarks(0).isEmpty())
+        assertTrue(editor.plan().erased.isEmpty())
+    }
+
+    @Test
+    fun dragsThatThePageEdgeOrTheSmallestSizeStopMakeNoUndoStepForSignaturesAndFormMarks() {
+        signatureReady()
+        editor.tapSignature(0, ViewerTextPoint(337.37f, 611.13f), A4_WIDTH, A4_HEIGHT, 2f)
+        pushAgainstTheLimits()
+        assertEquals(3, stepsBack())
+
+        editor.releaseFramed()
+        editor.selectTool(ViewerEditTool.FORM_MARK)
+        for (symbol in ViewerFormSymbol.entries) {
+            editor.chooseFormSymbol(symbol)
+            assertTrue(editor.tapFormMark(0, ViewerTextPoint(337.37f, 611.13f), A4_WIDTH, A4_HEIGHT, 2f))
+            pushAgainstTheLimits()
+            assertEquals(symbol.name, 3, stepsBack())
+            editor.releaseFramed()
+        }
+    }
+
+    private fun pushAgainstTheLimits() {
+        repeat(2) {
+            val box = editor.framed!!.box
+            val middle = ViewerTextPoint((box[0] + box[2]) / 2, (box[1] + box[3]) / 2)
+            assertTrue(editor.grabFramed(0, middle, 0.5f, 1f, 0f))
+            editor.dragFramed(ViewerTextPoint(middle.x + A4_WIDTH, middle.y + A4_HEIGHT), A4_WIDTH, A4_HEIGHT)
+            editor.endFramedDrag()
+        }
+        for (reach in listOf(100f, -1000f, -1000f)) {
+            val box = editor.framed!!.box
+            assertTrue(editor.grabFramed(0, ViewerTextPoint(box[2], box[3]), 3f, 1f, 0f))
+            editor.dragFramed(ViewerTextPoint(box[2] + reach, box[3] + reach), A4_WIDTH, A4_HEIGHT)
+            editor.endFramedDrag()
+        }
+    }
+
+    private fun stepsBack(): Int {
+        var steps = 0
+        while (editor.canUndo) {
+            editor.undo()
+            steps++
+        }
+        return steps
+    }
+
+    @Test
+    fun aSavedDotReadBackWithTheDefaultLineWidthStaysSavedWhileTheSliderMovesAndItsColorIsTappedAgain() {
+        val placed = ViewerFormMarks.place(ViewerFormSymbol.DOT, 0x202FB0, 1f, 12f, 0, ViewerTextPoint(33.37f, 61.13f), 100f, 100f)
+        document.marks[0] = ViewerPageMarks(listOf(ViewerSavedMark("o", 7, placed.kind, placed.color, 1f, placed.path)), intArrayOf(7))
+        formMarks()
+
+        assertFalse(tapForm(33.37f, 61.13f))
+        editor.beginWidthChoice()
+        for (stop in listOf(0, 4, 2)) editor.chooseWidth(stop)
+        editor.endWidthChoice()
+        editor.chooseColor(editor.settings.formColor)
+        editor.chooseFormSymbol(ViewerFormSymbol.DOT)
+
+        assertTrue(editor.addedMarks(0).isEmpty())
+        assertTrue(editor.plan().erased.isEmpty())
+        assertFalse(editor.canUndo)
+    }
+
+    @Test
+    fun theEraserTakesWholeFormMarks() {
+        formMarks()
+        tapForm(20f, 20f)
+        tapForm(90f, 90f)
+        editor.chooseFormSymbol(ViewerFormSymbol.DOT)
+        tapForm(60f, 60f)
+        assertEquals(2, editor.addedMarks(0).size)
+
+        erase(20f to 20f, 60f to 60f)
+
+        assertTrue(editor.addedMarks(0).isEmpty())
     }
 
     private class FakeMarkDocument : ViewerDocument, ViewerMarkSource {
@@ -832,6 +1133,8 @@ class ViewerEditorTest {
     }
 
     private companion object {
+        const val A4_WIDTH = 595.28f
+        const val A4_HEIGHT = 841.89f
         val SIGNATURE = ViewerSignature(2f, listOf(floatArrayOf(0.1f, 0.1f, 0.5f, 0.3f, 0.9f, 0.2f)))
     }
 }

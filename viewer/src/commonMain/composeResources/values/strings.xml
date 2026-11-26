@@ -42,6 +42,11 @@
     <string name="edit_underline_wavy">Wavy</string>
     <string name="edit_pen">Pen</string>
     <string name="edit_highlighter">Highlighter</string>
+    <string name="edit_form_marks">Form marks</string>
+    <string name="edit_form_x">X</string>
+    <string name="edit_form_check">Check mark</string>
+    <string name="edit_form_dash">Dash</string>
+    <string name="edit_form_dot">Dot</string>
     <string name="edit_vector_signature">Vector signature</string>
     <string name="edit_eraser">Eraser</string>
     <string name="edit_erase_visible">Remove edits from the visible pages</string>

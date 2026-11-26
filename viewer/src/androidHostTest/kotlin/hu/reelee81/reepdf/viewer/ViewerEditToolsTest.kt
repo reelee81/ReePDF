@@ -87,6 +87,29 @@ class ViewerEditToolsTest {
     }
 
     @Test
+    fun formMarksStartAsAThinXWithTheSignatureColorAndWidthsAndThePenColors() {
+        val settings = ViewerEditSettings().withTool(ViewerEditTool.FORM_MARK)
+
+        assertSame(ViewerEditPalettes.formMark, ViewerEditTool.FORM_MARK.palette)
+        assertEquals((0 until pen.size).map(pen::color), (0 until ViewerEditPalettes.formMark.size).map(ViewerEditPalettes.formMark::color))
+        assertArrayEquals(ViewerSignature.WIDTHS, ViewerEditPalettes.formMark.widths, 0f)
+        assertEquals(ViewerSignature.DEFAULT_WIDTH, ViewerEditPalettes.formMark.defaultWidth)
+        assertEquals(ViewerEditTool.FORM_MARK, settings.swatchTool)
+        assertEquals(ViewerFormSymbol.X, settings.formSymbol)
+        assertEquals(ViewerEditPalettes.signature.defaultColor, ViewerEditPalettes.formMark.defaultColor)
+        assertEquals(0x202FB0, settings.color(ViewerEditTool.FORM_MARK))
+        assertEquals(1f, settings.width(ViewerEditTool.FORM_MARK), 0f)
+        val chosen = settings.withColor(ViewerEditTool.FORM_MARK, 2).withWidth(ViewerEditTool.FORM_MARK, 3)
+        assertEquals(0xDD0000, chosen.color(ViewerEditTool.FORM_MARK))
+        assertEquals(2f, chosen.width(ViewerEditTool.FORM_MARK), 0f)
+        assertEquals(settings.penColor, chosen.penColor)
+        assertEquals(settings.penWidth, chosen.penWidth)
+        val broken = ViewerEditSettings(formColor = 99, formWidth = 7).sanitized()
+        assertEquals(ViewerEditPalettes.formMark.defaultColor, broken.formColor)
+        assertEquals(ViewerEditPalettes.formMark.defaultWidth, broken.formWidth)
+    }
+
+    @Test
     fun theTextToolOffersAllNineRobotoWeightsAndStartsAtRegular() {
         assertArrayEquals(floatArrayOf(100f, 200f, 300f, 400f, 500f, 600f, 700f, 800f, 900f), ViewerEditPalettes.text.widths, 0f)
         assertEquals(3, ViewerEditPalettes.text.defaultWidth)

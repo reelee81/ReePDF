@@ -7,10 +7,17 @@ enum class ViewerMarkKind {
     UNDERLINE,
     STRIKETHROUGH,
     SIGNATURE,
-    TYPED;
+    TYPED,
+    BOX_X,
+    BOX_CHECK,
+    BOX_DASH,
+    BOX_DOT;
 
     internal val fills: Boolean
-        get() = this == TEXT_HIGHLIGHT || this == UNDERLINE || this == STRIKETHROUGH || this == TYPED
+        get() = this == TEXT_HIGHLIGHT || this == UNDERLINE || this == STRIKETHROUGH || this == TYPED || this == BOX_DOT
+
+    internal val formMark: Boolean
+        get() = this == BOX_X || this == BOX_CHECK || this == BOX_DASH || this == BOX_DOT
 
     internal val translucent: Boolean
         get() = this == HIGHLIGHTER || this == TEXT_HIGHLIGHT

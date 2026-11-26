@@ -124,7 +124,11 @@ internal fun ViewerPages(
     val typing = state.editor.typing
     var caretShown by remember { mutableStateOf(true) }
     var focusRequests by remember { mutableIntStateOf(0) }
-    val typed = TypedHooks(askFocus = { focusRequests += 1 }, opened = { position -> motion.zoomToText(state, scope, position, touch.readableText) })
+    val hooks = EditHooks(
+        askFocus = { focusRequests += 1 },
+        opened = { position -> motion.zoomToText(state, scope, position, touch.readableText) },
+        placed = { position -> motion.zoomToMark(state, scope, position, touch.readableText) }
+    )
 
     LaunchedEffect(state.scrollCount) {
         if (state.scrollCount == 0) return@LaunchedEffect
@@ -174,7 +178,7 @@ internal fun ViewerPages(
                     onTap = { tap() }
                 )
             },
-        grab = { position -> grabAt(state, fastScroll, scrollerAlpha, position, thumbWidth, thumbHeight, touch, typed, scope) },
+        grab = { position -> grabAt(state, fastScroll, scrollerAlpha, position, thumbWidth, thumbHeight, touch, hooks, scope) },
         drawPage = { page, x, y, zoom ->
             drawTexts(state, colors, page, x, y, zoom)
             if (state.editor.isActive) drawEditMarks(state, colors, glyphs, sizeLabel, page, x, y, zoom)
@@ -215,7 +219,7 @@ private fun revealCaret(state: ViewerState) {
 
 private data class PagesFrame(val top: Float, val rootHeight: Int)
 
-private class TypedHooks(val askFocus: () -> Unit, val opened: (Offset) -> Unit)
+private class EditHooks(val askFocus: () -> Unit, val opened: (Offset) -> Unit, val placed: (Offset) -> Unit)
 
 private class ViewerTouch(
     val handleRadius: Float,
@@ -248,10 +252,19 @@ private fun ViewerMotion.doubleTap(state: ViewerState, scope: CoroutineScope, ta
 }
 
 private fun ViewerMotion.zoomToText(state: ViewerState, scope: CoroutineScope, tap: Offset, readable: Float) {
+    val text = state.editor.typing?.mark?.text ?: return
+    zoomToReadable(state, scope, tap, text.size, readable) { revealCaret(state) }
+}
+
+private fun ViewerMotion.zoomToMark(state: ViewerState, scope: CoroutineScope, tap: Offset, readable: Float) {
+    val mark = state.editor.framed?.mark?.takeIf { it.kind.formMark } ?: return
+    zoomToReadable(state, scope, tap, ViewerFormMarks.size(mark), readable) {}
+}
+
+private fun ViewerMotion.zoomToReadable(state: ViewerState, scope: CoroutineScope, tap: Offset, size: Float, readable: Float, after: () -> Unit) {
     val start = state.viewport ?: return
     val pages = state.layout ?: return
-    val text = state.editor.typing?.mark?.text ?: return
-    val target = start.readableZoom(text.size, readable, pages) ?: return
+    val target = start.readableZoom(size, readable, pages) ?: return
     start(scope) {
         try {
             animate(start.zoom, target, animationSpec = tween(ViewerViewport.DOUBLE_TAP_ANIMATION_MS.toInt())) { value, _ ->
@@ -260,7 +273,7 @@ private fun ViewerMotion.zoomToText(state: ViewerState, scope: CoroutineScope, t
         } finally {
             state.endZoom()
         }
-        revealCaret(state)
+        after()
     }
 }
 
@@ -296,7 +309,7 @@ private fun grabAt(
     thumbWidth: Float,
     thumbHeight: Int,
     touch: ViewerTouch,
-    typed: TypedHooks,
+    hooks: EditHooks,
     clock: CoroutineScope
 ): ViewerDrag? {
     val thumbStart = thumbHit(state, fastScroll, alpha, position, thumbWidth, thumbHeight)
@@ -306,7 +319,7 @@ private fun grabAt(
             ViewerDragEnd.DONE
         }
     }
-    if (state.editor.isActive) return editGrab(state, position, touch, typed, clock)
+    if (state.editor.isActive) return editGrab(state, position, touch, hooks, clock)
     val grab = ViewerSelectionHandles.grab(state, position, touch.handleRadius, touch.handleSlop)
     if (grab != null && state.selection.beginDrag(grab.handle)) {
         return { down ->
@@ -364,12 +377,12 @@ private suspend fun AwaitPointerEventScope.dragHandle(
     )
 }
 
-private fun editGrab(state: ViewerState, position: Offset, touch: ViewerTouch, typed: TypedHooks, clock: CoroutineScope): ViewerDrag? {
+private fun editGrab(state: ViewerState, position: Offset, touch: ViewerTouch, hooks: EditHooks, clock: CoroutineScope): ViewerDrag? {
     val editor = state.editor
     if (state.isWaiting || editor.paused) return null
     val tool = editor.settings.tool
-    if (tool == ViewerEditTool.SIGNATURE) return signatureGrab(state, position, touch, clock)
-    if (tool == ViewerEditTool.TEXT) return textGrab(state, position, touch, typed, clock)
+    if (tool == ViewerEditTool.SIGNATURE || tool == ViewerEditTool.FORM_MARK) return frameGrab(state, position, touch, hooks, clock)
+    if (tool == ViewerEditTool.TEXT) return textGrab(state, position, touch, hooks, clock)
     val erasing = tool == ViewerEditTool.ERASER
     if (!erasing && !tool.draws) return null
     val (page, point) = state.pageHit(position.x, position.y) ?: return null
@@ -477,7 +490,7 @@ private fun frameEdgeStep(state: ViewerState, page: Int, finger: Offset, width: 
     )
 }
 
-private fun signatureGrab(state: ViewerState, position: Offset, touch: ViewerTouch, clock: CoroutineScope): ViewerDrag? {
+private fun frameGrab(state: ViewerState, position: Offset, touch: ViewerTouch, hooks: EditHooks, clock: CoroutineScope): ViewerDrag? {
     val editor = state.editor
     val (page, point) = state.pageHit(position.x, position.y) ?: return null
     if (page in state.failedPages) return null
@@ -486,22 +499,29 @@ private fun signatureGrab(state: ViewerState, position: Offset, touch: ViewerTou
     val pageWidth = pages.width(page).toFloat()
     val pageHeight = pages.height(page).toFloat()
     val slop = touch.signatureSlop / zoom
-    if (!editor.grabSignature(page, point, touch.signatureReach / zoom, slop, touch.signatureMargin / zoom)) {
+    val form = editor.settings.tool == ViewerEditTool.FORM_MARK
+    if (!editor.grabFramed(page, point, touch.signatureReach / zoom, slop, touch.signatureMargin / zoom)) {
         return { down ->
             val press = awaitPress(state.surface, down)
-            if (press == ViewerPress.TAP) editor.tapSignature(page, point, pageWidth, pageHeight, slop)
+            if (press == ViewerPress.TAP) {
+                if (!form) {
+                    editor.tapSignature(page, point, pageWidth, pageHeight, slop)
+                } else if (editor.tapFormMark(page, point, pageWidth, pageHeight, slop)) {
+                    hooks.placed(position)
+                }
+            }
             pressEnd(press)
         }
     }
     return { down ->
         val drag = try {
-            dragFrame(state, page, down, touch, clock) { editor.dragSignature(it, pageWidth, pageHeight) }
+            dragFrame(state, page, down, touch, clock) { editor.dragFramed(it, pageWidth, pageHeight) }
         } catch (e: CancellationException) {
             editor.cancelGesture()
             throw e
         }
         when (drag) {
-            FrameDrag.MOVED -> editor.endSignatureDrag()
+            FrameDrag.MOVED -> editor.endFramedDrag()
             FrameDrag.PINCH, FrameDrag.STILL -> editor.cancelGesture()
         }
         if (drag == FrameDrag.PINCH) ViewerDragEnd.GESTURE else ViewerDragEnd.DONE
@@ -522,7 +542,7 @@ private fun DrawScope.drawEditMarks(
     val pages = state.layout ?: return
     val marks = editor.addedMarks(page)
     val wet = editor.wet?.takeIf { it.page == page }
-    val moved = editor.movedSignature?.takeIf { it.page == page }
+    val moved = editor.movedFramed?.takeIf { it.page == page }
     val framed = editor.framed?.takeIf { it.mark.page == page }
     val typing = editor.typing?.takeIf { it.mark.page == page }
     val dragged = editor.draggedText?.takeIf { it.page == page }
@@ -545,14 +565,14 @@ private fun DrawScope.drawEditMarks(
         drawSignatureFrame(colors.cropFrame, frame)
         with(sizeLabel) { drawSize(text.size, frame, zoom, colors.cropFrame, colors.page, top) }
     }
-    val box = moved?.let { ViewerSignaturePlacement.box(it.path, it.width) } ?: framed?.box ?: return
+    val box = moved?.let(ViewerFramedMark::boxOf) ?: framed?.box ?: return
     drawSignatureFrame(
         colors.cropFrame,
         Rect(left + box[0] * zoom - margin, top + box[1] * zoom - margin, left + box[2] * zoom + margin, top + box[3] * zoom + margin)
     )
 }
 
-private fun textGrab(state: ViewerState, position: Offset, touch: ViewerTouch, typed: TypedHooks, clock: CoroutineScope): ViewerDrag? {
+private fun textGrab(state: ViewerState, position: Offset, touch: ViewerTouch, hooks: EditHooks, clock: CoroutineScope): ViewerDrag? {
     val editor = state.editor
     val hit = state.pageHit(position.x, position.y)
     if (hit == null) {
@@ -577,8 +597,8 @@ private fun textGrab(state: ViewerState, position: Offset, touch: ViewerTouch, t
                 val closed = editor.typing == null
                 editor.tapText(page, point, pageWidth, pageHeight, slop)
                 val open = editor.typing
-                if (open != null) typed.askFocus()
-                if (closed && open?.isNew == true) typed.opened(position)
+                if (open != null) hooks.askFocus()
+                if (closed && open?.isNew == true) hooks.opened(position)
             }
             pressEnd(press)
         }
@@ -596,7 +616,7 @@ private fun textGrab(state: ViewerState, position: Offset, touch: ViewerTouch, t
             FrameDrag.STILL -> {
                 editor.cancelGesture()
                 editor.placeCaret(page, point)
-                typed.askFocus()
+                hooks.askFocus()
             }
         }
         if (drag == FrameDrag.PINCH) ViewerDragEnd.GESTURE else ViewerDragEnd.DONE

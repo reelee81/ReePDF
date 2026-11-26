@@ -83,10 +83,10 @@ class ViewerEditJournalTest {
         editor.selectTool(ViewerEditTool.SIGNATURE)
         editor.tapSignature(0, ViewerTextPoint(150f, 150f), 300f, 300f, 2f)
         val box = editor.framed!!.box
-        assertTrue(editor.grabSignature(0, ViewerTextPoint(box[0] + 1f, box[1] + 1f), 3f, 1f, 0f))
-        editor.dragSignature(ViewerTextPoint(box[0] + 21f, box[1] + 11f), 300f, 300f)
-        editor.endSignatureDrag()
-        editor.releaseSignature()
+        assertTrue(editor.grabFramed(0, ViewerTextPoint(box[0] + 1f, box[1] + 1f), 3f, 1f, 0f))
+        editor.dragFramed(ViewerTextPoint(box[0] + 21f, box[1] + 11f), 300f, 300f)
+        editor.endFramedDrag()
+        editor.releaseFramed()
         editor.eraseVisible(setOf(1))
         editor.undo()
         editor.undo()
@@ -263,6 +263,30 @@ class ViewerEditJournalTest {
         assertEquals(0, next.signatures.deleting)
         assertEquals(1, target.rewrites)
         assertEquals(shown(editor), shown(resumed(target.read())))
+    }
+
+    @Test
+    fun formMarksAndTheirChangesComeBackFromTheJournal() {
+        editing()
+        editor.selectTool(ViewerEditTool.FORM_MARK)
+        for ((index, symbol) in ViewerFormSymbol.entries.withIndex()) {
+            editor.chooseFormSymbol(symbol)
+            assertTrue(editor.tapFormMark(0, ViewerTextPoint(30f + index * 40f, 50f), 300f, 300f, 2f))
+            editor.releaseFramed()
+        }
+        assertFalse(editor.tapFormMark(0, ViewerTextPoint(30f, 50f), 300f, 300f, 2f))
+        editor.chooseColor(2)
+
+        val next = resumed()
+
+        assertEquals(
+            listOf(ViewerMarkKind.BOX_CHECK, ViewerMarkKind.BOX_DASH, ViewerMarkKind.BOX_DOT, ViewerMarkKind.BOX_X),
+            next.addedMarks(0).map { it.kind }
+        )
+        assertEquals(shown(editor), shown(next))
+        next.undo()
+        editor.undo()
+        assertEquals(shown(editor), shown(next))
     }
 
     @Test

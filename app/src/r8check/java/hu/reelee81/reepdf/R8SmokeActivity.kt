@@ -69,12 +69,15 @@ import hu.reelee81.reepdf.pdf.PdfViewerEditOperation
 import hu.reelee81.reepdf.pdf.PdfViewerPageSizes
 import hu.reelee81.reepdf.pdf.ProgressTracker
 import hu.reelee81.reepdf.pdf.SignedPageRenderer
+import hu.reelee81.reepdf.viewer.ViewerFormMarks
+import hu.reelee81.reepdf.viewer.ViewerFormSymbol
 import hu.reelee81.reepdf.viewer.ViewerMark
 import hu.reelee81.reepdf.viewer.ViewerMarkKind
 import hu.reelee81.reepdf.viewer.ViewerMarkPath
 import hu.reelee81.reepdf.viewer.ViewerMarkText
 import hu.reelee81.reepdf.viewer.ViewerPageLayout
 import hu.reelee81.reepdf.viewer.ViewerRender
+import hu.reelee81.reepdf.viewer.ViewerTextPoint
 import hu.reelee81.reepdf.viewer.ViewerTile
 import hu.reelee81.reepdf.viewer.ViewerTilesRender
 import hu.reelee81.reepdf.viewer.ViewerViewport
@@ -336,7 +339,7 @@ class R8SmokeActivity : Activity() {
         if (points.isEmpty()) return false
         val xs = points.filterIndexed { index, _ -> index % 2 == 0 }
         val ys = points.filterIndexed { index, _ -> index % 2 == 1 }
-        val reach = if (mark.kind == PdfMarkKind.PEN || mark.kind == PdfMarkKind.HIGHLIGHTER) mark.width / 2.0 else 0.0
+        val reach = mark.width / 2.0
         return area.intersects(xs.min() - reach, ys.min() - reach, xs.max() + reach, ys.max() + reach)
     }
 
@@ -705,7 +708,7 @@ class R8SmokeActivity : Activity() {
             withViewerDocument(saved) { document ->
                 val erase = HashMap<Int, PdfStreamEdit>()
                 for (page in pages) {
-                    val marks = expectMarks(document, page, "saved", page.highlight, page.underline, page.pen, page.strikethrough, page.extra, page.typed)
+                    val marks = expectMarks(document, page, "saved", page.highlight, page.underline, page.pen, page.strikethrough, page.extra, page.typed, *page.forms)
                     checkColor(probe(document, page, page.extraY), EXTRA_COLOR) { "editor page ${page.index + 1} saved: extra pen not drawn ($it)" }
                     val stream = marks.single { it.mark.id == page.extra.id }.stream
                     val edit = PdfStreamEdit(false, setOf(page.extra.id))
@@ -718,7 +721,7 @@ class R8SmokeActivity : Activity() {
             }
             withViewerDocument(erased) { document ->
                 for (page in pages) {
-                    expectMarks(document, page, "erased", page.highlight, page.underline, page.pen, page.strikethrough, page.typed)
+                    expectMarks(document, page, "erased", page.highlight, page.underline, page.pen, page.strikethrough, page.typed, *page.forms)
                     checkErased(document, page, "erased")
                 }
             }
@@ -726,7 +729,7 @@ class R8SmokeActivity : Activity() {
             withViewerDocument(nup) { document ->
                 for (page in pages) {
                     val area = labelArea(nup, page.index)
-                    val kept = listOf(page.highlight, page.underline, page.pen, page.strikethrough, page.typed)
+                    val kept = (listOf(page.highlight, page.underline, page.pen, page.strikethrough, page.typed) + page.forms)
                         .filter { area == null || touches(page.inUser(it), area) }
                     expectMarks(document, page, "projected", *kept.toTypedArray())
                 }
@@ -875,12 +878,16 @@ class R8SmokeActivity : Activity() {
         val strikethrough = band(PdfMarkKind.STRIKETHROUGH, STRIKETHROUGH_COLOR, width, height * STRIKETHROUGH_Y)
         val extra = line(PdfMarkKind.PEN, EXTRA_COLOR, width, height * EXTRA_Y)
         val typed = typed(width * LINE_FROM, height * TYPED_Y)
+        val forms = ViewerFormSymbol.entries.mapIndexed { order, symbol ->
+            val at = ViewerTextPoint(width * (LINE_FROM + order * FORM_STEP), height * FORM_Y)
+            ViewerFormMarks.place(symbol, FORM_COLOR, FORM_WIDTH, FORM_SIZE, index, at, width, height).toPdf(doubleArrayOf(1.0, 0.0, 0.0, 1.0, 0.0, 0.0))
+        }.toTypedArray()
         val centerX = width / 2f
         val centerY = height * PEN_Y
         val extraY = height * EXTRA_Y
         var background = IntArray(3)
 
-        fun added(): List<PdfMark> = listOf(highlight, underline, pen, strikethrough, extra, typed).map(::inUser)
+        fun added(): List<PdfMark> = (listOf(highlight, underline, pen, strikethrough, extra, typed) + forms).map(::inUser)
 
         fun inUser(mark: PdfMark): PdfMark =
             mark.transformed(checkNotNull(PdfEditProjection.inverse(toPage)) { "editor page ${index + 1}: no usable transform" })
@@ -1420,6 +1427,11 @@ class R8SmokeActivity : Activity() {
         const val TYPED_WEIGHT = 700
         const val TYPED_SIZE = 12f
         const val TYPED_EM_GUESS = 0.6f
+        const val FORM_Y = 0.125f
+        const val FORM_STEP = 0.1f
+        const val FORM_COLOR = 0x00854C
+        const val FORM_WIDTH = 2f
+        const val FORM_SIZE = 12f
         const val PROBE_PX = 5
         const val PROBE_LINE_PX = 12f
         const val PROBE_STRONG = 180

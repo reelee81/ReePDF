@@ -96,6 +96,10 @@ We publish the source code so that others can use it, modify it and learn from i
   proportionally by its bottom-right corner, and touch it again later to adjust it
 - Unlike the PNG signature, the vector signature stays a separate vector element in the PDF, so a PDF editor can
   remove or copy it; it becomes part of the page picture only if a PNG signature is added to that page afterward
+- Form marks: an X, a check mark, a dash or a dot for the boxes of a form, placed with a tap in the pen's colors
+  and five line widths, with their own remembered symbol, color and width; every new mark is 12 pt and the view
+  zooms in until it is easy to see; move it, resize it proportionally by its bottom-right corner (the line grows
+  with it), and touch it again later to change its symbol, color or width
 - Eraser (it also removes saved edits), remove the edits of the current page or of every page,
   undo and redo
 - Saved edits stay on the pages even when the layout settings change later

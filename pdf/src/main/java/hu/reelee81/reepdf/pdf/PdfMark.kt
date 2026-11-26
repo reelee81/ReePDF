@@ -11,10 +11,14 @@ enum class PdfMarkKind(internal val code: String) {
     UNDERLINE("Under"),
     STRIKETHROUGH("Strike"),
     SIGNATURE("Sign"),
-    TYPED("Typed");
+    TYPED("Typed"),
+    BOX_X("BoxX"),
+    BOX_CHECK("BoxCheck"),
+    BOX_DASH("BoxDash"),
+    BOX_DOT("BoxDot");
 
     internal val fills: Boolean
-        get() = this == TEXT_HIGHLIGHT || this == UNDERLINE || this == STRIKETHROUGH || this == TYPED
+        get() = this == TEXT_HIGHLIGHT || this == UNDERLINE || this == STRIKETHROUGH || this == TYPED || this == BOX_DOT
 
     internal val translucent: Boolean
         get() = this == HIGHLIGHTER || this == TEXT_HIGHLIGHT

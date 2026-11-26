@@ -10,6 +10,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlin.math.abs
 
 class ViewerEditor(private val scope: CoroutineScope, private val onPagesChanged: (Set<Int>?) -> Unit) {
     private var document: ViewerDocument? = null
@@ -26,7 +27,8 @@ class ViewerEditor(private val scope: CoroutineScope, private val onPagesChanged
     private var pendingSaved = emptySet<ViewerEditSession.SavedRef>()
 
     val signatures = ViewerSignatures(scope)
-    private var signatureDrag: SignatureDrag? = null
+    private var framedDrag: FramedDrag? = null
+    private var restyleBase by mutableStateOf<ViewerFramedMark?>(null)
 
     var textFonts by mutableStateOf<ViewerTextFonts?>(null)
     private var textDrag: TextDrag? = null
@@ -56,9 +58,9 @@ class ViewerEditor(private val scope: CoroutineScope, private val onPagesChanged
         private set
     var rowOpen by mutableStateOf(false)
         private set
-    var framed by mutableStateOf<ViewerFramedSignature?>(null)
+    var framed by mutableStateOf<ViewerFramedMark?>(null)
         private set
-    var movedSignature by mutableStateOf<ViewerMark?>(null)
+    var movedFramed by mutableStateOf<ViewerMark?>(null)
         private set
     var typing by mutableStateOf<ViewerTypingDraft?>(null)
         private set
@@ -128,7 +130,7 @@ class ViewerEditor(private val scope: CoroutineScope, private val onPagesChanged
 
     fun togglePause() {
         commitTyping()
-        releaseSignature()
+        releaseFramed()
         cancelGesture()
         closePanel()
         paused = !paused
@@ -140,6 +142,7 @@ class ViewerEditor(private val scope: CoroutineScope, private val onPagesChanged
         if (tool == ViewerEditTool.ERASER) rowOpen = false
         if (tool == settings.tool) {
             when {
+                tool == ViewerEditTool.FORM_MARK -> togglePanel(ViewerEditPanel.MARKS)
                 tool.palette?.hasWidths == true -> togglePanel(ViewerEditPanel.WIDTH)
                 tool == ViewerEditTool.UNDERLINE -> togglePanel(ViewerEditPanel.STYLE)
                 tool == ViewerEditTool.SIGNATURE -> togglePanel(ViewerEditPanel.SIGNATURES)
@@ -151,7 +154,7 @@ class ViewerEditor(private val scope: CoroutineScope, private val onPagesChanged
     }
 
     fun tapGroup() {
-        releaseSignature()
+        releaseFramedSignature()
         panel = null
         if (settings.tool == ViewerEditTool.ERASER) {
             selectTool(settings.drawingTool)
@@ -171,20 +174,29 @@ class ViewerEditor(private val scope: CoroutineScope, private val onPagesChanged
     }
 
     private fun togglePanel(chosen: ViewerEditPanel) {
-        releaseSignature()
+        releaseFramedSignature()
         panel = if (panel == chosen) null else chosen
+    }
+
+    private fun releaseFramedSignature() {
+        if (framed?.mark?.kind == ViewerMarkKind.SIGNATURE) releaseFramed()
     }
 
     fun selectTool(tool: ViewerEditTool) {
         if (tool != settings.tool) {
             commitTyping()
-            releaseSignature()
+            releaseFramed()
         }
         update(settings.withTool(tool))
     }
 
     fun chooseColor(index: Int) {
         update(settings.withColor(settings.swatchTool, index))
+        if (settings.swatchTool == ViewerEditTool.FORM_MARK) {
+            val color = settings.color(ViewerEditTool.FORM_MARK)
+            restyleFramed { ViewerFormMarks.restyled(it, symbolOf(it), color, ViewerFormMarks.width(it)) }
+            return
+        }
         val open = typing ?: return
         if (settings.swatchTool != ViewerEditTool.TEXT) return
         val color = settings.color(ViewerEditTool.TEXT)
@@ -193,10 +205,25 @@ class ViewerEditor(private val scope: CoroutineScope, private val onPagesChanged
 
     fun beginWidthChoice() {
         weightDrag = typing?.takeIf { settings.swatchTool == ViewerEditTool.TEXT }
+        if (settings.swatchTool != ViewerEditTool.FORM_MARK) return
+        val current = framed?.takeIf { it.mark.kind.formMark && !it.mark.kind.fills } ?: return
+        restyleBase = current
+        movedFramed = current.mark
+        hide(current)
     }
 
     fun chooseWidth(index: Int) {
         update(settings.withWidth(settings.swatchTool, index))
+        if (settings.swatchTool == ViewerEditTool.FORM_MARK) {
+            val width = settings.width(ViewerEditTool.FORM_MARK)
+            val base = restyleBase
+            if (base != null) {
+                movedFramed = ViewerFormMarks.restyled(base.mark, symbolOf(base.mark), base.mark.color, width)
+            } else {
+                restyleFramed { ViewerFormMarks.restyled(it, symbolOf(it), it.color, width) }
+            }
+            return
+        }
         val open = typing ?: return
         val fonts = textFonts ?: return
         if (settings.swatchTool != ViewerEditTool.TEXT) return
@@ -211,6 +238,10 @@ class ViewerEditor(private val scope: CoroutineScope, private val onPagesChanged
     }
 
     fun endWidthChoice() {
+        restyleBase?.let { base ->
+            restyleBase = null
+            finishPreview(base, movedFramed)
+        }
         val drag = weightDrag ?: return
         weightDrag = null
         val open = typing ?: return
@@ -222,20 +253,51 @@ class ViewerEditor(private val scope: CoroutineScope, private val onPagesChanged
         return draft.copy(mark = mark, cursor = draft.cursor.coerceAtMost(mark.text?.text?.length ?: 0), changed = true)
     }
 
-    fun shownColor(tool: ViewerEditTool): Int = openText(tool)?.mark?.color ?: settings.color(tool)
+    fun shownColor(tool: ViewerEditTool): Int = openText(tool)?.mark?.color ?: shownForm(tool)?.color ?: settings.color(tool)
 
     fun shownColorIndex(tool: ViewerEditTool): Int {
-        val open = openText(tool) ?: return settings.colorIndex(tool)
+        val mark = openText(tool)?.mark ?: shownForm(tool) ?: return settings.colorIndex(tool)
         val palette = tool.palette ?: return NOT_IN_PALETTE
-        return (0 until palette.size).firstOrNull { palette.color(it) == open.mark.color } ?: NOT_IN_PALETTE
+        return (0 until palette.size).firstOrNull { palette.color(it) == mark.color } ?: NOT_IN_PALETTE
     }
 
     fun shownWidthIndex(tool: ViewerEditTool): Int {
+        shownForm(tool)?.takeIf { !it.kind.fills }?.let { return nearestWidth(ViewerFormMarks.width(it)) }
         val weight = openText(tool)?.mark?.text?.weight ?: return settings.widthIndex(tool)
         return ViewerMarkText.WEIGHTS.indexOf(weight).takeIf { it >= 0 } ?: settings.widthIndex(tool)
     }
 
+    val shownFormSymbol: ViewerFormSymbol
+        get() = shownForm(ViewerEditTool.FORM_MARK)?.let(::symbolOf) ?: settings.formSymbol
+
     private fun openText(tool: ViewerEditTool): ViewerTypingDraft? = typing?.takeIf { tool == ViewerEditTool.TEXT }
+
+    private fun shownForm(tool: ViewerEditTool): ViewerMark? {
+        if (tool != ViewerEditTool.FORM_MARK) return null
+        val mark = if (restyleBase != null) movedFramed else framed?.mark
+        return mark?.takeIf { it.kind.formMark }
+    }
+
+    private fun nearestWidth(width: Float): Int {
+        val widths = ViewerEditPalettes.formMark.widths
+        return widths.indices.minByOrNull { abs(widths[it] - width) } ?: settings.formWidth
+    }
+
+    private fun symbolOf(mark: ViewerMark): ViewerFormSymbol = ViewerFormSymbol.of(mark.kind) ?: settings.formSymbol
+
+    fun chooseFormSymbol(symbol: ViewerFormSymbol) {
+        update(settings.copy(formSymbol = symbol))
+        val width = settings.width(ViewerEditTool.FORM_MARK)
+        restyleFramed { ViewerFormMarks.restyled(it, symbol, it.color, if (it.kind.fills) width else ViewerFormMarks.width(it)) }
+    }
+
+    private fun rememberForm(mark: ViewerMark) {
+        val symbol = ViewerFormSymbol.of(mark.kind) ?: return
+        val palette = ViewerEditPalettes.formMark
+        val color = (0 until palette.size).firstOrNull { palette.color(it) == mark.color } ?: settings.formColor
+        val width = if (mark.kind.fills) settings.formWidth else nearestWidth(ViewerFormMarks.width(mark))
+        update(settings.copy(formSymbol = symbol, formColor = color, formWidth = width))
+    }
 
     private fun rememberLook(mark: ViewerMark) {
         val text = mark.text ?: return
@@ -274,11 +336,11 @@ class ViewerEditor(private val scope: CoroutineScope, private val onPagesChanged
     fun tapSignature(page: Int, point: ViewerTextPoint, pageWidth: Float, pageHeight: Float, tolerance: Float) {
         if (!isActive || paused || settings.tool != ViewerEditTool.SIGNATURE) return
         if (framed != null) {
-            releaseSignature()
+            releaseFramed()
             return
         }
         cancelGesture()
-        val found = signatureAt(page, point, tolerance)
+        val found = framedAt(page, point, tolerance) { it == ViewerMarkKind.SIGNATURE }
         if (found != null) {
             framed = found
             return
@@ -290,76 +352,123 @@ class ViewerEditor(private val scope: CoroutineScope, private val onPagesChanged
         }
         val mark = ViewerSignaturePlacement.place(signature, settings.color(ViewerEditTool.SIGNATURE), page, point, pageWidth, pageHeight)
         perform(ViewerEditSession.Action.Add(mark))
-        framed = ViewerFramedSignature(mark, emptySet())
+        framed = ViewerFramedMark(mark, emptySet())
     }
 
-    fun grabSignature(page: Int, point: ViewerTextPoint, handleReach: Float, tolerance: Float, margin: Float): Boolean {
+    fun tapFormMark(page: Int, point: ViewerTextPoint, pageWidth: Float, pageHeight: Float, tolerance: Float): Boolean {
+        if (!isActive || paused || settings.tool != ViewerEditTool.FORM_MARK) return false
+        if (framed != null) {
+            releaseFramed()
+            return false
+        }
+        cancelGesture()
+        val found = framedAt(page, point, tolerance) { it.formMark }
+        if (found != null) {
+            framed = found
+            rememberForm(found.mark)
+            return false
+        }
+        val tool = ViewerEditTool.FORM_MARK
+        val mark = ViewerFormMarks.place(
+            settings.formSymbol, settings.color(tool), settings.width(tool), ViewerFormMarks.DEFAULT_SIZE, page, point, pageWidth, pageHeight
+        )
+        perform(ViewerEditSession.Action.Add(mark))
+        framed = ViewerFramedMark(mark, emptySet())
+        return true
+    }
+
+    fun grabFramed(page: Int, point: ViewerTextPoint, handleReach: Float, tolerance: Float, margin: Float): Boolean {
         val current = framed ?: return false
         if (!isActive || paused || current.mark.page != page) return false
         val frame = ViewerSignaturePlacement.framed(current.box, margin)
         val resize = ViewerSignaturePlacement.onHandle(frame, point, handleReach)
         if (!resize && !ViewerSignaturePlacement.inside(frame, point, tolerance)) return false
         cancelGesture()
-        signatureDrag = SignatureDrag(current, point, resize)
-        movedSignature = current.mark
+        framedDrag = FramedDrag(current, point, resize)
+        movedFramed = current.mark
+        hide(current)
+        return true
+    }
+
+    private fun hide(current: ViewerFramedMark) {
         if (current.saved.isEmpty()) {
             pendingMarks = setOf(current.mark)
         } else {
             pendingSaved = current.saved
             sync()
         }
-        return true
     }
 
-    fun dragSignature(point: ViewerTextPoint, pageWidth: Float, pageHeight: Float) {
-        val drag = signatureDrag ?: return
+    fun dragFramed(point: ViewerTextPoint, pageWidth: Float, pageHeight: Float) {
+        val drag = framedDrag ?: return
         val base = drag.framed
-        movedSignature = if (drag.resize) {
+        movedFramed = if (drag.resize) {
             val corner = ViewerTextPoint(base.box[2] + point.x - drag.start.x, base.box[3] + point.y - drag.start.y)
-            ViewerSignaturePlacement.resized(base.mark, base.box, corner, pageWidth, pageHeight)
+            if (base.mark.kind.formMark) {
+                ViewerFormMarks.resized(base.mark, base.box, corner, pageWidth, pageHeight)
+            } else {
+                ViewerSignaturePlacement.resized(base.mark, base.box, corner, pageWidth, pageHeight)
+            }
         } else {
             ViewerSignaturePlacement.moved(base.mark, base.box, point.x - drag.start.x, point.y - drag.start.y, pageWidth, pageHeight)
         }
     }
 
-    fun endSignatureDrag() {
-        val drag = signatureDrag ?: return
-        val moved = movedSignature
-        val base = drag.framed
-        signatureDrag = null
-        movedSignature = null
+    fun endFramedDrag() {
+        val drag = framedDrag ?: return
+        framedDrag = null
+        finishPreview(drag.framed, movedFramed)
+    }
+
+    private fun finishPreview(base: ViewerFramedMark, moved: ViewerMark?) {
+        movedFramed = null
         pendingMarks = emptySet()
         val hidSaved = pendingSaved.isNotEmpty()
         pendingSaved = emptySet()
-        val same = moved != null && moved.width == base.mark.width && moved.path.points.contentEquals(base.mark.path.points)
-        if (moved != null && moved !== base.mark && !same) {
-            val unsaved = if (base.saved.isEmpty()) setOf(base.mark) else emptySet()
-            perform(ViewerEditSession.Action.Replace(unsaved, base.saved, moved))
-            framed = ViewerFramedSignature(moved, emptySet())
-        }
+        if (moved != null) replaceFramed(base, moved)
         if (hidSaved) sync()
     }
 
-    fun releaseSignature() {
-        if (signatureDrag != null) cancelGesture()
+    private fun restyleFramed(change: (ViewerMark) -> ViewerMark) {
+        val current = framed?.takeIf { it.mark.kind.formMark } ?: return
+        if (replaceFramed(current, change(current.mark)) && current.saved.isNotEmpty()) sync()
+    }
+
+    private fun replaceFramed(base: ViewerFramedMark, changed: ViewerMark): Boolean {
+        val old = base.mark
+        val before = old.path.points
+        val after = changed.path.points
+        val same = changed.kind == old.kind && changed.color == old.color && abs(changed.width - old.width) <= UNSAVABLE_SHIFT &&
+            changed.path.verbs.contentEquals(old.path.verbs) && after.size == before.size &&
+            after.indices.all { abs(after[it] - before[it]) <= UNSAVABLE_SHIFT }
+        if (same) return false
+        val unsaved = if (base.saved.isEmpty()) setOf(old) else emptySet()
+        perform(ViewerEditSession.Action.Replace(unsaved, base.saved, changed))
+        framed = ViewerFramedMark(changed, emptySet())
+        if (changed.kind.formMark) rememberForm(changed)
+        return true
+    }
+
+    fun releaseFramed() {
+        if (framedDrag != null) cancelGesture()
         framed = null
     }
 
-    private fun signatureAt(page: Int, point: ViewerTextPoint, tolerance: Float): ViewerFramedSignature? {
-        addedMarks(page).lastOrNull { it.kind == ViewerMarkKind.SIGNATURE && ViewerSignaturePlacement.inside(ViewerSignaturePlacement.box(it.path, it.width), point, tolerance) }
-            ?.let { return ViewerFramedSignature(it, emptySet()) }
+    private fun framedAt(page: Int, point: ViewerTextPoint, tolerance: Float, accepts: (ViewerMarkKind) -> Boolean): ViewerFramedMark? {
+        addedMarks(page).lastOrNull { accepts(it.kind) && ViewerSignaturePlacement.inside(ViewerFramedMark.boxOf(it), point, tolerance) }
+            ?.let { return ViewerFramedMark(it, emptySet()) }
         val marks = loaded[page] ?: return null
         val hit = marks.marks.lastOrNull { saved ->
-            saved.kind == ViewerMarkKind.SIGNATURE &&
+            accepts(saved.kind) &&
                 state.isVisible(ViewerEditSession.SavedRef(page, saved.stream, saved.id)) &&
                 ViewerMarkHit.within(saved.clip, point.x, point.y, tolerance) &&
-                ViewerSignaturePlacement.inside(ViewerSignaturePlacement.box(saved.path, saved.width), point, tolerance)
+                ViewerSignaturePlacement.inside(ViewerFramedMark.boxOf(ViewerMark(page, saved.kind, saved.color, saved.width, saved.path)), point, tolerance)
         } ?: return null
         val refs = marks.marks.filter { it.id == hit.id }
             .map { ViewerEditSession.SavedRef(page, it.stream, it.id) }
             .filter(state::isVisible)
             .toSet()
-        return ViewerFramedSignature(ViewerMark(page, ViewerMarkKind.SIGNATURE, hit.color, hit.width, hit.path), refs)
+        return ViewerFramedMark(ViewerMark(page, hit.kind, hit.color, hit.width, hit.path), refs)
     }
 
     fun tapText(page: Int, point: ViewerTextPoint, pageWidth: Float, pageHeight: Float, tolerance: Float) {
@@ -600,8 +709,9 @@ class ViewerEditor(private val scope: CoroutineScope, private val onPagesChanged
         stroke = null
         wet = null
         eraser = null
-        signatureDrag = null
-        movedSignature = null
+        framedDrag = null
+        restyleBase = null
+        movedFramed = null
         textDrag = null
         draggedText = null
         pendingMarks = emptySet()
@@ -645,7 +755,7 @@ class ViewerEditor(private val scope: CoroutineScope, private val onPagesChanged
     fun eraseVisible(pages: Set<Int>) {
         if (!isActive || pages.isEmpty()) return
         commitTyping()
-        releaseSignature()
+        releaseFramed()
         cancelGesture()
         val anything = pages.any { page ->
             state.added[page].orEmpty().isNotEmpty() || (!state.isBlank(page) && loaded[page]?.streams?.isNotEmpty() == true)
@@ -658,7 +768,7 @@ class ViewerEditor(private val scope: CoroutineScope, private val onPagesChanged
     fun eraseAll() {
         if (!isActive || (state.blankAll && state.added.isEmpty())) return
         commitTyping()
-        releaseSignature()
+        releaseFramed()
         cancelGesture()
         perform(ViewerEditSession.Action.Blank(null))
         sync()
@@ -667,7 +777,7 @@ class ViewerEditor(private val scope: CoroutineScope, private val onPagesChanged
     fun undo() {
         commitTyping()
         if (!state.canUndo) return
-        releaseSignature()
+        releaseFramed()
         cancelGesture()
         moved(session.undo())
         sync()
@@ -676,7 +786,7 @@ class ViewerEditor(private val scope: CoroutineScope, private val onPagesChanged
     fun redo() {
         commitTyping()
         if (!state.canRedo) return
-        releaseSignature()
+        releaseFramed()
         cancelGesture()
         moved(session.redo())
         sync()
@@ -984,8 +1094,9 @@ class ViewerEditor(private val scope: CoroutineScope, private val onPagesChanged
         wet = null
         pendingMarks = emptySet()
         pendingSaved = emptySet()
-        signatureDrag = null
-        movedSignature = null
+        framedDrag = null
+        restyleBase = null
+        movedFramed = null
         textDrag = null
         weightDrag = null
         draggedText = null
@@ -1040,16 +1151,17 @@ class ViewerEditor(private val scope: CoroutineScope, private val onPagesChanged
 
     private class Eraser(var page: Int, var last: ViewerTextPoint, val tolerance: Float)
 
-    private class SignatureDrag(val framed: ViewerFramedSignature, val start: ViewerTextPoint, val resize: Boolean)
+    private class FramedDrag(val framed: ViewerFramedMark, val start: ViewerTextPoint, val resize: Boolean)
 
     private class TextDrag(val draft: ViewerTypingDraft, val start: ViewerTextPoint, val resize: Boolean)
 
     private companion object {
         const val COMPACT_BYTES = 64L * 1024
         const val NOT_IN_PALETTE = -1
+        const val UNSAVABLE_SHIFT = 0.0005f
     }
 }
 
-enum class ViewerEditPanel { COLORS, WIDTH, STYLE, SIGNATURES }
+enum class ViewerEditPanel { COLORS, WIDTH, STYLE, SIGNATURES, MARKS }
 
 enum class ViewerEditQuestion { EXIT, ERASE_ALL }

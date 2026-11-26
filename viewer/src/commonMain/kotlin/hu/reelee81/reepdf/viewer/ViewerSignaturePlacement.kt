@@ -2,8 +2,13 @@ package hu.reelee81.reepdf.viewer
 
 import kotlin.math.hypot
 
-class ViewerFramedSignature internal constructor(val mark: ViewerMark, internal val saved: Set<ViewerEditSession.SavedRef>) {
-    val box: FloatArray = ViewerSignaturePlacement.box(mark.path, mark.width)
+class ViewerFramedMark internal constructor(val mark: ViewerMark, internal val saved: Set<ViewerEditSession.SavedRef>) {
+    val box: FloatArray = boxOf(mark)
+
+    companion object {
+        fun boxOf(mark: ViewerMark): FloatArray =
+            if (mark.kind.formMark) ViewerFormMarks.box(mark) else ViewerSignaturePlacement.box(mark.path, mark.width)
+    }
 }
 
 internal object ViewerSignaturePlacement {
@@ -59,6 +64,10 @@ internal object ViewerSignaturePlacement {
         if (width <= 0f || height <= 0f) return mark
         val wanted = ((point.x - left) * width + (point.y - top) * height) / (width * width + height * height)
         val factor = within(wanted, MIN_SIDE / maxOf(width, height), minOf((pageWidth - left) / width, (pageHeight - top) / height))
+        return scaled(mark, left, top, factor)
+    }
+
+    fun scaled(mark: ViewerMark, left: Float, top: Float, factor: Float): ViewerMark {
         val points = mark.path.points
         val scaled = FloatArray(points.size) { if (it % 2 == 0) left + (points[it] - left) * factor else top + (points[it] - top) * factor }
         return ViewerMark(mark.page, mark.kind, mark.color, mark.width * factor, ViewerMarkPath(mark.path.verbs, scaled))

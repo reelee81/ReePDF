@@ -35,6 +35,7 @@ class ViewerEditBarLayoutTest {
                 ViewerEditTool.STRIKETHROUGH,
                 ViewerEditTool.PEN,
                 ViewerEditTool.HIGHLIGHTER,
+                ViewerEditTool.FORM_MARK,
                 ViewerEditTool.SIGNATURE
             ).map { ViewerEditBarLayout.rowCenter(it, width) }
             val step = ViewerEditBarLayout.step(width)

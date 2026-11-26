@@ -42,6 +42,11 @@
     <string name="edit_underline_wavy">Hullámos</string>
     <string name="edit_pen">Toll</string>
     <string name="edit_highlighter">Kiemelő</string>
+    <string name="edit_form_marks">Jelölők</string>
+    <string name="edit_form_x">X</string>
+    <string name="edit_form_check">Pipa</string>
+    <string name="edit_form_dash">Gondolatjel</string>
+    <string name="edit_form_dot">Pont</string>
     <string name="edit_vector_signature">Vektoros aláírás</string>
     <string name="edit_eraser">Radír</string>
     <string name="edit_erase_visible">Szerkesztések törlése a látható lapokról</string>
