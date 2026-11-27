@@ -120,9 +120,10 @@ We publish the source code so that others can use it, modify it and learn from i
 
 - Two setting profiles, **Profile 1** and **Profile 2** (grid, margin, orientation, border, scale, position,
   crop, signature position (separately for portrait and landscape), resolution and effects, password
-  protection, file name template), saved and loaded with one tap
+  protection, file name template), saved and loaded with one tap; both profiles also save and load the editor
+  settings and the two vector signatures (one shared copy)
 - Export the settings to an XML file and import them again, for example on another device; the file also
-  holds the saved vector signatures, so keep it safe
+  holds the editor settings and the vector signatures saved with the profiles, so keep it safe
 - Light, dark or phone theme
 - English and Hungarian user interface
 - The main screen uses icons; long-press a button or icon to show its name

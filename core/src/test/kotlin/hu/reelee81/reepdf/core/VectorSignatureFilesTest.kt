@@ -57,6 +57,24 @@ class VectorSignatureFilesTest {
     }
 
     @Test
+    fun readingAllGivesEverySlotWithOnlyTheAcceptedSignatures() {
+        val files = VectorSignatureFiles(File(temp.root, "Signatures"))
+        files.write(1, "good")
+
+        assertEquals(listOf(null, "good"), files.readAll { true })
+
+        files.write(0, "broken")
+
+        assertEquals(listOf(null, "good"), files.readAll { it != "broken" })
+        assertEquals(listOf("broken", "good"), files.readAll { true })
+    }
+
+    @Test
+    fun readingAllFromAMissingFolderGivesEmptySlots() {
+        assertEquals(listOf(null, null), VectorSignatureFiles(File(temp.root, "Missing")).readAll { true })
+    }
+
+    @Test
     fun onlyTheTwoSlotsExist() {
         val files = VectorSignatureFiles(temp.root)
 

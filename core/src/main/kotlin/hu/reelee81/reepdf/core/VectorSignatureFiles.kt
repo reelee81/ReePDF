@@ -30,6 +30,8 @@ class VectorSignatureFiles(private val dir: File) {
         if (!file.delete() && file.exists()) throw IOException("Cannot delete ${file.name}")
     }
 
+    fun readAll(accept: (String) -> Boolean): List<String?> = List(SLOTS) { slot -> read(slot)?.takeIf(accept) }
+
     private fun file(slot: Int): File {
         require(slot in 0 until SLOTS) { "Invalid signature slot $slot" }
         return File(dir, "$PREFIX${slot + 1}$SUFFIX")

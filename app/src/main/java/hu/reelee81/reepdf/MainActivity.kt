@@ -103,6 +103,7 @@ import com.itextpdf.kernel.pdf.PdfDocument
 import com.itextpdf.kernel.pdf.PdfWriter
 import com.itextpdf.kernel.pdf.WriterProperties
 import com.itextpdf.kernel.pdf.canvas.PdfCanvas
+import hu.reelee81.reepdf.core.EditorTransfer
 import hu.reelee81.reepdf.core.IncomingFileKind
 import hu.reelee81.reepdf.core.IncomingFileKind.isSupportedImageFileName
 import hu.reelee81.reepdf.core.IncomingFileKind.isSupportedImageMime
@@ -143,7 +144,8 @@ import hu.reelee81.reepdf.pdf.PdfSourceParts
 import hu.reelee81.reepdf.pdf.PdfViewerEditOperation
 import hu.reelee81.reepdf.pdf.ProgressTracker
 import hu.reelee81.reepdf.pdf.SignedPageRenderer
-import hu.reelee81.reepdf.viewer.ViewerSignature
+import hu.reelee81.reepdf.viewer.ViewerEditSettings
+import hu.reelee81.reepdf.viewer.ViewerEditSettingsFormat
 import hu.reelee81.reepdf.viewer.ViewerSignatureFormat
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -169,6 +171,7 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
@@ -177,7 +180,7 @@ import org.xmlpull.v1.XmlPullParser
 class MainActivity : AppCompatActivity() {
 
     private companion object {
-        const val PREFS_NAME_FRAGMENT = "ReePDFPrefs"
+        const val PREFS_NAME_FRAGMENT = EditorProfiles.APP_PREFS
         const val KEY_THEME_MODE = "theme_mode"
         const val KEY_ROWS = "rows"
         const val KEY_REEPROFILE1_ROWS = "reeprofile1_rows"
@@ -395,7 +398,7 @@ class MainActivity : AppCompatActivity() {
             val uri = result.data!!.data!!
             val job = lifecycleScope.launch(Dispatchers.IO) {
                 try {
-                    val xml = exportAllSharedPreferencesXml()
+                    val xml = exportAllSharedPreferencesXml(EditorProfiles.of(this@MainActivity).saved())
                     contentResolver.openOutputStream(uri)?.use { out ->
                         out.write(xml.toByteArray(Charsets.UTF_8))
                         out.flush()
@@ -426,7 +429,7 @@ class MainActivity : AppCompatActivity() {
                         bytes.toString(Charsets.UTF_8)
                     } ?: throw IOException(getString(R.string.input_stream_is_null))
 
-                    importAllSharedPreferencesFromXml(xml)
+                    importAllSharedPreferencesFromXml(xml, EditorProfiles.of(this@MainActivity))
 
                     withContext(Dispatchers.Main) {
                         Toast.makeText(this@MainActivity, getString(R.string.msg_prefs_loaded_success), Toast.LENGTH_LONG).show()
@@ -2893,66 +2896,23 @@ class MainActivity : AppCompatActivity() {
         val prefs = appPrefs
         val fileNameEt: EditText = findViewById(R.id.file_name)
 
-        synchronized(prefsBackupLock) {
+        val rows = numberOfRows.text.toString()
+        val columns = numberOfColumns.text.toString()
+        val marginVal = margin.text.toString()
+        val isPortrait = !landscape.isChecked
+        val drawFrame = drawFrameSwitch.isChecked
+        val (sigPortraitX, sigPortraitY) = currentSignaturePosition(false)
+        val (sigLandscapeX, sigLandscapeY) = currentSignaturePosition(true)
+        val scale = scaleMode().scale
+        val fit = scaleMode().fit
+        val fileNameTemplate = fileNameEt.text?.toString() ?: ""
+        val passwordOutChecked = passwordOutCb.isChecked
+
+        val profileValues = synchronized(prefsBackupLock) {
+            val sigDpiIndex = prefs.getInt(KEY_LAST_SIG_DPI_INDEX, 0)
+            val scanEffect = prefs.getBoolean(KEY_LAST_SCAN_EFFECT, false)
+            val grayscale = prefs.getBoolean(KEY_LAST_GRAYSCALE, false)
             prefs.edit {
-                val rows = numberOfRows.text.toString()
-                val columns = numberOfColumns.text.toString()
-                val marginVal = margin.text.toString()
-                val isPortrait = !landscape.isChecked
-                val drawFrame = drawFrameSwitch.isChecked
-                val (sigPortraitX, sigPortraitY) = currentSignaturePosition(false)
-                val (sigLandscapeX, sigLandscapeY) = currentSignaturePosition(true)
-                val scale = scaleMode().scale
-                val fit = scaleMode().fit
-                val fileNameTemplate = fileNameEt.text?.toString() ?: ""
-                val passwordOutChecked = passwordOutCb.isChecked
-                val sigDpiIndex = prefs.getInt(KEY_LAST_SIG_DPI_INDEX, 0)
-                val scanEffect = prefs.getBoolean(KEY_LAST_SCAN_EFFECT, false)
-                val grayscale = prefs.getBoolean(KEY_LAST_GRAYSCALE, false)
-
-                when (type) {
-                    "reeprofile1" -> {
-                        putString(KEY_REEPROFILE1_ROWS, rows)
-                        putString(KEY_REEPROFILE1_COLUMNS, columns)
-                        putString(KEY_REEPROFILE1_MARGIN, marginVal)
-                        putBoolean(KEY_REEPROFILE1_ORIENTATION, isPortrait)
-                        putBoolean(KEY_REEPROFILE1_DRAW_FRAME, drawFrame)
-                        putString(KEY_REEPROFILE1_SIG_POS_PORTRAIT_X, sigPortraitX)
-                        putString(KEY_REEPROFILE1_SIG_POS_PORTRAIT_Y, sigPortraitY)
-                        putString(KEY_REEPROFILE1_SIG_POS_LANDSCAPE_X, sigLandscapeX)
-                        putString(KEY_REEPROFILE1_SIG_POS_LANDSCAPE_Y, sigLandscapeY)
-                        putBoolean(KEY_REEPROFILE1_SCALE, scale)
-                        putBoolean(KEY_REEPROFILE1_FIT, fit)
-                        putInt(KEY_REEPROFILE1_POSITION, defaultPosition)
-                        putBoolean(KEY_REEPROFILE1_CROP, cropAllPages)
-                        putBoolean(KEY_REEPROFILE1_PASSWORD_OUT, passwordOutChecked)
-                        putString(KEY_REEPROFILE1_FILE_NAME_TEMPLATE, fileNameTemplate)
-                        putInt(KEY_REEPROFILE1_SIG_DPI_INDEX, sigDpiIndex)
-                        putBoolean(KEY_REEPROFILE1_SCAN_EFFECT, scanEffect)
-                        putBoolean(KEY_REEPROFILE1_GRAYSCALE, grayscale)
-                    }
-
-                    "reeprofile2" -> {
-                        putString(KEY_REEPROFILE2_ROWS, rows)
-                        putString(KEY_REEPROFILE2_COLUMNS, columns)
-                        putString(KEY_REEPROFILE2_MARGIN, marginVal)
-                        putBoolean(KEY_REEPROFILE2_ORIENTATION, isPortrait)
-                        putBoolean(KEY_REEPROFILE2_DRAW_FRAME, drawFrame)
-                        putString(KEY_REEPROFILE2_SIG_POS_PORTRAIT_X, sigPortraitX)
-                        putString(KEY_REEPROFILE2_SIG_POS_PORTRAIT_Y, sigPortraitY)
-                        putString(KEY_REEPROFILE2_SIG_POS_LANDSCAPE_X, sigLandscapeX)
-                        putString(KEY_REEPROFILE2_SIG_POS_LANDSCAPE_Y, sigLandscapeY)
-                        putBoolean(KEY_REEPROFILE2_SCALE, scale)
-                        putBoolean(KEY_REEPROFILE2_FIT, fit)
-                        putInt(KEY_REEPROFILE2_POSITION, defaultPosition)
-                        putBoolean(KEY_REEPROFILE2_CROP, cropAllPages)
-                        putBoolean(KEY_REEPROFILE2_PASSWORD_OUT, passwordOutChecked)
-                        putString(KEY_REEPROFILE2_FILE_NAME_TEMPLATE, fileNameTemplate)
-                        putInt(KEY_REEPROFILE2_SIG_DPI_INDEX, sigDpiIndex)
-                        putBoolean(KEY_REEPROFILE2_SCAN_EFFECT, scanEffect)
-                        putBoolean(KEY_REEPROFILE2_GRAYSCALE, grayscale)
-                    }
-                }
                 putString(KEY_ROWS, rows)
                 putString(KEY_COLUMNS, columns)
                 putString(KEY_MARGIN, marginVal)
@@ -2969,7 +2929,65 @@ class MainActivity : AppCompatActivity() {
                 putBoolean(KEY_PASSWORD_OUT, passwordOutChecked)
                 putString(KEY_FILE_NAME_TEMPLATE, fileNameTemplate)
             }
-            Toast.makeText(this, getString(R.string.settings_saved), Toast.LENGTH_SHORT).show()
+
+            fun text(value: String) = EditorTransfer.Value.Text(value)
+            fun number(value: Int) = EditorTransfer.Value.Number(value)
+            fun flag(value: Boolean) = EditorTransfer.Value.Flag(value)
+            when (type) {
+                "reeprofile1" -> mapOf(
+                    KEY_REEPROFILE1_ROWS to text(rows),
+                    KEY_REEPROFILE1_COLUMNS to text(columns),
+                    KEY_REEPROFILE1_MARGIN to text(marginVal),
+                    KEY_REEPROFILE1_ORIENTATION to flag(isPortrait),
+                    KEY_REEPROFILE1_DRAW_FRAME to flag(drawFrame),
+                    KEY_REEPROFILE1_SIG_POS_PORTRAIT_X to text(sigPortraitX),
+                    KEY_REEPROFILE1_SIG_POS_PORTRAIT_Y to text(sigPortraitY),
+                    KEY_REEPROFILE1_SIG_POS_LANDSCAPE_X to text(sigLandscapeX),
+                    KEY_REEPROFILE1_SIG_POS_LANDSCAPE_Y to text(sigLandscapeY),
+                    KEY_REEPROFILE1_SCALE to flag(scale),
+                    KEY_REEPROFILE1_FIT to flag(fit),
+                    KEY_REEPROFILE1_POSITION to number(defaultPosition),
+                    KEY_REEPROFILE1_CROP to flag(cropAllPages),
+                    KEY_REEPROFILE1_PASSWORD_OUT to flag(passwordOutChecked),
+                    KEY_REEPROFILE1_FILE_NAME_TEMPLATE to text(fileNameTemplate),
+                    KEY_REEPROFILE1_SIG_DPI_INDEX to number(sigDpiIndex),
+                    KEY_REEPROFILE1_SCAN_EFFECT to flag(scanEffect),
+                    KEY_REEPROFILE1_GRAYSCALE to flag(grayscale)
+                )
+
+                "reeprofile2" -> mapOf(
+                    KEY_REEPROFILE2_ROWS to text(rows),
+                    KEY_REEPROFILE2_COLUMNS to text(columns),
+                    KEY_REEPROFILE2_MARGIN to text(marginVal),
+                    KEY_REEPROFILE2_ORIENTATION to flag(isPortrait),
+                    KEY_REEPROFILE2_DRAW_FRAME to flag(drawFrame),
+                    KEY_REEPROFILE2_SIG_POS_PORTRAIT_X to text(sigPortraitX),
+                    KEY_REEPROFILE2_SIG_POS_PORTRAIT_Y to text(sigPortraitY),
+                    KEY_REEPROFILE2_SIG_POS_LANDSCAPE_X to text(sigLandscapeX),
+                    KEY_REEPROFILE2_SIG_POS_LANDSCAPE_Y to text(sigLandscapeY),
+                    KEY_REEPROFILE2_SCALE to flag(scale),
+                    KEY_REEPROFILE2_FIT to flag(fit),
+                    KEY_REEPROFILE2_POSITION to number(defaultPosition),
+                    KEY_REEPROFILE2_CROP to flag(cropAllPages),
+                    KEY_REEPROFILE2_PASSWORD_OUT to flag(passwordOutChecked),
+                    KEY_REEPROFILE2_FILE_NAME_TEMPLATE to text(fileNameTemplate),
+                    KEY_REEPROFILE2_SIG_DPI_INDEX to number(sigDpiIndex),
+                    KEY_REEPROFILE2_SCAN_EFFECT to flag(scanEffect),
+                    KEY_REEPROFILE2_GRAYSCALE to flag(grayscale)
+                )
+
+                else -> emptyMap()
+            }
+        }
+        lifecycleScope.launch {
+            try {
+                withContext(NonCancellable) { EditorProfiles.of(this@MainActivity).saveProfile(profileValues) }
+                Toast.makeText(this@MainActivity, getString(R.string.settings_saved), Toast.LENGTH_SHORT).show()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Toast.makeText(this@MainActivity, getString(R.string.msg_prefs_save_failed, e.message), Toast.LENGTH_LONG).show()
+            }
         }
     }
 
@@ -3077,7 +3095,16 @@ class MainActivity : AppCompatActivity() {
         regenRequestedDuringProfileLoad = false
 
         lifecycleScope.launch {
-            val data = withContext(Dispatchers.IO) {
+            val profiles = EditorProfiles.of(this@MainActivity)
+            val editorError = try {
+                profiles.loadProfile()
+                null
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                e
+            }
+            val data = profiles.readProfiles {
                 localizeDefaultFileNameTemplatesInPrefs()
                 val prefs = appPrefs
                 synchronized(prefsBackupLock) {
@@ -3199,6 +3226,9 @@ class MainActivity : AppCompatActivity() {
 
             updateFileNameHintBasedOnRowsCols()
             validateInputs()
+            editorError?.let {
+                Toast.makeText(this@MainActivity, getString(R.string.msg_prefs_load_failed, it.message), Toast.LENGTH_LONG).show()
+            }
 
             isLoadingSettingsProfile = false
 
@@ -6572,7 +6602,7 @@ class MainActivity : AppCompatActivity() {
         loadPrefsLauncher.launch(intent)
     }
 
-    private fun exportAllSharedPreferencesXml(): String {
+    private fun exportAllSharedPreferencesXml(saved: EditorProfiles.Saved): String {
         val serializer = Xml.newSerializer()
         val sw = StringWriter()
 
@@ -6582,9 +6612,7 @@ class MainActivity : AppCompatActivity() {
         serializer.startTag(null, "preferences")
 
         fun writeMap(name: String) {
-            val all = synchronized(prefsBackupLock) {
-                applicationContext.getSharedPreferences(name, MODE_PRIVATE).all
-            }
+            val all = saved.values
             serializer.startTag(null, "map")
             serializer.attribute(null, "name", name)
 
@@ -6633,14 +6661,21 @@ class MainActivity : AppCompatActivity() {
                 }
                 serializer.endTag(null, "entry")
             }
-            val signatures = VectorSignatureFiles(signaturesDir)
-            for (slot in 0 until VectorSignatureFiles.SLOTS) {
-                val signature = signatures.read(slot)?.let(ViewerSignatureFormat::decode) ?: continue
+            val editorProfile = saved.editor
+            if (editorProfile != null) {
                 serializer.startTag(null, "entry")
-                serializer.attribute(null, "key", "$XML_VECTOR_SIGNATURE_PREFIX${slot + 1}")
+                serializer.attribute(null, "key", EditorProfiles.KEY)
                 serializer.attribute(null, "type", "string")
-                serializer.text(ViewerSignatureFormat.encode(signature))
+                serializer.text(editorProfile.settings)
                 serializer.endTag(null, "entry")
+                for ((slot, signature) in editorProfile.signatures.withIndex()) {
+                    if (signature == null) continue
+                    serializer.startTag(null, "entry")
+                    serializer.attribute(null, "key", "$XML_VECTOR_SIGNATURE_PREFIX${slot + 1}")
+                    serializer.attribute(null, "type", "string")
+                    serializer.text(signature)
+                    serializer.endTag(null, "entry")
+                }
             }
             serializer.endTag(null, "map")
         }
@@ -6653,13 +6688,11 @@ class MainActivity : AppCompatActivity() {
         return sw.toString()
     }
 
-    private fun importAllSharedPreferencesFromXml(xml: String) {
+    private suspend fun importAllSharedPreferencesFromXml(xml: String, profiles: EditorProfiles) {
         val parser = Xml.newPullParser()
         parser.setInput(StringReader(xml))
 
-        val spFragment = appPrefs
-
-        var editor: SharedPreferences.Editor? = null
+        val values = LinkedHashMap<String, EditorTransfer.Value>()
         var inTargetMap = false
 
         var currentKey: String? = null
@@ -6694,7 +6727,8 @@ class MainActivity : AppCompatActivity() {
         val positionKeys = setOf(KEY_REEPROFILE1_POSITION, KEY_REEPROFILE2_POSITION)
         val dpiIndexKeys = setOf(KEY_REEPROFILE1_SIG_DPI_INDEX, KEY_REEPROFILE2_SIG_DPI_INDEX, KEY_LAST_SIG_DPI_INDEX)
         val vectorSignatureSlots = (0 until VectorSignatureFiles.SLOTS).associateBy { "$XML_VECTOR_SIGNATURE_PREFIX${it + 1}" }
-        val vectorSignatures = LinkedHashMap<Int, ViewerSignature>()
+        val vectorSignatures = arrayOfNulls<String>(VectorSignatureFiles.SLOTS)
+        var editorSettings: String? = null
 
         fun invalid(key: String): Nothing =
             throw IllegalArgumentException(getString(R.string.error_invalid_prefs_value, key))
@@ -6709,12 +6743,7 @@ class MainActivity : AppCompatActivity() {
                                 .firstOrNull { parser.getAttributeName(it) == "name" }
                                 ?.let { parser.getAttributeValue(it) }
                             inTargetMap = (nameAttr == PREFS_NAME_FRAGMENT)
-                            if (inTargetMap) {
-                                foundTargetMap = true
-                                synchronized(prefsBackupLock) {
-                                    editor = spFragment.edit()
-                                }
-                            }
+                            if (inTargetMap) foundTargetMap = true
                         }
                         "entry" -> {
                             if (inTargetMap) {
@@ -6742,31 +6771,37 @@ class MainActivity : AppCompatActivity() {
                                 val type = currentType
                                 val valueText = textBuf.toString()
 
-                                if (key != null && type != null && editor != null) {
+                                if (key != null && type != null) {
                                     when (key) {
                                         in stringKeys -> {
                                             if (type != "string") invalid(key)
-                                            editor.putString(key, valueText)
+                                            values[key] = EditorTransfer.Value.Text(valueText)
                                         }
                                         in booleanKeys -> {
                                             val value = valueText.lowercase(Locale.ROOT).toBooleanStrictOrNull()
                                             if (type != "boolean" || value == null) invalid(key)
-                                            editor.putBoolean(key, value)
+                                            values[key] = EditorTransfer.Value.Flag(value)
                                         }
                                         in positionKeys -> {
                                             val value = valueText.toIntOrNull()
                                             if (type != "int" || value == null || validPosition(value) != value) invalid(key)
-                                            editor.putInt(key, value)
+                                            values[key] = EditorTransfer.Value.Number(value)
                                         }
                                         in dpiIndexKeys -> {
                                             val value = valueText.toIntOrNull()
                                             if (type != "int" || value == null || value !in 0..1) invalid(key)
-                                            editor.putInt(key, value)
+                                            values[key] = EditorTransfer.Value.Number(value)
                                         }
                                         in vectorSignatureSlots -> {
                                             val signature = ViewerSignatureFormat.decode(valueText)
                                             if (type != "string" || signature == null) invalid(key)
-                                            vectorSignatures[vectorSignatureSlots.getValue(key)] = signature
+                                            vectorSignatures[vectorSignatureSlots.getValue(key)] = ViewerSignatureFormat.encode(signature)
+                                        }
+                                        EditorProfiles.KEY -> {
+                                            if (type != "string" || !ViewerEditSettingsFormat.decode(valueText, ViewerEditSettings()).isValid) {
+                                                invalid(key)
+                                            }
+                                            editorSettings = valueText
                                         }
                                     }
                                 }
@@ -6787,11 +6822,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         if (foundTargetMap) {
-            val signatures = VectorSignatureFiles(signaturesDir)
-            for ((slot, signature) in vectorSignatures) signatures.write(slot, ViewerSignatureFormat.encode(signature))
-            synchronized(prefsBackupLock) {
-                editor?.apply()
-            }
+            profiles.importProfiles(values, editorSettings?.let { EditorProfiles.Profile(it, vectorSignatures.toList()) })
         } else {
             throw IllegalArgumentException(getString(R.string.error_invalid_prefs_file, PREFS_NAME_FRAGMENT))
         }

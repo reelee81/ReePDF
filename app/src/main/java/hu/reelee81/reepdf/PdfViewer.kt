@@ -3,7 +3,6 @@ package hu.reelee81.reepdf
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Intent
-import android.content.SharedPreferences
 import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
@@ -25,21 +24,15 @@ import hu.reelee81.reepdf.viewer.ViewerEditPanel
 import hu.reelee81.reepdf.viewer.ViewerEditPlan
 import hu.reelee81.reepdf.viewer.ViewerEditQuestion
 import hu.reelee81.reepdf.viewer.ViewerEditSaveResult
-import hu.reelee81.reepdf.viewer.ViewerEditSettings
-import hu.reelee81.reepdf.viewer.ViewerEditTool
-import hu.reelee81.reepdf.viewer.ViewerFormSymbol
 import hu.reelee81.reepdf.viewer.ViewerResume
 import hu.reelee81.reepdf.viewer.ViewerState
-import hu.reelee81.reepdf.viewer.ViewerUnderlineStyle
 import hu.reelee81.reepdf.viewer.ViewerWait
 import hu.reelee81.reepdf.viewer.viewerView
 import java.io.File
 import kotlin.time.Duration.Companion.milliseconds
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 class PdfViewer : AppCompatActivity(), ViewerActions {
 
@@ -61,24 +54,6 @@ class PdfViewer : AppCompatActivity(), ViewerActions {
         private const val STATE_DELETING = "pdf_edit_deleting"
         private const val STATE_SAVING = "pdf_edit_saving"
         private const val NOTIFICATION_PROGRESS_MS = 5_000L
-        private const val EDIT_PREFS = "viewer_edit"
-        private const val KEY_TOOL = "tool"
-        private const val KEY_DRAWING_TOOL = "drawing_tool"
-        private const val KEY_PEN_COLOR = "pen_color"
-        private const val KEY_PEN_WIDTH = "pen_width"
-        private const val KEY_HIGHLIGHTER_COLOR = "highlighter_color"
-        private const val KEY_HIGHLIGHTER_WIDTH = "highlighter_width"
-        private const val KEY_UNDERLINE_COLOR = "underline_color"
-        private const val KEY_STRIKETHROUGH_COLOR = "strikethrough_color"
-        private const val KEY_UNDERLINE_STYLE = "underline_style"
-        private const val KEY_SIGNATURE_COLOR = "signature_color"
-        private const val KEY_SIGNATURE_WIDTH = "signature_width"
-        private const val KEY_SIGNATURE_SLOT = "signature_slot"
-        private const val KEY_TEXT_COLOR = "text_color"
-        private const val KEY_TEXT_WEIGHT = "text_weight"
-        private const val KEY_FORM_MARK_SYMBOL = "form_mark_symbol"
-        private const val KEY_FORM_MARK_COLOR = "form_mark_color"
-        private const val KEY_FORM_MARK_WIDTH = "form_mark_width"
     }
 
     private lateinit var model: PdfViewerModel
@@ -117,15 +92,15 @@ class PdfViewer : AppCompatActivity(), ViewerActions {
         val state = model.state ?: return
         model.outputUri?.let(::setEditedDocumentResult)
         lifecycleScope.launch {
-            val (prefs, saved) = withContext(Dispatchers.IO) {
-                val prefs = applicationContext.getSharedPreferences(EDIT_PREFS, MODE_PRIVATE)
-                prefs to if (created) readEditSettings(prefs) else null
-            }
+            val profiles = EditorProfiles.of(this@PdfViewer)
+            val saved = if (created) profiles.liveSettings() else null
             saved?.let(state.editor::restore)
-            state.editor.onSettingsChanged = { settings -> writeEditSettings(prefs, settings) }
+            state.editor.onSettingsChanged = { settings ->
+                profiles.liveSettingsPrefs.edit { EditSettingsPrefs.put(this, settings) }
+            }
         }
         state.editSaver = ::saveEdits
-        state.editor.signatures.attach(AndroidSignatureStore(File(File(applicationInfo.dataDir, "files"), "Signatures")))
+        state.editor.signatures.attach(AndroidSignatureStore(applicationContext))
 
         val frame = FrameLayout(this).apply {
             fitsSystemWindows = true
@@ -295,55 +270,6 @@ class PdfViewer : AppCompatActivity(), ViewerActions {
             deleting = if (saved.containsKey(STATE_DELETING)) saved.getInt(STATE_DELETING) else null,
             saving = saved.getBoolean(STATE_SAVING)
         )
-    }
-
-    private fun readEditSettings(prefs: SharedPreferences): ViewerEditSettings {
-        val defaults = ViewerEditSettings()
-        fun tool(key: String, fallback: ViewerEditTool) =
-            prefs.getString(key, null)?.let { name -> ViewerEditTool.entries.firstOrNull { it.name == name } } ?: fallback
-        return ViewerEditSettings(
-            tool = tool(KEY_TOOL, defaults.tool),
-            drawingTool = tool(KEY_DRAWING_TOOL, defaults.drawingTool),
-            penColor = prefs.getInt(KEY_PEN_COLOR, defaults.penColor),
-            penWidth = prefs.getInt(KEY_PEN_WIDTH, defaults.penWidth),
-            highlighterColor = prefs.getInt(KEY_HIGHLIGHTER_COLOR, defaults.highlighterColor),
-            highlighterWidth = prefs.getInt(KEY_HIGHLIGHTER_WIDTH, defaults.highlighterWidth),
-            underlineColor = prefs.getInt(KEY_UNDERLINE_COLOR, defaults.underlineColor),
-            strikethroughColor = prefs.getInt(KEY_STRIKETHROUGH_COLOR, defaults.strikethroughColor),
-            underlineStyle = prefs.getString(KEY_UNDERLINE_STYLE, null)
-                ?.let { name -> ViewerUnderlineStyle.entries.firstOrNull { it.name == name } } ?: defaults.underlineStyle,
-            signatureColor = prefs.getInt(KEY_SIGNATURE_COLOR, defaults.signatureColor),
-            signatureWidth = prefs.getInt(KEY_SIGNATURE_WIDTH, defaults.signatureWidth),
-            signatureSlot = prefs.getInt(KEY_SIGNATURE_SLOT, defaults.signatureSlot),
-            textColor = prefs.getInt(KEY_TEXT_COLOR, defaults.textColor),
-            textWeight = prefs.getInt(KEY_TEXT_WEIGHT, defaults.textWeight),
-            formSymbol = prefs.getString(KEY_FORM_MARK_SYMBOL, null)
-                ?.let { name -> ViewerFormSymbol.entries.firstOrNull { it.name == name } } ?: defaults.formSymbol,
-            formColor = prefs.getInt(KEY_FORM_MARK_COLOR, defaults.formColor),
-            formWidth = prefs.getInt(KEY_FORM_MARK_WIDTH, defaults.formWidth)
-        )
-    }
-
-    private fun writeEditSettings(prefs: SharedPreferences, settings: ViewerEditSettings) {
-        prefs.edit {
-            putString(KEY_TOOL, settings.tool.name)
-            putString(KEY_DRAWING_TOOL, settings.drawingTool.name)
-            putInt(KEY_PEN_COLOR, settings.penColor)
-            putInt(KEY_PEN_WIDTH, settings.penWidth)
-            putInt(KEY_HIGHLIGHTER_COLOR, settings.highlighterColor)
-            putInt(KEY_HIGHLIGHTER_WIDTH, settings.highlighterWidth)
-            putInt(KEY_UNDERLINE_COLOR, settings.underlineColor)
-            putInt(KEY_STRIKETHROUGH_COLOR, settings.strikethroughColor)
-            putString(KEY_UNDERLINE_STYLE, settings.underlineStyle.name)
-            putInt(KEY_SIGNATURE_COLOR, settings.signatureColor)
-            putInt(KEY_SIGNATURE_WIDTH, settings.signatureWidth)
-            putInt(KEY_SIGNATURE_SLOT, settings.signatureSlot)
-            putInt(KEY_TEXT_COLOR, settings.textColor)
-            putInt(KEY_TEXT_WEIGHT, settings.textWeight)
-            putString(KEY_FORM_MARK_SYMBOL, settings.formSymbol.name)
-            putInt(KEY_FORM_MARK_COLOR, settings.formColor)
-            putInt(KEY_FORM_MARK_WIDTH, settings.formWidth)
-        }
     }
 
     private fun setEditedDocumentResult(uri: String) {
