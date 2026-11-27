@@ -163,4 +163,23 @@
     <string name="about_contact_email" translatable="false"><u>reelee81@gmail.com</u></string>
     <string name="no_app_can_open_link">No app can open the link</string>
     <string name="no_email_app">No email app found</string>
+    <string name="viewer_back">Back</string>
+    <string name="menu">Menu</string>
+    <string name="go_to_list_start">Go to the start of the list</string>
+    <string name="go_to_list_end">Go to the end of the list</string>
+    <string name="rotate_left">Rotate left</string>
+    <string name="delete">Delete</string>
+    <string name="select">Select</string>
+    <string name="selection_select_all">Select all</string>
+    <string name="crop_title">Free crop</string>
+    <string name="signature_position">Signature position</string>
+    <string name="position_top_left">Top left</string>
+    <string name="position_top_center">Top center</string>
+    <string name="position_top_right">Top right</string>
+    <string name="position_middle_left">Middle left</string>
+    <string name="position_center">Center</string>
+    <string name="position_middle_right">Middle right</string>
+    <string name="position_bottom_left">Bottom left</string>
+    <string name="position_bottom_center">Bottom center</string>
+    <string name="position_bottom_right">Bottom right</string>
 </resources>

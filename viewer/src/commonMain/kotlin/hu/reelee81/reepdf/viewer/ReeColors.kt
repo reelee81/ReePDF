@@ -17,6 +17,8 @@ class ReeColors private constructor(night: Boolean) {
         ReeColorState.DISABLED to (if (night) p.darkLight050 else p.darkLight065),
         ReeColorState.PRESSED to (if (night) p.darkLight075 else p.darkLight025)
     )
+    val menuBackgroundColor = ReeColor(if (night) p.darkLight025 else p.darkLight100)
+    val menuTextColor = ReeColor(if (night) p.darkLight100 else p.darkLight000)
     val normalTextColor = ReeColor(if (night) p.darkLight100 else p.darkLight000)
     val pdfViewerSbBgColor = ReeColor(if (night) p.darkLight000 else p.darkLight090)
     val progressIndicatorColor = ReeColor(p.teal100)

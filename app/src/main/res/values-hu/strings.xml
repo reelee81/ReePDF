@@ -152,4 +152,23 @@
     <string name="about_contact">Kapcsolat:</string>
     <string name="no_app_can_open_link">Nincs olyan alkalmazás, ami meg tudja nyitni a linket</string>
     <string name="no_email_app">Nincs e-mail-küldő alkalmazás</string>
+    <string name="viewer_back">Vissza</string>
+    <string name="menu">Menü</string>
+    <string name="go_to_list_start">Ugrás a lista elejére</string>
+    <string name="go_to_list_end">Ugrás a lista végére</string>
+    <string name="rotate_left">Forgatás balra</string>
+    <string name="delete">Törlés</string>
+    <string name="select">Kijelölés</string>
+    <string name="selection_select_all">Mind kijelöl</string>
+    <string name="crop_title">Szabad vágás</string>
+    <string name="signature_position">Aláírás pozíciója</string>
+    <string name="position_top_left">Fent balra</string>
+    <string name="position_top_center">Fent középen</string>
+    <string name="position_top_right">Fent jobbra</string>
+    <string name="position_middle_left">Középen balra</string>
+    <string name="position_center">Középen</string>
+    <string name="position_middle_right">Középen jobbra</string>
+    <string name="position_bottom_left">Lent balra</string>
+    <string name="position_bottom_center">Lent középen</string>
+    <string name="position_bottom_right">Lent jobbra</string>
 </resources>

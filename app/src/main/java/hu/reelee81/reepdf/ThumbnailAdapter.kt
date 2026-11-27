@@ -39,7 +39,8 @@ class ThumbnailAdapter(
     private val isCroppedAt: (Int) -> Boolean,
     private val isLandscape: () -> Boolean,
     private val clickListener: (Int) -> Unit,
-    private val selectionChanged: (Int, Boolean) -> Unit
+    private val selectionChanged: (Int, Boolean) -> Unit,
+    private val labelViewsCreated: (List<View>) -> Unit
 ) : RecyclerView.Adapter<ThumbnailAdapter.ViewHolder>() {
 
     @Volatile private var docKey: String = "init"
@@ -75,7 +76,7 @@ class ThumbnailAdapter(
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
         val v = LayoutInflater.from(parent.context).inflate(R.layout.item_page_thumbnail, parent, false)
-        return ViewHolder(v)
+        return ViewHolder(v).also { labelViewsCreated(it.labelViews) }
     }
 
     override fun getItemCount(): Int = items.size
@@ -416,5 +417,6 @@ class ThumbnailAdapter(
         val tvSize: TextView = itemView.findViewById(R.id.tv_size_label)
         val cbSel: AppCompatCheckBox = itemView.findViewById(R.id.cb_select)
         val tvPageNumber: TextView = itemView.findViewById(R.id.page_number)
+        val labelViews: List<View> = listOf(btnRotateLeft, btnDelete, btnCrop, btnPosition, cbSel)
     }
 }

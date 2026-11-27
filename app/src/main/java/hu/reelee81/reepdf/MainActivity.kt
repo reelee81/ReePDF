@@ -64,9 +64,11 @@ import androidx.annotation.WorkerThread
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.appcompat.content.res.AppCompatResources
+import androidx.appcompat.widget.ActionMenuView
 import androidx.appcompat.widget.AppCompatCheckBox
 import androidx.appcompat.widget.AppCompatImageButton
 import androidx.appcompat.widget.AppCompatImageView
+import androidx.appcompat.widget.TooltipCompat
 import androidx.constraintlayout.widget.ConstraintLayout.LayoutParams
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
@@ -343,6 +345,7 @@ class MainActivity : AppCompatActivity() {
     private var lastRootH: Int = -1
     private var bottomPanelView: View? = null
     private val labelTooltip = LabelTooltip()
+    private var thumbnailLabelPressed = false
     private var hasWindowFocusFlag: Boolean = true
     private var pendingRvUpdate: Boolean = false
     private var suppressNup: Boolean = true
@@ -584,6 +587,8 @@ class MainActivity : AppCompatActivity() {
 
         setThemedBackArrow()
         binding.toolbar.setNavigationOnClickListener { finishAndRemoveTask() }
+        binding.toolbar.navigationContentDescription = getString(R.string.viewer_back)
+        binding.toolbar.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> attachToolbarTooltips() }
 
         signaturesDir = File(File(applicationInfo.dataDir, "files"), "Signatures")
 
@@ -629,7 +634,9 @@ class MainActivity : AppCompatActivity() {
                 R.id.row_simple_text, R.id.landscape, R.id.column_simple_text,
                 R.id.scale, R.id.drawframe, R.id.border_simple_text,
                 R.id.empty_page, R.id.select_pdf,
-                R.id.password_out_text, R.id.print_pdf, R.id.save_pdf_file, R.id.send_pdf
+                R.id.password_out_text, R.id.print_pdf, R.id.save_pdf_file, R.id.send_pdf,
+                R.id.all_select, R.id.list_start, R.id.position_select, R.id.rotate_left_select,
+                R.id.list_end, R.id.delete_select, R.id.add_time
             ).map { findViewById(it) }
         )
 
@@ -736,7 +743,8 @@ class MainActivity : AppCompatActivity() {
             isCroppedAt = { pos -> isNupGroupCropped(pos) },
             isLandscape = { landscape.isChecked },
             clickListener = { position -> openNupPdf(position) },
-            selectionChanged = { _, _ -> updateButtonsState() }
+            selectionChanged = { _, _ -> updateButtonsState() },
+            labelViewsCreated = labelTooltip::attach
         )
         rvThumbnails.adapter = adapter
 
@@ -772,11 +780,23 @@ class MainActivity : AppCompatActivity() {
         fastScroller = AlwaysVisibleFastScroller(binding.rvThumbnails, this)
         fastScroller?.setEnabledWhen(viewModel.pageItems.isNotEmpty())
 
+        rvThumbnails.addOnItemTouchListener(object : RecyclerView.SimpleOnItemTouchListener() {
+            override fun onInterceptTouchEvent(rv: RecyclerView, e: MotionEvent): Boolean {
+                if (e.actionMasked == MotionEvent.ACTION_DOWN) {
+                    val holder = rv.findChildViewUnder(e.x, e.y)?.let(rv::getChildViewHolder) as? ThumbnailAdapter.ViewHolder
+                    thumbnailLabelPressed = holder?.labelViews?.any { it.isShown && isTouchInsideView(e, it) } == true
+                }
+                return false
+            }
+        })
+
         ItemTouchHelper(object : ItemTouchHelper.SimpleCallback(
             ItemTouchHelper.UP or ItemTouchHelper.DOWN or
                     ItemTouchHelper.LEFT or ItemTouchHelper.RIGHT, 0
         ) {
             private var userDragActive = false
+
+            override fun isLongPressDragEnabled(): Boolean = !thumbnailLabelPressed
 
             private var originalOrder: List<PageItem>? = null
 
@@ -1310,6 +1330,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
+        labelTooltip.dismiss()
         val prevConfig = lastConfigSnapshotForDiff?.let { Configuration(it) } ?: Configuration(newConfig)
         lastConfigSnapshotForDiff = Configuration(newConfig)
 
@@ -2231,12 +2252,13 @@ class MainActivity : AppCompatActivity() {
                                         gravity = Gravity.CENTER_VERTICAL
                                     }
                                     setImageDrawable(AppCompatResources.getDrawable(context, R.drawable.ic_edit_24))
-                                    contentDescription = null
+                                    contentDescription = context.getString(R.string.signature_position)
                                     background = null
                                     isFocusable = false
                                     setPadding(0, 0, 0, 0)
                                 }
 
+                                labelTooltip.attach(listOf(editBtn))
                                 rightGroup.addView(rb)
                                 rightGroup.addView(editBtn)
                                 container.addView(tv)
@@ -4268,6 +4290,7 @@ class MainActivity : AppCompatActivity() {
         val et = dialogView.findViewById<PasswordToggleEditText>(R.id.pwd_edittext)
 
         runCatching { et.setInitialStateMasked() }
+        et.onIconLongPress = { area -> labelTooltip.show(et, getString(R.string.toggle_password_visibility), area) }
 
         et.setOnEditorActionListener { _, actionId, event ->
             val isEnter = event?.keyCode == KeyEvent.KEYCODE_ENTER && event.action == KeyEvent.ACTION_DOWN
@@ -6299,6 +6322,19 @@ class MainActivity : AppCompatActivity() {
         override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
         override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
         override fun afterTextChanged(s: Editable?) { cb() }
+    }
+
+    private fun attachToolbarTooltips() {
+        val toolbar = binding.toolbar
+        val children = (0 until toolbar.childCount).map(toolbar::getChildAt)
+        val back = children.filterIsInstance<ImageButton>().firstOrNull { it.drawable != null && it.drawable === toolbar.navigationIcon }
+        val menu = children.filterIsInstance<ActionMenuView>()
+            .flatMap { bar -> (0 until bar.childCount).map(bar::getChildAt) }
+            .firstOrNull { (it.layoutParams as? ActionMenuView.LayoutParams)?.isOverflowButton == true }
+        menu?.contentDescription = getString(R.string.menu)
+        val views = listOfNotNull(back, menu)
+        views.forEach { TooltipCompat.setTooltipText(it, null) }
+        labelTooltip.attach(views)
     }
 
     private fun setThemedBackArrow() {

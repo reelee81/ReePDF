@@ -126,7 +126,8 @@ We publish the source code so that others can use it, modify it and learn from i
   holds the editor settings and the vector signatures saved with the profiles, so keep it safe
 - Light, dark or phone theme
 - English and Hungarian user interface
-- The main screen uses icons; long-press a button or icon to show its name
+- The app uses icons; long-press any icon, on the main screen, in its windows, in the viewer and in the
+  editor, to show its name (on a color of the palette: its hex value)
 - “About the app” window with the version number and links to this page, the privacy policy,
   the licenses, the source code and the contact address
 

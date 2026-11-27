@@ -81,6 +81,7 @@
 
             <View
                 android:id="@+id/ponp_cell_1"
+                android:contentDescription="@string/position_top_left"
                 android:layout_width="0dp"
                 android:layout_height="0dp"
                 android:clickable="true"
@@ -92,6 +93,7 @@
 
             <View
                 android:id="@+id/ponp_cell_2"
+                android:contentDescription="@string/position_top_center"
                 android:layout_width="0dp"
                 android:layout_height="0dp"
                 android:clickable="true"
@@ -103,6 +105,7 @@
 
             <View
                 android:id="@+id/ponp_cell_3"
+                android:contentDescription="@string/position_top_right"
                 android:layout_width="0dp"
                 android:layout_height="0dp"
                 android:clickable="true"
@@ -114,6 +117,7 @@
 
             <View
                 android:id="@+id/ponp_cell_4"
+                android:contentDescription="@string/position_middle_left"
                 android:layout_width="0dp"
                 android:layout_height="0dp"
                 android:clickable="true"
@@ -125,6 +129,7 @@
 
             <View
                 android:id="@+id/ponp_cell_5"
+                android:contentDescription="@string/position_center"
                 android:layout_width="0dp"
                 android:layout_height="0dp"
                 android:clickable="true"
@@ -136,6 +141,7 @@
 
             <View
                 android:id="@+id/ponp_cell_6"
+                android:contentDescription="@string/position_middle_right"
                 android:layout_width="0dp"
                 android:layout_height="0dp"
                 android:clickable="true"
@@ -147,6 +153,7 @@
 
             <View
                 android:id="@+id/ponp_cell_7"
+                android:contentDescription="@string/position_bottom_left"
                 android:layout_width="0dp"
                 android:layout_height="0dp"
                 android:clickable="true"
@@ -158,6 +165,7 @@
 
             <View
                 android:id="@+id/ponp_cell_8"
+                android:contentDescription="@string/position_bottom_center"
                 android:layout_width="0dp"
                 android:layout_height="0dp"
                 android:clickable="true"
@@ -169,6 +177,7 @@
 
             <View
                 android:id="@+id/ponp_cell_9"
+                android:contentDescription="@string/position_bottom_right"
                 android:layout_width="0dp"
                 android:layout_height="0dp"
                 android:clickable="true"

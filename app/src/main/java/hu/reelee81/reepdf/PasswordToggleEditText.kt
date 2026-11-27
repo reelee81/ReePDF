@@ -1,13 +1,17 @@
 package hu.reelee81.reepdf
 
 import android.content.Context
+import android.graphics.Rect
 import android.text.method.PasswordTransformationMethod
 import android.util.AttributeSet
+import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.SoundEffectConstants
 import android.view.View
+import android.view.ViewConfiguration
 import android.view.accessibility.AccessibilityEvent
 import androidx.appcompat.content.res.AppCompatResources
+import androidx.core.view.ViewCompat
 import androidx.core.widget.TextViewCompat
 import com.google.android.material.textfield.TextInputEditText
 import java.io.Closeable
@@ -20,6 +24,17 @@ class PasswordToggleEditText @JvmOverloads constructor(
 
     private var passwordVisible: Boolean = false
     private var iconTouchActive: Boolean = false
+    private var iconLongPressed: Boolean = false
+
+    var onIconLongPress: ((Rect) -> Unit)? = null
+
+    private val iconLongPress = Runnable {
+        if (iconTouchActive) {
+            iconLongPressed = true
+            performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+            onIconLongPress?.invoke(iconArea())
+        }
+    }
 
     private val asteriskTransformation = object : PasswordTransformationMethod() {
         private inner class AsteriskCharSequence(private val source: CharSequence) : CharSequence {
@@ -48,6 +63,10 @@ class PasswordToggleEditText @JvmOverloads constructor(
 
     init {
         setInitialStateMasked()
+        ViewCompat.addAccessibilityAction(this, resources.getString(R.string.toggle_password_visibility)) { _, _ ->
+            toggleVisibility()
+            true
+        }
     }
 
     fun setInitialStateMasked() {
@@ -56,10 +75,6 @@ class PasswordToggleEditText @JvmOverloads constructor(
 
         if (compoundDrawablePadding == 0) {
             compoundDrawablePadding = (8 * resources.displayMetrics.density).toInt()
-        }
-
-        if (contentDescription.isNullOrBlank()) {
-            contentDescription = resources.getString(R.string.toggle_password_visibility)
         }
 
         TextViewCompat.setCompoundDrawableTintList(this, null)
@@ -96,6 +111,11 @@ class PasswordToggleEditText @JvmOverloads constructor(
         }
     }
 
+    private fun iconArea(): Rect {
+        val iconW = compoundDrawables.getOrNull(2)?.bounds?.width() ?: 0
+        return Rect(width - paddingRight - iconW, 0, width - paddingRight, height)
+    }
+
     override fun performClick(): Boolean {
         super.performClick()
         return true
@@ -118,20 +138,30 @@ class PasswordToggleEditText @JvmOverloads constructor(
             MotionEvent.ACTION_DOWN -> {
                 if (isInsideIcon()) {
                     iconTouchActive = true
+                    iconLongPressed = false
                     cancelLongPress()
                     cancelPendingInputEvents()
+                    postDelayed(iconLongPress, ViewConfiguration.getLongPressTimeout().toLong())
                     return true
                 }
             }
 
             MotionEvent.ACTION_MOVE -> {
                 if (iconTouchActive) {
-                    if (!isInsideIcon()) iconTouchActive = false
+                    if (!isInsideIcon()) {
+                        iconTouchActive = false
+                        removeCallbacks(iconLongPress)
+                    }
                     return true
                 }
             }
 
             MotionEvent.ACTION_UP -> {
+                removeCallbacks(iconLongPress)
+                if (iconTouchActive && iconLongPressed) {
+                    iconTouchActive = false
+                    return true
+                }
                 if (iconTouchActive && isInsideIcon()) {
                     toggleVisibility()
                     performClick()
@@ -143,6 +173,7 @@ class PasswordToggleEditText @JvmOverloads constructor(
             }
 
             MotionEvent.ACTION_CANCEL -> {
+                removeCallbacks(iconLongPress)
                 iconTouchActive = false
             }
         }

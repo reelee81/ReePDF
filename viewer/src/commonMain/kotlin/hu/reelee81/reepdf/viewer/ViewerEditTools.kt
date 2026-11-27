@@ -56,6 +56,8 @@ class ViewerEditPalette internal constructor(
 
     fun color(index: Int): Int = entries[index].first
 
+    fun hex(index: Int): String = "#" + color(index).toString(16).uppercase().padStart(6, '0')
+
     fun name(index: Int): StringResource = entries[index].second
 }
 

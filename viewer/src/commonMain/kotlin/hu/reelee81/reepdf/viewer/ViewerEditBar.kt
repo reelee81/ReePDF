@@ -43,7 +43,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import hu.reelee81.reepdf.viewer.resources.Res
-import hu.reelee81.reepdf.viewer.resources.edit_color_palette
+import hu.reelee81.reepdf.viewer.resources.edit_color_picker
 import hu.reelee81.reepdf.viewer.resources.edit_erase_all
 import hu.reelee81.reepdf.viewer.resources.edit_erase_visible
 import hu.reelee81.reepdf.viewer.resources.edit_eraser
@@ -88,7 +88,7 @@ internal fun ViewerEditBar(
                 BarIcon(if (scrolling) ViewerIcons.visibilityOn else ViewerIcons.visibilityOff, iconColor)
             }
             val swatchEnabled = settings.tool.palette != null
-            BarItem(ViewerEditBarLayout.SWATCH, width, scroll, Res.string.edit_color_palette, enabled = swatchEnabled, onClick = editor::tapSwatch) {
+            BarItem(ViewerEditBarLayout.SWATCH, width, scroll, Res.string.edit_color_picker, enabled = swatchEnabled, onClick = editor::tapSwatch) {
                 val color = Color(OPAQUE or editor.shownColor(settings.swatchTool))
                 val outline = viewerColors.colorOutline
                 Canvas(Modifier.size(SWATCH_SIZE)) {
@@ -158,9 +158,10 @@ internal fun ViewerToolRow(editor: ViewerEditor, colors: ReeColors, viewerColors
                 val chosen = tool == shown
                 val description = stringResource(toolLabel(tool))
                 val center = ViewerEditBarLayout.rowCenter(tool, rowWidth) - origin
+                val visible = { ViewerEditBarLayout.rowIconShown(tool, rowWidth, with(density) { scroll.value.toDp().value }) }
                 val press = if (tool.enabled) {
                     Modifier.clickable(interactionSource = null, indication = null, role = Role.Button) {
-                        if (ViewerEditBarLayout.rowIconShown(tool, rowWidth, with(density) { scroll.value.toDp().value })) editor.tapTool(tool)
+                        if (visible()) editor.tapTool(tool)
                     }
                 } else {
                     Modifier
@@ -169,6 +170,7 @@ internal fun ViewerToolRow(editor: ViewerEditor, colors: ReeColors, viewerColors
                     Modifier.offset(x = (center - ViewerEditBarLayout.STEP / 2).dp)
                         .width(ViewerEditBarLayout.STEP.dp)
                         .fillMaxHeight()
+                        .viewerTooltip(description, visible)
                         .then(press)
                         .semantics {
                             contentDescription = description
@@ -216,8 +218,9 @@ private fun BarItem(
     val center = ViewerEditBarLayout.center(index, width) - if (reach != null) ViewerEditBarLayout.STRIP_START else 0f
     val left = if (index == ViewerEditBarLayout.BACK) 0f else center - step / 2
     val right = if (index == ViewerEditBarLayout.ITEMS - 1 && reach == null) width else center + step / 2
+    val visible = { reach == null || ViewerEditBarLayout.iconShown(index, width, with(density) { reach.value.toDp().value }) }
     val tap = {
-        if (reach == null || ViewerEditBarLayout.iconShown(index, width, with(density) { reach.value.toDp().value })) onClick()
+        if (visible()) onClick()
     }
     val press = when {
         !enabled -> Modifier
@@ -228,6 +231,7 @@ private fun BarItem(
         Modifier.offset(x = left.dp)
             .width((right - left).dp)
             .fillMaxHeight()
+            .viewerTooltip(description, visible, center = (center - left).dp)
             .then(press)
             .semantics {
                 contentDescription = description

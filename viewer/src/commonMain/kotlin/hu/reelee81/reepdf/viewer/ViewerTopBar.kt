@@ -58,6 +58,7 @@ internal fun ViewerTopBar(
     ) {
         Box(
             Modifier.size(NAVIGATION_SIZE)
+                .viewerTooltip(backLabel)
                 .clickable(interactionSource = null, indication = null, role = Role.Button, onClick = onBack)
                 .semantics { contentDescription = backLabel },
             contentAlignment = Alignment.Center
@@ -88,6 +89,7 @@ internal fun ViewerTopBar(
             Box(
                 Modifier.padding(end = if (index == actions.lastIndex) LAST_ACTION_END_MARGIN else ACTION_END_MARGIN)
                     .size(ACTION_SIZE)
+                    .viewerTooltip(action.label, height = BAR_HEIGHT)
                     .then(press)
                     .semantics { contentDescription = action.label },
                 contentAlignment = Alignment.Center

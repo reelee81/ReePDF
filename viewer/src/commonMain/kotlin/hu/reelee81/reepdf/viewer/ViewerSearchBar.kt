@@ -96,6 +96,7 @@ internal fun ViewerSearchBar(
         Box(
             Modifier.align(Alignment.CenterStart)
                 .size(NAVIGATION_SIZE)
+                .viewerTooltip(backLabel)
                 .clickable(interactionSource = null, indication = null, role = Role.Button, onClick = onBack)
                 .semantics { contentDescription = backLabel },
             contentAlignment = Alignment.Center
@@ -175,6 +176,7 @@ private fun BoxScope.SearchArrow(
             .padding(end = areaEnd)
             .width(areaWidth)
             .fillMaxHeight()
+            .viewerTooltip(label, center = areaWidth - iconEnd - ICON_SIZE / 2)
             .clickable(interactionSource = null, indication = null, role = Role.Button, onClick = onClick)
             .semantics { contentDescription = label }
     ) {

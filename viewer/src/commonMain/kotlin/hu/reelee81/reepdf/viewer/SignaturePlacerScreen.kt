@@ -43,45 +43,47 @@ fun SignaturePlacerScreen(state: SignaturePlacerState, actions: SignaturePlacerA
     val edgeStep = with(density) { AUTO_SCROLL_STEP.toPx() }
     val motion = remember { ViewerMotion() }
     val clock = rememberCoroutineScope()
-    Box(Modifier.fillMaxSize().background(colors.pdfViewerSbBgColor.default)) {
-        Column(Modifier.fillMaxSize()) {
-            val save = ViewerBarAction(ViewerIcons.save, stringResource(Res.string.viewer_save)) {
-                if (state.isReady) actions.onSave()
+    ViewerTooltipHost(colors, fontFamily) {
+        Box(Modifier.fillMaxSize().background(colors.pdfViewerSbBgColor.default)) {
+            Column(Modifier.fillMaxSize()) {
+                val save = ViewerBarAction(ViewerIcons.save, stringResource(Res.string.viewer_save)) {
+                    if (state.isReady) actions.onSave()
+                }
+                ViewerTopBar(
+                    title = stringResource(Res.string.signature_position),
+                    actions = listOf(save),
+                    colors = colors,
+                    fontFamily = fontFamily,
+                    onBack = actions::onBack
+                )
+                ViewerSurfaceView(
+                    surface = state.surface,
+                    colors = viewerColors,
+                    fontFamily = fontFamily,
+                    motion = motion,
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    grab = { position ->
+                        if (state.grab(position.x, position.y, slop)) {
+                            autoScrollDrag(state.surface, clock, edge, edgeStep, state::dragTo, state::endDrag)
+                        } else {
+                            null
+                        }
+                    },
+                    drawOver = { drawSignature(state) }
+                )
             }
-            ViewerTopBar(
-                title = stringResource(Res.string.signature_position),
-                actions = listOf(save),
-                colors = colors,
-                fontFamily = fontFamily,
-                onBack = actions::onBack
-            )
-            ViewerSurfaceView(
-                surface = state.surface,
-                colors = viewerColors,
-                fontFamily = fontFamily,
-                motion = motion,
-                modifier = Modifier.weight(1f).fillMaxWidth(),
-                grab = { position ->
-                    if (state.grab(position.x, position.y, slop)) {
-                        autoScrollDrag(state.surface, clock, edge, edgeStep, state::dragTo, state::endDrag)
-                    } else {
-                        null
-                    }
-                },
-                drawOver = { drawSignature(state) }
-            )
-        }
-        if (state.asking) {
-            ViewerSaveQuestion(
-                text = stringResource(Res.string.signature_position_question),
-                colors = colors,
-                overlayColor = palette.dialogOverlayBackgroundColor,
-                fontFamily = fontFamily,
-                mainPanelWidth = mainPanelWidth,
-                onDismiss = state::dismissQuestion,
-                onDiscard = actions::onDiscard,
-                onSave = actions::onSave
-            )
+            if (state.asking) {
+                ViewerSaveQuestion(
+                    text = stringResource(Res.string.signature_position_question),
+                    colors = colors,
+                    overlayColor = palette.dialogOverlayBackgroundColor,
+                    fontFamily = fontFamily,
+                    mainPanelWidth = mainPanelWidth,
+                    onDismiss = state::dismissQuestion,
+                    onDiscard = actions::onDiscard,
+                    onSave = actions::onSave
+                )
+            }
         }
     }
 }

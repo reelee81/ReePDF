@@ -38,7 +38,7 @@
             android:layout_width="@dimen/dp_26"
             android:layout_height="@dimen/dp_26"
             android:background="@null"
-            android:contentDescription="@null"
+            android:contentDescription="@string/rotate_left"
             app:srcCompat="@drawable/ic_rotate_left_24"
             app:tintMode="src_in"
             app:tint="@color/ic_delete_rotate_position_page_crop_color" />
@@ -49,7 +49,7 @@
             android:layout_width="@dimen/dp_26"
             android:layout_height="@dimen/dp_26"
             android:background="@null"
-            android:contentDescription="@null"
+            android:contentDescription="@string/delete"
             app:srcCompat="@drawable/ic_close_24"
             app:tintMode="src_in"
             app:tint="@color/ic_delete_rotate_position_page_crop_color" />
@@ -61,7 +61,7 @@
             android:layout_height="@dimen/dp_28"
             android:text=""
             android:background="@null"
-            android:contentDescription="@null"
+            android:contentDescription="@string/select"
             app:buttonTint="@color/ic_checkbox_page_color" />
 
         <androidx.appcompat.widget.AppCompatImageButton
@@ -70,7 +70,7 @@
             android:layout_width="@dimen/dp_28"
             android:layout_height="@dimen/dp_28"
             android:background="@null"
-            android:contentDescription="@null"
+            android:contentDescription="@string/crop_title"
             app:srcCompat="@drawable/ic_crop_24"
             app:tintMode="src_in"
             app:tint="@color/ic_delete_rotate_position_page_crop_color" />
@@ -81,7 +81,7 @@
             android:layout_width="@dimen/dp_28"
             android:layout_height="@dimen/dp_28"
             android:background="@null"
-            android:contentDescription="@null"
+            android:contentDescription="@string/position_on_page"
             app:srcCompat="@drawable/ic_position_00_24"
             app:tintMode="src_in"
             app:tint="@color/ic_delete_rotate_position_page_crop_color" />

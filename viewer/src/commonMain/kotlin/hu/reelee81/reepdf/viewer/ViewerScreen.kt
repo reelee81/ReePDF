@@ -60,169 +60,171 @@ fun ViewerScreen(state: ViewerState, actions: ViewerActions, fontFamily: FontFam
     val tooLarge = stringResource(Res.string.selection_too_large)
     var copying by remember { mutableStateOf(false) }
     val editBarScroll = remember(state.editor.isActive) { ScrollState(0) }
-    Box(Modifier.fillMaxSize().background(colors.pdfViewerSbBgColor.default)) {
-        Column(Modifier.fillMaxSize().then(if (waiting) Modifier.clearAndSetSemantics {} else Modifier)) {
-            if (state.editor.isActive) {
-                ViewerEditBar(
-                    editor = state.editor,
-                    colors = colors,
-                    viewerColors = viewerColors,
-                    scroll = editBarScroll,
-                    onBack = {
-                        state.editor.commitTyping()
-                        actions.onBack()
-                    },
-                    onEraseVisible = {
-                        state.editor.closePanel()
-                        state.editor.eraseVisible(state.labeledPages())
-                    },
-                    onEraseAll = {
-                        state.editor.closePanel()
-                        state.editor.question = ViewerEditQuestion.ERASE_ALL
-                    },
-                    onSave = state::saveEdits
-                )
-            } else if (state.search.isActive) {
-                ViewerSearchBar(
-                    search = state.search,
-                    currentPage = { state.currentPage },
-                    colors = colors,
-                    viewerColors = viewerColors,
-                    fontFamily = fontFamily,
-                    onBack = actions::onBack
-                )
-            } else {
-                val search = ViewerBarAction(ViewerIcons.search, stringResource(Res.string.viewer_search), onClick = state::startSearch)
-                val bar = if (state.canEdit) {
-                    listOf(search, ViewerBarAction(ViewerIcons.edit, stringResource(Res.string.edit_pdf), onClick = state::startEditing))
+    ViewerTooltipHost(colors, fontFamily) {
+        Box(Modifier.fillMaxSize().background(colors.pdfViewerSbBgColor.default)) {
+            Column(Modifier.fillMaxSize().then(if (waiting) Modifier.clearAndSetSemantics {} else Modifier)) {
+                if (state.editor.isActive) {
+                    ViewerEditBar(
+                        editor = state.editor,
+                        colors = colors,
+                        viewerColors = viewerColors,
+                        scroll = editBarScroll,
+                        onBack = {
+                            state.editor.commitTyping()
+                            actions.onBack()
+                        },
+                        onEraseVisible = {
+                            state.editor.closePanel()
+                            state.editor.eraseVisible(state.labeledPages())
+                        },
+                        onEraseAll = {
+                            state.editor.closePanel()
+                            state.editor.question = ViewerEditQuestion.ERASE_ALL
+                        },
+                        onSave = state::saveEdits
+                    )
+                } else if (state.search.isActive) {
+                    ViewerSearchBar(
+                        search = state.search,
+                        currentPage = { state.currentPage },
+                        colors = colors,
+                        viewerColors = viewerColors,
+                        fontFamily = fontFamily,
+                        onBack = actions::onBack
+                    )
                 } else {
-                    listOf(search)
+                    val search = ViewerBarAction(ViewerIcons.search, stringResource(Res.string.viewer_search), onClick = state::startSearch)
+                    val bar = if (state.canEdit) {
+                        listOf(search, ViewerBarAction(ViewerIcons.edit, stringResource(Res.string.edit_pdf), onClick = state::startEditing))
+                    } else {
+                        listOf(search)
+                    }
+                    ViewerTopBar(
+                        title = state.title,
+                        actions = bar,
+                        colors = colors,
+                        fontFamily = fontFamily,
+                        onBack = actions::onBack
+                    )
                 }
-                ViewerTopBar(
-                    title = state.title,
-                    actions = bar,
-                    colors = colors,
-                    fontFamily = fontFamily,
-                    onBack = actions::onBack
-                )
-            }
-            Box(Modifier.weight(1f).fillMaxWidth()) {
-                ViewerPages(
-                    state = state,
-                    colors = viewerColors,
-                    reeColors = colors,
-                    fontFamily = fontFamily,
-                    onTap = {
-                        focusManager.clearFocus()
-                        state.selection.clear()
-                    },
-                    onCopy = {
-                        if (!copying) {
-                            copying = true
-                            scope.launch {
-                                try {
-                                    val text = state.selection.copyText()
-                                    if (text == null) {
-                                        actions.onMessage(tooLarge)
-                                    } else {
-                                        if (text.isNotEmpty()) actions.onCopy(text)
-                                        state.selection.clear()
+                Box(Modifier.weight(1f).fillMaxWidth()) {
+                    ViewerPages(
+                        state = state,
+                        colors = viewerColors,
+                        reeColors = colors,
+                        fontFamily = fontFamily,
+                        onTap = {
+                            focusManager.clearFocus()
+                            state.selection.clear()
+                        },
+                        onCopy = {
+                            if (!copying) {
+                                copying = true
+                                scope.launch {
+                                    try {
+                                        val text = state.selection.copyText()
+                                        if (text == null) {
+                                            actions.onMessage(tooLarge)
+                                        } else {
+                                            if (text.isNotEmpty()) actions.onCopy(text)
+                                            state.selection.clear()
+                                        }
+                                    } finally {
+                                        copying = false
                                     }
-                                } finally {
-                                    copying = false
                                 }
                             }
-                        }
-                    },
-                    modifier = Modifier.fillMaxSize()
-                )
-                if (state.editor.isActive) {
-                    ViewerEditPanels(state, colors, viewerColors, fontFamily, editBarScroll)
+                        },
+                        modifier = Modifier.fillMaxSize()
+                    )
+                    if (state.editor.isActive) {
+                        ViewerEditPanels(state, colors, viewerColors, fontFamily, editBarScroll)
+                    }
                 }
+                if (state.bottomGap) Spacer(Modifier.fillMaxWidth().height(BOTTOM_SPACE))
             }
-            if (state.bottomGap) Spacer(Modifier.fillMaxWidth().height(BOTTOM_SPACE))
-        }
-        when (state.editor.question) {
-            ViewerEditQuestion.EXIT -> ViewerSaveQuestion(
-                text = stringResource(Res.string.edit_question),
-                colors = colors,
-                overlayColor = palette.dialogOverlayBackgroundColor,
-                fontFamily = fontFamily,
-                mainPanelWidth = mainPanelWidth,
-                onDismiss = { state.editor.question = null },
-                onDiscard = state.editor::discard,
-                onSave = state::saveEdits
-            )
-            ViewerEditQuestion.ERASE_ALL -> ViewerSaveQuestion(
-                text = stringResource(Res.string.edit_erase_all_question),
-                colors = colors,
-                overlayColor = palette.dialogOverlayBackgroundColor,
-                fontFamily = fontFamily,
-                mainPanelWidth = mainPanelWidth,
-                onDismiss = { state.editor.question = null },
-                onDiscard = { state.editor.question = null },
-                onSave = {
-                    state.editor.question = null
-                    state.editor.eraseAll()
-                },
-                firstButton = Res.string.cancel_text,
-                secondButton = Res.string.ok_text
-            )
-            null -> Unit
-        }
-        state.editor.signatures.pad?.let { pad ->
-            ViewerSignaturePadDialog(state.editor, pad, colors, viewerColors, palette.dialogOverlayBackgroundColor, fontFamily, mainPanelWidth)
-        }
-        state.editor.signatures.deleting?.let { slot ->
-            ViewerSaveQuestion(
-                text = stringResource(if (slot == 0) Res.string.edit_signature_1_delete_question else Res.string.edit_signature_2_delete_question),
-                colors = colors,
-                overlayColor = palette.dialogOverlayBackgroundColor,
-                fontFamily = fontFamily,
-                mainPanelWidth = mainPanelWidth,
-                onDismiss = state.editor.signatures::dismissDelete,
-                onDiscard = state.editor.signatures::dismissDelete,
-                onSave = state.editor.signatures::confirmDelete,
-                firstButton = Res.string.cancel_text,
-                secondButton = Res.string.ok_text
-            )
-        }
-        if (waiting) {
-            Box(Modifier.fillMaxSize().pointerInput(Unit) { blockTouches() })
-            if (state.waitRevealed) {
-                val reason = state.waitReason
-                val saving = reason == ViewerWait.Reason.SAVING_EDITS
-                val leaves = reason == ViewerWait.Reason.OPENING_EDITED
-                ViewerWaitDialog(
-                    caption = stringResource(
-                        when {
-                            saving -> Res.string.pdf_edits_saving
-                            leaves -> Res.string.pdf_wait_reading_edited_pages
-                            else -> Res.string.pdf_wait_reading_pages
-                        }
-                    ),
-                    buttonLabel = stringResource(if (leaves) Res.string.back_to_main_screen else Res.string.cancel_text),
+            when (state.editor.question) {
+                ViewerEditQuestion.EXIT -> ViewerSaveQuestion(
+                    text = stringResource(Res.string.edit_question),
                     colors = colors,
                     overlayColor = palette.dialogOverlayBackgroundColor,
                     fontFamily = fontFamily,
                     mainPanelWidth = mainPanelWidth,
-                    onCancel = if (saving) state::cancelSave else actions::onCancelWait
+                    onDismiss = { state.editor.question = null },
+                    onDiscard = state.editor::discard,
+                    onSave = state::saveEdits
+                )
+                ViewerEditQuestion.ERASE_ALL -> ViewerSaveQuestion(
+                    text = stringResource(Res.string.edit_erase_all_question),
+                    colors = colors,
+                    overlayColor = palette.dialogOverlayBackgroundColor,
+                    fontFamily = fontFamily,
+                    mainPanelWidth = mainPanelWidth,
+                    onDismiss = { state.editor.question = null },
+                    onDiscard = { state.editor.question = null },
+                    onSave = {
+                        state.editor.question = null
+                        state.editor.eraseAll()
+                    },
+                    firstButton = Res.string.cancel_text,
+                    secondButton = Res.string.ok_text
+                )
+                null -> Unit
+            }
+            state.editor.signatures.pad?.let { pad ->
+                ViewerSignaturePadDialog(state.editor, pad, colors, viewerColors, palette.dialogOverlayBackgroundColor, fontFamily, mainPanelWidth)
+            }
+            state.editor.signatures.deleting?.let { slot ->
+                ViewerSaveQuestion(
+                    text = stringResource(if (slot == 0) Res.string.edit_signature_1_delete_question else Res.string.edit_signature_2_delete_question),
+                    colors = colors,
+                    overlayColor = palette.dialogOverlayBackgroundColor,
+                    fontFamily = fontFamily,
+                    mainPanelWidth = mainPanelWidth,
+                    onDismiss = state.editor.signatures::dismissDelete,
+                    onDiscard = state.editor.signatures::dismissDelete,
+                    onSave = state.editor.signatures::confirmDelete,
+                    firstButton = Res.string.cancel_text,
+                    secondButton = Res.string.ok_text
                 )
             }
-        }
-        val message = when (val shown = state.editMessage) {
-            null -> null
-            ViewerEditMessage.NothingToSave -> stringResource(Res.string.no_pdf_edits_to_save)
-            is ViewerEditMessage.SaveFailed -> stringResource(Res.string.pdf_edits_save_failed, shown.text)
-            is ViewerEditMessage.EraseFailed -> stringResource(Res.string.pdf_edits_erase_failed, shown.text)
-            is ViewerEditMessage.SignatureFailed -> stringResource(Res.string.signature_store_failed, shown.text)
-            ViewerEditMessage.RestoreIncomplete -> stringResource(Res.string.pdf_edits_restore_incomplete)
-            ViewerEditMessage.SaveInterrupted -> stringResource(Res.string.pdf_edits_save_interrupted)
-        }
-        LaunchedEffect(message) {
-            if (message != null) {
-                actions.onMessage(message)
-                state.messageShown()
+            if (waiting) {
+                Box(Modifier.fillMaxSize().pointerInput(Unit) { blockTouches() })
+                if (state.waitRevealed) {
+                    val reason = state.waitReason
+                    val saving = reason == ViewerWait.Reason.SAVING_EDITS
+                    val leaves = reason == ViewerWait.Reason.OPENING_EDITED
+                    ViewerWaitDialog(
+                        caption = stringResource(
+                            when {
+                                saving -> Res.string.pdf_edits_saving
+                                leaves -> Res.string.pdf_wait_reading_edited_pages
+                                else -> Res.string.pdf_wait_reading_pages
+                            }
+                        ),
+                        buttonLabel = stringResource(if (leaves) Res.string.back_to_main_screen else Res.string.cancel_text),
+                        colors = colors,
+                        overlayColor = palette.dialogOverlayBackgroundColor,
+                        fontFamily = fontFamily,
+                        mainPanelWidth = mainPanelWidth,
+                        onCancel = if (saving) state::cancelSave else actions::onCancelWait
+                    )
+                }
+            }
+            val message = when (val shown = state.editMessage) {
+                null -> null
+                ViewerEditMessage.NothingToSave -> stringResource(Res.string.no_pdf_edits_to_save)
+                is ViewerEditMessage.SaveFailed -> stringResource(Res.string.pdf_edits_save_failed, shown.text)
+                is ViewerEditMessage.EraseFailed -> stringResource(Res.string.pdf_edits_erase_failed, shown.text)
+                is ViewerEditMessage.SignatureFailed -> stringResource(Res.string.signature_store_failed, shown.text)
+                ViewerEditMessage.RestoreIncomplete -> stringResource(Res.string.pdf_edits_restore_incomplete)
+                ViewerEditMessage.SaveInterrupted -> stringResource(Res.string.pdf_edits_save_interrupted)
+            }
+            LaunchedEffect(message) {
+                if (message != null) {
+                    actions.onMessage(message)
+                    state.messageShown()
+                }
             }
         }
     }

@@ -71,56 +71,58 @@ fun PageCropperScreen(
         snapshotFlow { if (state.asking) emptyList() else state.sideMarkZones(markSlop).map { it.translate(origin) } }
             .collect { currentExclude(it) }
     }
-    Box(Modifier.fillMaxSize().background(colors.pdfViewerSbBgColor.default)) {
-        Column(Modifier.fillMaxSize()) {
-            val allPages = ViewerBarAction(
-                icon = if (state.allPages) ViewerIcons.allPagesOn else ViewerIcons.allPagesOff,
-                label = stringResource(Res.string.crop_all_pages),
-                tint = if (state.allPages) palette.teal100 else null,
-                checked = state.allPages,
-                onClick = state::toggleAllPages
-            )
-            val reset = ViewerBarAction(ViewerIcons.restoreCrop, stringResource(Res.string.crop_reset)) {
-                if (state.isReady) state.reset()
+    ViewerTooltipHost(colors, fontFamily) {
+        Box(Modifier.fillMaxSize().background(colors.pdfViewerSbBgColor.default)) {
+            Column(Modifier.fillMaxSize()) {
+                val allPages = ViewerBarAction(
+                    icon = if (state.allPages) ViewerIcons.allPagesOn else ViewerIcons.allPagesOff,
+                    label = stringResource(Res.string.crop_all_pages),
+                    tint = if (state.allPages) palette.teal100 else null,
+                    checked = state.allPages,
+                    onClick = state::toggleAllPages
+                )
+                val reset = ViewerBarAction(ViewerIcons.restoreCrop, stringResource(Res.string.crop_reset)) {
+                    if (state.isReady) state.reset()
+                }
+                val save = ViewerBarAction(ViewerIcons.save, stringResource(Res.string.viewer_save)) {
+                    if (state.isReady) actions.onSave()
+                }
+                ViewerTopBar(
+                    title = stringResource(Res.string.crop_title),
+                    actions = listOf(save, allPages, reset),
+                    colors = colors,
+                    fontFamily = fontFamily,
+                    onBack = actions::onBack
+                )
+                ViewerSurfaceView(
+                    surface = state.surface,
+                    colors = viewerColors,
+                    fontFamily = fontFamily,
+                    motion = motion,
+                    modifier = Modifier.weight(1f).fillMaxWidth().onGloballyPositioned { origin = it.positionInRoot() },
+                    gutter = PAGE_GUTTER,
+                    grab = { position ->
+                        if (state.grab(position.x, position.y, markLength, markSlop, lineSlop)) {
+                            autoScrollDrag(state.surface, clock, edge, edgeStep, state::dragTo, state::endDrag)
+                        } else {
+                            null
+                        }
+                    },
+                    drawOver = { drawCropFrame(state, viewerColors, markLength) }
+                )
             }
-            val save = ViewerBarAction(ViewerIcons.save, stringResource(Res.string.viewer_save)) {
-                if (state.isReady) actions.onSave()
+            if (state.asking) {
+                ViewerSaveQuestion(
+                    text = stringResource(Res.string.crop_question),
+                    colors = colors,
+                    overlayColor = palette.dialogOverlayBackgroundColor,
+                    fontFamily = fontFamily,
+                    mainPanelWidth = mainPanelWidth,
+                    onDismiss = state::dismissQuestion,
+                    onDiscard = actions::onDiscard,
+                    onSave = actions::onSave
+                )
             }
-            ViewerTopBar(
-                title = stringResource(Res.string.crop_title),
-                actions = listOf(save, allPages, reset),
-                colors = colors,
-                fontFamily = fontFamily,
-                onBack = actions::onBack
-            )
-            ViewerSurfaceView(
-                surface = state.surface,
-                colors = viewerColors,
-                fontFamily = fontFamily,
-                motion = motion,
-                modifier = Modifier.weight(1f).fillMaxWidth().onGloballyPositioned { origin = it.positionInRoot() },
-                gutter = PAGE_GUTTER,
-                grab = { position ->
-                    if (state.grab(position.x, position.y, markLength, markSlop, lineSlop)) {
-                        autoScrollDrag(state.surface, clock, edge, edgeStep, state::dragTo, state::endDrag)
-                    } else {
-                        null
-                    }
-                },
-                drawOver = { drawCropFrame(state, viewerColors, markLength) }
-            )
-        }
-        if (state.asking) {
-            ViewerSaveQuestion(
-                text = stringResource(Res.string.crop_question),
-                colors = colors,
-                overlayColor = palette.dialogOverlayBackgroundColor,
-                fontFamily = fontFamily,
-                mainPanelWidth = mainPanelWidth,
-                onDismiss = state::dismissQuestion,
-                onDiscard = actions::onDiscard,
-                onSave = actions::onSave
-            )
         }
     }
 }

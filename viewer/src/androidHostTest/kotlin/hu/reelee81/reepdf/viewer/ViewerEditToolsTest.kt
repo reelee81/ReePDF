@@ -15,6 +15,14 @@ class ViewerEditToolsTest {
     private val strikethrough = ViewerEditPalettes.strikethrough
 
     @Test
+    fun aPaletteColorIsNamedBySixUppercaseHexDigits() {
+        assertEquals("#000000", pen.hex(0))
+        assertEquals("#202FB0", pen.hex(1))
+        assertEquals("#3D5FEC", pen.hex(8))
+        assertEquals((0 until pen.size).map { "#%06X".format(pen.color(it)) }, (0 until pen.size).map(pen::hex))
+    }
+
+    @Test
     fun thePalettesHoldTheAndroidxColorsInTheirOrder() {
         assertEquals(
             listOf(

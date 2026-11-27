@@ -34,7 +34,7 @@
     <string name="pdf_edits_saving">Szerkesztés(ek) mentése…</string>
     <string name="pdf_edits_save_failed">A PDF-módosítások mentése sikertelen: %1$s</string>
     <string name="pdf_edits_erase_failed">A szerkesztések törlése sikertelen: %1$s</string>
-    <string name="edit_color_palette">Színpaletta</string>
+    <string name="edit_color_picker">Színválasztó</string>
     <string name="edit_text">Szöveg</string>
     <string name="edit_underline">Aláhúzás</string>
     <string name="edit_strikethrough">Áthúzás</string>

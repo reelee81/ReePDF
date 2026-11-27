@@ -73,7 +73,7 @@ object ViewerEditSettingsFormat {
         palette: ViewerEditPalette,
         get: (ViewerEditSettings) -> Int,
         set: ViewerEditSettings.(Int) -> ViewerEditSettings
-    ) = Field(key, { "#" + palette.color(get(it)).toString(16).uppercase().padStart(6, '0') }) { settings, value ->
+    ) = Field(key, { palette.hex(get(it)) }) { settings, value ->
         value.takeIf { it.length == 7 && it[0] == '#' }
             ?.substring(1)?.toIntOrNull(16)
             ?.let { rgb -> (0 until palette.size).firstOrNull { palette.color(it) == rgb } }

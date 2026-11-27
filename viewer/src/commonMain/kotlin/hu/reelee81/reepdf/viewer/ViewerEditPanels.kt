@@ -239,6 +239,7 @@ private fun Palette(
                     val color = Color(OPAQUE or palette.color(index))
                     Canvas(
                         Modifier.size(cell)
+                            .viewerTooltip(palette.hex(index))
                             .clickable(interactionSource = null, indication = null, role = Role.RadioButton) { editor.chooseColor(index) }
                             .semantics {
                                 contentDescription = name
@@ -327,6 +328,7 @@ private fun FormMarks(
                 Box(
                     Modifier.weight(1f)
                         .fillMaxHeight()
+                        .viewerTooltip(name)
                         .clickable(interactionSource = null, indication = null, role = Role.RadioButton) { editor.chooseFormSymbol(symbol) }
                         .semantics {
                             contentDescription = name
@@ -464,6 +466,7 @@ private fun Styles(editor: ViewerEditor, colors: ReeColors) {
             if (index > 0) Spacer(Modifier.width(STYLE_GAP))
             Row(
                 Modifier.fillMaxHeight()
+                    .viewerTooltip(name)
                     .clickable(interactionSource = null, indication = null, role = Role.RadioButton) { editor.chooseUnderlineStyle(option) }
                     .semantics {
                         contentDescription = name
@@ -528,6 +531,7 @@ private fun Signatures(editor: ViewerEditor, colors: ReeColors, viewerColors: Vi
 private fun SignatureIcon(icon: ImageVector, description: String, enabled: Boolean, colors: ReeColors, onClick: () -> Unit) {
     Box(
         Modifier.size(SIGNATURE_ICON_WIDTH, CELL)
+            .viewerTooltip(description)
             .clickable(enabled = enabled, interactionSource = null, indication = null, role = Role.Button, onClick = onClick)
             .semantics {
                 contentDescription = description

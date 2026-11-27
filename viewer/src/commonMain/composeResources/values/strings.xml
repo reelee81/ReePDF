@@ -34,7 +34,7 @@
     <string name="pdf_edits_saving">Saving edit(s)…</string>
     <string name="pdf_edits_save_failed">Saving PDF edits failed: %1$s</string>
     <string name="pdf_edits_erase_failed">Removing edits failed: %1$s</string>
-    <string name="edit_color_palette">Color palette</string>
+    <string name="edit_color_picker">Color picker</string>
     <string name="edit_text">Text</string>
     <string name="edit_underline">Underline</string>
     <string name="edit_strikethrough">Strikethrough</string>

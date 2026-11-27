@@ -1,12 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <com.google.android.material.textview.MaterialTextView
     xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/label_tooltip_text"
     style="@style/Widget.ReePDF.TextView"
     android:layout_width="wrap_content"
     android:layout_height="wrap_content"
     android:background="@drawable/menu_bg_overflow_popup"
     android:textColor="@color/menu_text_color"
+    app:lineHeight="@dimen/dp_20"
     android:paddingLeft="@dimen/dp_12"
     android:paddingRight="@dimen/dp_12"
     android:paddingTop="@dimen/dp_8"
