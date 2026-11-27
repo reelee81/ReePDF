@@ -590,13 +590,13 @@ class ViewerEditorTest {
         val stored = mutableListOf<ViewerEditSettings>()
         editor.onSettingsChanged = { stored += it }
 
-        editor.restore(ViewerEditSettings(tool = ViewerEditTool.TEXT, penColor = 50, undoPanelTop = true))
-        editor.placeUndoPanel(true)
+        editor.restore(ViewerEditSettings(tool = ViewerEditTool.TEXT, penColor = 50, underlineStyle = ViewerUnderlineStyle.WAVY))
+        editor.chooseUnderlineStyle(ViewerUnderlineStyle.WAVY)
         editor.selectTool(ViewerEditTool.HIGHLIGHTER)
 
         assertEquals(ViewerEditTool.HIGHLIGHTER, editor.settings.tool)
         assertEquals(ViewerEditPalettes.pen.defaultColor, editor.settings.penColor)
-        assertEquals(listOf(ViewerEditSettings(tool = ViewerEditTool.HIGHLIGHTER, drawingTool = ViewerEditTool.HIGHLIGHTER, undoPanelTop = true)), stored)
+        assertEquals(listOf(ViewerEditSettings(tool = ViewerEditTool.HIGHLIGHTER, drawingTool = ViewerEditTool.HIGHLIGHTER, underlineStyle = ViewerUnderlineStyle.WAVY)), stored)
         assertNotNull(editor.settings)
     }
 

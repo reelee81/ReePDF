@@ -71,7 +71,6 @@ class PdfViewer : AppCompatActivity(), ViewerActions {
         private const val KEY_UNDERLINE_COLOR = "underline_color"
         private const val KEY_STRIKETHROUGH_COLOR = "strikethrough_color"
         private const val KEY_UNDERLINE_STYLE = "underline_style"
-        private const val KEY_UNDO_PANEL_TOP = "undo_panel_top"
         private const val KEY_SIGNATURE_COLOR = "signature_color"
         private const val KEY_SIGNATURE_WIDTH = "signature_width"
         private const val KEY_SIGNATURE_SLOT = "signature_slot"
@@ -313,7 +312,6 @@ class PdfViewer : AppCompatActivity(), ViewerActions {
             strikethroughColor = prefs.getInt(KEY_STRIKETHROUGH_COLOR, defaults.strikethroughColor),
             underlineStyle = prefs.getString(KEY_UNDERLINE_STYLE, null)
                 ?.let { name -> ViewerUnderlineStyle.entries.firstOrNull { it.name == name } } ?: defaults.underlineStyle,
-            undoPanelTop = prefs.getBoolean(KEY_UNDO_PANEL_TOP, defaults.undoPanelTop),
             signatureColor = prefs.getInt(KEY_SIGNATURE_COLOR, defaults.signatureColor),
             signatureWidth = prefs.getInt(KEY_SIGNATURE_WIDTH, defaults.signatureWidth),
             signatureSlot = prefs.getInt(KEY_SIGNATURE_SLOT, defaults.signatureSlot),
@@ -337,7 +335,6 @@ class PdfViewer : AppCompatActivity(), ViewerActions {
             putInt(KEY_UNDERLINE_COLOR, settings.underlineColor)
             putInt(KEY_STRIKETHROUGH_COLOR, settings.strikethroughColor)
             putString(KEY_UNDERLINE_STYLE, settings.underlineStyle.name)
-            putBoolean(KEY_UNDO_PANEL_TOP, settings.undoPanelTop)
             putInt(KEY_SIGNATURE_COLOR, settings.signatureColor)
             putInt(KEY_SIGNATURE_WIDTH, settings.signatureWidth)
             putInt(KEY_SIGNATURE_SLOT, settings.signatureSlot)

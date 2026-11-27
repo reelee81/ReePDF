@@ -1,5 +1,6 @@
 package hu.reelee81.reepdf.viewer
 
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -58,6 +59,7 @@ fun ViewerScreen(state: ViewerState, actions: ViewerActions, fontFamily: FontFam
     val scope = rememberCoroutineScope()
     val tooLarge = stringResource(Res.string.selection_too_large)
     var copying by remember { mutableStateOf(false) }
+    val editBarScroll = remember(state.editor.isActive) { ScrollState(0) }
     Box(Modifier.fillMaxSize().background(colors.pdfViewerSbBgColor.default)) {
         Column(Modifier.fillMaxSize().then(if (waiting) Modifier.clearAndSetSemantics {} else Modifier)) {
             if (state.editor.isActive) {
@@ -65,6 +67,7 @@ fun ViewerScreen(state: ViewerState, actions: ViewerActions, fontFamily: FontFam
                     editor = state.editor,
                     colors = colors,
                     viewerColors = viewerColors,
+                    scroll = editBarScroll,
                     onBack = {
                         state.editor.commitTyping()
                         actions.onBack()
@@ -134,8 +137,7 @@ fun ViewerScreen(state: ViewerState, actions: ViewerActions, fontFamily: FontFam
                     modifier = Modifier.fillMaxSize()
                 )
                 if (state.editor.isActive) {
-                    ViewerUndoPanel(state.editor, colors, viewerColors)
-                    ViewerEditPanels(state, colors, viewerColors, fontFamily)
+                    ViewerEditPanels(state, colors, viewerColors, fontFamily, editBarScroll)
                 }
             }
             if (state.bottomGap) Spacer(Modifier.fillMaxWidth().height(BOTTOM_SPACE))

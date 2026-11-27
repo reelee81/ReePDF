@@ -53,7 +53,6 @@ class ViewerEditToolsTest {
         assertEquals(1f, settings.width(ViewerEditTool.PEN), 0f)
         assertEquals(0xFFFF00, settings.color(ViewerEditTool.HIGHLIGHTER))
         assertEquals(24f, settings.width(ViewerEditTool.HIGHLIGHTER), 0f)
-        assertFalse(settings.undoPanelTop)
         assertEquals(ViewerUnderlineStyle.STRAIGHT, settings.underlineStyle)
     }
 
@@ -182,14 +181,14 @@ class ViewerEditToolsTest {
             highlighterWidth = 5,
             underlineColor = 28,
             strikethroughColor = -1,
-            undoPanelTop = true,
+            underlineStyle = ViewerUnderlineStyle.WAVY,
             textColor = 28,
             textWeight = 9
         )
 
         val fixed = broken.sanitized()
 
-        assertEquals(ViewerEditSettings(tool = ViewerEditTool.TEXT, undoPanelTop = true), fixed)
+        assertEquals(ViewerEditSettings(tool = ViewerEditTool.TEXT, underlineStyle = ViewerUnderlineStyle.WAVY), fixed)
         assertTrue(ViewerEditSettings().sanitized() == ViewerEditSettings())
     }
 

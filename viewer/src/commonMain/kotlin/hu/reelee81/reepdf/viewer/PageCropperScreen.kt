@@ -88,7 +88,7 @@ fun PageCropperScreen(
             }
             ViewerTopBar(
                 title = stringResource(Res.string.crop_title),
-                actions = listOf(allPages, reset, save),
+                actions = listOf(save, allPages, reset),
                 colors = colors,
                 fontFamily = fontFamily,
                 onBack = actions::onBack

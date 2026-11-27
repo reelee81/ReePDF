@@ -2,7 +2,7 @@ package hu.reelee81.reepdf.viewer
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -24,11 +24,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -42,8 +44,10 @@ import androidx.compose.ui.graphics.PathOperation
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.input.pointer.PointerInputScope
@@ -66,6 +70,7 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import hu.reelee81.reepdf.viewer.resources.Res
@@ -93,6 +98,7 @@ internal fun ViewerEditPanels(
     colors: ReeColors,
     viewerColors: ViewerColors,
     fontFamily: FontFamily,
+    barScroll: ScrollState,
     modifier: Modifier = Modifier
 ) {
     val editor = state.editor
@@ -102,31 +108,52 @@ internal fun ViewerEditPanels(
     val tool = editor.settings.swatchTool
     BoxWithConstraints(modifier.fillMaxSize()) {
         Box(Modifier.fillMaxSize().pointerInput(editor) { closeOnTouch(editor) })
-        if (row) ViewerToolRow(editor, colors, viewerColors, maxWidth)
+        val rowScroll = remember(row, maxWidth) { ScrollState(0) }
+        if (row) ViewerToolRow(editor, colors, viewerColors, maxWidth, rowScroll)
         if (panel == null) return@BoxWithConstraints
         val palette = tool.palette ?: return@BoxWithConstraints
         val cell = minOf(CELL, (maxWidth - PANEL_EDGE * 2 - PANEL_PADDING * 2) / COLUMNS)
         val contentWidth = if (panel == ViewerEditPanel.STYLE) STYLE_WIDTH else cell * COLUMNS
         val underRow = row && (panel == ViewerEditPanel.WIDTH || panel == ViewerEditPanel.STYLE || panel == ViewerEditPanel.SIGNATURES || panel == ViewerEditPanel.MARKS)
-        val iconCenter = when {
-            underRow -> ViewerEditBarLayout.rowCenter(tool, maxWidth.value)
-            panel == ViewerEditPanel.COLORS -> ViewerEditBarLayout.center(ViewerEditBarLayout.SWATCH, maxWidth.value)
-            else -> ViewerEditBarLayout.center(ViewerEditBarLayout.GROUP, maxWidth.value)
+        val width = maxWidth.value
+        val density = LocalDensity.current
+        LaunchedEffect(editor, panel, underRow, tool, width, density, rowScroll, barScroll) {
+            snapshotFlow {
+                with(density) {
+                    if (underRow) {
+                        ViewerEditBarLayout.rowIconShown(tool, width, rowScroll.value.toDp().value)
+                    } else {
+                        val anchor = if (panel == ViewerEditPanel.COLORS) ViewerEditBarLayout.SWATCH else ViewerEditBarLayout.GROUP
+                        ViewerEditBarLayout.iconShown(anchor, width, barScroll.value.toDp().value)
+                    }
+                }
+            }.collect { shown -> if (!shown) editor.hidePanel() }
         }
         val top = if (underRow) ViewerEditBarLayout.ROW_HEIGHT.dp + PANEL_MARGIN else PANEL_MARGIN
-        val place = ViewerEditPanelPlace.of(
-            width = maxWidth.value,
-            panelWidth = (contentWidth + PANEL_PADDING * 2).value,
-            iconCenter = iconCenter,
-            margin = PANEL_EDGE.value,
-            corner = PANEL_RADIUS.value + TAIL_HEIGHT.value,
-            underIcon = panel == ViewerEditPanel.STYLE
-        )
-        val shape = BubbleShape(with(LocalDensity.current) { place.tail.dp.toPx() })
+        val place = { units: Density ->
+            val iconCenter = when {
+                underRow -> ViewerEditBarLayout.rowCenter(tool, width, with(units) { rowScroll.value.toDp().value })
+                panel == ViewerEditPanel.COLORS -> ViewerEditBarLayout.center(ViewerEditBarLayout.SWATCH, width, with(units) { barScroll.value.toDp().value })
+                else -> ViewerEditBarLayout.center(ViewerEditBarLayout.GROUP, width, with(units) { barScroll.value.toDp().value })
+            }
+            ViewerEditPanelPlace.of(
+                width = width,
+                panelWidth = (contentWidth + PANEL_PADDING * 2).value,
+                iconCenter = iconCenter,
+                margin = PANEL_EDGE.value,
+                corner = PANEL_RADIUS.value + TAIL_HEIGHT.value,
+                underIcon = panel == ViewerEditPanel.STYLE
+            )
+        }
+        val background = colors.alertdialogBackgroundColor.default
         Box(
-            Modifier.offset(x = place.left.dp, y = top)
-                .shadow(PANEL_SHADOW, shape)
-                .background(colors.alertdialogBackgroundColor.default, shape)
+            Modifier.offset { IntOffset(place(this).left.dp.roundToPx(), top.roundToPx()) }
+                .graphicsLayer {
+                    shape = BubbleShape(place(this).tail.dp.toPx())
+                    shadowElevation = PANEL_SHADOW.toPx()
+                    clip = true
+                }
+                .drawBehind { drawOutline(BubbleShape(place(this).tail.dp.toPx()).createOutline(size, layoutDirection, this), background) }
                 .pointerInput(Unit) { detectTapGestures { } }
                 .padding(start = PANEL_PADDING, top = PANEL_PADDING + TAIL_HEIGHT, end = PANEL_PADDING, bottom = PANEL_PADDING)
         ) {

@@ -173,6 +173,10 @@ class ViewerEditor(private val scope: CoroutineScope, private val onPagesChanged
         rowOpen = false
     }
 
+    fun hidePanel() {
+        panel = null
+    }
+
     private fun togglePanel(chosen: ViewerEditPanel) {
         releaseFramedSignature()
         panel = if (panel == chosen) null else chosen
@@ -308,8 +312,6 @@ class ViewerEditor(private val scope: CoroutineScope, private val onPagesChanged
     }
 
     fun chooseUnderlineStyle(style: ViewerUnderlineStyle) = update(settings.copy(underlineStyle = style))
-
-    fun placeUndoPanel(top: Boolean) = update(settings.copy(undoPanelTop = top))
 
     val chosenSignature: Int?
         get() = signatures.chosen(settings.signatureSlot)

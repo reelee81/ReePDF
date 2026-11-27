@@ -179,7 +179,6 @@ data class ViewerEditSettings(
     val underlineColor: Int = ViewerEditPalettes.underline.defaultColor,
     val strikethroughColor: Int = ViewerEditPalettes.strikethrough.defaultColor,
     val underlineStyle: ViewerUnderlineStyle = ViewerUnderlineStyle.STRAIGHT,
-    val undoPanelTop: Boolean = false,
     val signatureColor: Int = ViewerEditPalettes.signature.defaultColor,
     val signatureWidth: Int = ViewerSignature.DEFAULT_WIDTH,
     val signatureSlot: Int = 0,
