@@ -143,6 +143,8 @@
     <string name="allow_notifications">Allow notifications</string>
     <string name="allow_notifications_turned_off">Allow notifications – turned off</string>
     <string name="allow_notifications_text">During long PDF operations, the app shows the processing progress in a notification, without sound, and runs as a foreground service, so processing can continue in the background.\n\nWhile notifications are not allowed, the foreground service cannot be used, and the system may stop processing while the app is in the background.\n\nOK opens the app\'s notification settings, where you can turn them on.</string>
+    <string name="exit_app_question">Are you sure you want to exit the app?</string>
+    <string name="exit_text">EXIT</string>
     <string name="position_on_page">Position on page(s)</string>
     <string name="pdf_edits_save_failed">Saving PDF edits failed: %1$s</string>
     <string name="pdf_edits_erasing">Removing edits</string>

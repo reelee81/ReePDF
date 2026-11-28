@@ -115,6 +115,8 @@ We publish the source code so that others can use it, modify it and learn from i
   PDF 2.0); the password has to be typed twice
 - File name template with date and time tokens: `[YYYY]`, `[YY]`, `[MM]`, `[DD]`, `[hh]`, `[mm]`, `[ss]`;
   characters that are not allowed in file names are replaced
+- While pages are loaded, the back button and the back arrow ask before leaving the app, so a mistaken
+  tap does not lose the work that has not been saved yet
 
 ### Settings
 

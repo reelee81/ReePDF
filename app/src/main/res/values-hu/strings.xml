@@ -140,6 +140,8 @@
     <string name="allow_notifications">Értesítések engedélyezése</string>
     <string name="allow_notifications_turned_off">Értesítések engedélyezése – kikapcsolva</string>
     <string name="allow_notifications_text">Hosszú PDF-műveleteknél az app értesítésben mutatja a feldolgozás haladását, hang nélkül, és közben előtérszolgáltatásként fut, így a feldolgozás a háttérben is folytatódhat.\n\nAmíg az értesítések nincsenek engedélyezve, az előtérszolgáltatás nem használható, és ilyenkor a rendszer megállíthatja a feldolgozást, amíg az app a háttérben van.\n\nAz OK gomb megnyitja az app értesítési beállításait, ahol bekapcsolhatod őket.</string>
+    <string name="exit_app_question">Biztos, hogy kilépsz az alkalmazásból?</string>
+    <string name="exit_text">KILÉPÉS</string>
     <string name="position_on_page">Pozicionálás az oldal(ak)on</string>
     <string name="pdf_edits_save_failed">A PDF-módosítások mentése sikertelen: %1$s</string>
     <string name="pdf_edits_erasing">Szerkesztések törlése</string>

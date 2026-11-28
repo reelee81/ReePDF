@@ -365,6 +365,7 @@ class MainActivity : AppCompatActivity() {
     private var operationRestore: ThumbRestore? = null
     private var discardOperation = false
     private var handoverId: Long? = null
+    private var thumbnailsReloading = false
 
     @Volatile private var isSigningCancelled: Boolean = false
     @Volatile private var isNupRebuilding = false
@@ -586,7 +587,7 @@ class MainActivity : AppCompatActivity() {
         setSupportActionBar(binding.toolbar)
 
         setThemedBackArrow()
-        binding.toolbar.setNavigationOnClickListener { finishAndRemoveTask() }
+        binding.toolbar.setNavigationOnClickListener { requestExit() }
         binding.toolbar.navigationContentDescription = getString(R.string.viewer_back)
         binding.toolbar.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> attachToolbarTooltips() }
 
@@ -1210,11 +1211,52 @@ class MainActivity : AppCompatActivity() {
                         binding.overlayDialogImportWarnings.performClick()
                         return
                     }
+
+                    if (binding.overlayDialogExitApp.isVisible) {
+                        binding.overlayDialogExitApp.performClick()
+                        return
+                    }
                 }
 
-                finishAndRemoveTask()
+                requestExit()
             }
         })
+    }
+
+    private fun requestExit() {
+        if (!::binding.isInitialized || (viewModel.pageItems.isEmpty() && !thumbnailsReloading)) {
+            finishAndRemoveTask()
+            return
+        }
+        showExitAppDialog()
+    }
+
+    private fun showExitAppDialog() {
+
+        val overlay = binding.overlayDialogExitApp
+        val panel = binding.overlayDialogExitAppPanel
+
+        panel.removeAllViews()
+        val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_exit_app, panel, false)
+        panel.addView(dialogView)
+
+        overlay.visibility = View.VISIBLE
+
+        overlay.setOnClickListener {
+            overlay.visibility = View.GONE
+            overlay.setOnClickListener(null)
+        }
+        panel.setOnClickListener {
+        }
+
+        dialogView.findViewById<Button>(R.id.ea_btn_cancel)?.setOnClickListener {
+            overlay.visibility = View.GONE
+            overlay.setOnClickListener(null)
+        }
+
+        dialogView.findViewById<Button>(R.id.ea_btn_exit)?.setOnClickListener {
+            finishAndRemoveTask()
+        }
     }
 
     private fun requestNotificationPermissionIfNeeded() {
@@ -1296,6 +1338,7 @@ class MainActivity : AppCompatActivity() {
             binding.overlayDialogPositionOnPagePanel,
             binding.overlayDialogMaxCoordinatesPanel,
             binding.overlayDialogImportWarningsPanel,
+            binding.overlayDialogExitAppPanel,
             binding.overlayProgressDialogPanel,
             binding.overlayProgressDialogUpdateUiPanel
         ).forEach { updateMatchConstraintMaxWidth(it, maxPxOverlay) }
@@ -4523,6 +4566,7 @@ class MainActivity : AppCompatActivity() {
         val offset = lm.findViewByPosition(firstVisiblePosition)?.top ?: 0
 
         clearThumbnails()
+        thumbnailsReloading = true
 
         var releasedUiOnce = false
         var preDrawListener: ViewTreeObserver.OnPreDrawListener? = null
@@ -4709,6 +4753,8 @@ class MainActivity : AppCompatActivity() {
                 releaseDeferredUnlockAndInvokeOnStarted()
                 return@launch
             }
+
+            thumbnailsReloading = false
 
             if (items.isEmpty()) {
                 updateButtonsState()
